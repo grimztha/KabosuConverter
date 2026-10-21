@@ -1,0 +1,49 @@
+# Rust / Cargo build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Executables & Dynamic Libraries
+# (ffmpeg.exe, ffplay.exe, ffprobe.exe, yt-dlp.exe exceed GitHub file size limits and are managed locally)
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local User Settings & Runtime Configuration
+settings.json
+settings.json.bak
+
+# Log files & diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary & Cache files
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# OS metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+._*
+
+# Editor & IDE configs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Local Agent & Configuration Roots
+.agents/
+.gemini/
+.claude/
+scratch/
+ui.slint

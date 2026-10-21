@@ -3142,61 +3142,23 @@ export component MainWindow inherits Window {
         // Bottom Divider
         Rectangle { height: 1px; background: #334155; }
 
-        // BOTTOM ACTION & PROGRESS BAR
+        // BOTTOM ACTION BAR
         Rectangle {
-            height: 80px;
+            height: 56px;
             background: #1e293b;
 
-            VerticalLayout {
-                padding-left: 20px;
+            HorizontalLayout {
                 padding-right: 20px;
-                padding-top: 12px;
-                padding-bottom: 12px;
-                spacing: 8px;
+                alignment: center;
 
-                // Progress Indicator Track
-                Rectangle {
-                    height: 8px;
-                    border-radius: 4px;
-                    background: #0f172a;
-
-                    // Active progress fill
-                    Rectangle {
-                        x: 0px;
-                        width: parent.width * AppData.progress_percent;
-                        height: parent.height;
-                        border-radius: 4px;
-                        background: @linear-gradient(90deg, #0284c7 0%, #10b981 100%);
-                    }
-                }
-
-                // Stats, Action Buttons, and Bottom-Right Logs Toggle
+                // Left Column: 340px width matching the Left File Queue panel, center-aligned
                 HorizontalLayout {
-                    spacing: 12px;
-
-                    // Left stats
-                    HorizontalLayout {
-                        spacing: 10px;
-                        alignment: center;
-
-                        Text {
-                            text: AppData.progress_text;
-                            font-size: 12px;
-                            font-weight: 600;
-                            color: #f8fafc;
-                            vertical-alignment: center;
-                        }
-
-                        Badge { label: AppData.time_text; bg_color: #0f172a; fg_color: #38bdf8; }
-                        Badge { label: AppData.speed_text; bg_color: #0f172a; fg_color: #a78bfa; }
-                        Badge { label: AppData.fps_text; bg_color: #0f172a; fg_color: #34d399; }
-                    }
-
-                    Rectangle { horizontal-stretch: 1; }
+                    width: 340px;
+                    alignment: center;
 
                     // Action Controls
                     if !AppData.is_processing : ActionButton {
-                        width: 175px;
+                        width: 200px;
                         height: 36px;
                         title: "START FUNCTION";
                         icon_source: @image-url("icons/play.svg");
@@ -3209,7 +3171,7 @@ export component MainWindow inherits Window {
                     }
 
                     if AppData.is_processing : ActionButton {
-                        width: 160px;
+                        width: 200px;
                         height: 36px;
                         title: "STOP / CANCEL";
                         icon_source: @image-url("icons/stop.svg");
@@ -3219,115 +3181,112 @@ export component MainWindow inherits Window {
                         hover_color: #dc2626;
                         clicked => { AppLogic.cancel_processing(); }
                     }
+                }
 
-                    Rectangle { horizontal-stretch: 1; }
+                // Spacer pushing right-hand controls to the far right
+                Rectangle { horizontal-stretch: 1; }
 
-                    // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle (Bottom-Aligned)
-                    VerticalLayout {
-                        alignment: end;
+                // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    // FFmpeg Engine Badge
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 4px;
+                        background: #0f172a;
+                        border-width: 1px;
+                        border-color: #38bdf8.with-alpha(0.3);
 
                         HorizontalLayout {
-                            spacing: 8px;
-                            alignment: end;
-
-                            // FFmpeg Engine Badge
-                            Rectangle {
-                                height: 28px;
-                                border-radius: 4px;
-                                background: #0f172a;
-                                border-width: 1px;
-                                border-color: #38bdf8.with-alpha(0.3);
-
-                                HorizontalLayout {
-                                    padding-left: 8px;
-                                    padding-right: 8px;
-                                    alignment: center;
-                                    VerticalLayout {
-                                        alignment: center;
-                                        Text {
-                                            text: "FFmpeg 7.x Engine";
-                                            font-size: 11px;
-                                            color: #38bdf8;
-                                            font-weight: 600;
-                                        }
-                                    }
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "FFmpeg 7.x Engine";
+                                    font-size: 11px;
+                                    color: #38bdf8;
+                                    font-weight: 600;
                                 }
                             }
+                        }
+                    }
 
-                            // GPU Acceleration Pill
-                            Rectangle {
-                                height: 28px;
-                                border-radius: 4px;
-                                background: #0f172a;
-                                border-width: 1px;
-                                border-color: #34d399.with-alpha(0.3);
+                    // GPU Acceleration Pill
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 4px;
+                        background: #0f172a;
+                        border-width: 1px;
+                        border-color: #34d399.with-alpha(0.3);
 
-                                HorizontalLayout {
-                                    padding-left: 8px;
-                                    padding-right: 8px;
-                                    spacing: 5px;
-                                    alignment: center;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 5px;
+                            alignment: center;
 
-                                    VerticalLayout {
-                                        alignment: center;
-                                        Image {
-                                            source: @image-url("icons/zap.svg");
-                                            width: 12px;
-                                            height: 12px;
-                                            colorize: #34d399;
-                                        }
-                                    }
-                                    VerticalLayout {
-                                        alignment: center;
-                                        Text {
-                                            text: "GPU Accelerated";
-                                            font-size: 11px;
-                                            color: #34d399;
-                                            font-weight: 600;
-                                        }
-                                    }
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/zap.svg");
+                                    width: 12px;
+                                    height: 12px;
+                                    colorize: #34d399;
                                 }
                             }
-
-                            // Compact "Show Logs" Toggle in Bottom-Right Corner
-                            Rectangle {
-                                height: 28px;
-                                border-radius: 4px;
-                                background: AppData.show_logs ? #334155 : #0f172a;
-                                border-width: 1px;
-                                border-color: AppData.show_logs ? #38bdf8 : #334155;
-
-                                HorizontalLayout {
-                                    padding-left: 8px;
-                                    padding-right: 8px;
-                                    spacing: 5px;
-                                    alignment: center;
-
-                                    VerticalLayout {
-                                        alignment: center;
-                                        Image {
-                                            source: @image-url("icons/logs.svg");
-                                            width: 12px;
-                                            height: 12px;
-                                            colorize: AppData.show_logs ? #38bdf8 : #94a3b8;
-                                        }
-                                    }
-                                    VerticalLayout {
-                                        alignment: center;
-                                        Text {
-                                            text: AppData.show_logs ? "Hide Logs" : "Show Logs";
-                                            font-size: 10px;
-                                            font-weight: 600;
-                                            color: AppData.show_logs ? #f8fafc : #94a3b8;
-                                        }
-                                    }
-                                }
-
-                                TouchArea {
-                                    mouse-cursor: pointer;
-                                    clicked => { AppLogic.toggle_logs(); }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "GPU Accelerated";
+                                    font-size: 11px;
+                                    color: #34d399;
+                                    font-weight: 600;
                                 }
                             }
+                        }
+                    }
+
+                    // Compact "Show Logs" Toggle in Bottom-Right Corner
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 4px;
+                        background: AppData.show_logs ? #334155 : #0f172a;
+                        border-width: 1px;
+                        border-color: AppData.show_logs ? #38bdf8 : #334155;
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 5px;
+                            alignment: center;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/logs.svg");
+                                    width: 12px;
+                                    height: 12px;
+                                    colorize: AppData.show_logs ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: AppData.show_logs ? "Hide Logs" : "Show Logs";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: AppData.show_logs ? #f8fafc : #94a3b8;
+                                }
+                            }
+                        }
+
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { AppLogic.toggle_logs(); }
                         }
                     }
                 }

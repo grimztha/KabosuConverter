@@ -3023,12 +3023,13 @@ export component MainWindow inherits Window {
                                     color: #10b981;
                                 }
 
+                                // Row 1: Container Format
                                 HorizontalLayout {
-                                    spacing: 10px;
-                                    alignment: end;
+                                    spacing: 12px;
+                                    alignment: center;
 
                                     VerticalLayout {
-                                        width: 130px;
+                                        width: 180px;
                                         spacing: 3px;
                                         Text { text: "Container Format"; font-size: 11px; font-weight: 600; color: #94a3b8; }
                                         ComboBox {
@@ -3039,20 +3040,42 @@ export component MainWindow inherits Window {
                                     }
 
                                     VerticalLayout {
+                                        alignment: center;
                                         horizontal-stretch: 1;
-                                        spacing: 3px;
-                                        Text { text: "Destination Folder"; font-size: 11px; font-weight: 600; color: #94a3b8; }
+                                        Text {
+                                            text: AppData.container_index == 0 ? "Standard MPEG-4 Part 14 container — universal compatibility for web, mobile, and desktop." :
+                                                  AppData.container_index == 1 ? "Matroska Multimedia Container — flexible open standard supporting almost all codecs and subtitles." :
+                                                  AppData.container_index == 2 ? "Apple QuickTime container — native for macOS, Final Cut Pro, and ProRes workflows." :
+                                                  AppData.container_index == 3 ? "WebM open media file format — optimized for HTML5 and VP9/AV1 streaming." :
+                                                  AppData.container_index == 4 ? "Audio Video Interleave container — legacy format for Windows." :
+                                                  AppData.container_index == 5 ? "MPEG Transport Stream — broadcast and streaming standard." :
+                                                  AppData.container_index == 6 ? "MPEG-1 Audio Layer III — universal audio format." :
+                                                  AppData.container_index == 7 ? "Waveform Audio File Format — uncompressed PCM lossless audio." :
+                                                  "Free Lossless Audio Codec — compressed lossless audio format.";
+                                            font-size: 10.5px;
+                                            color: #64748b;
+                                        }
+                                    }
+                                }
+
+                                // Row 2: Destination Folder
+                                VerticalLayout {
+                                    spacing: 4px;
+
+                                    Text { text: "Destination Folder"; font-size: 11px; font-weight: 600; color: #94a3b8; }
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: center;
+
                                         LineEdit {
                                             height: 28px;
+                                            horizontal-stretch: 1;
                                             font-size: 11.5px;
                                             text: AppData.output_directory;
                                             read-only: true;
                                         }
-                                    }
 
-                                    VerticalLayout {
-                                        spacing: 3px;
-                                        Text { text: " "; font-size: 11px; }
                                         ActionButton {
                                             width: 95px;
                                             height: 28px;
@@ -3066,11 +3089,7 @@ export component MainWindow inherits Window {
                                             hover_color: #334155;
                                             clicked => { AppLogic.select_output_dir(); }
                                         }
-                                    }
 
-                                    VerticalLayout {
-                                        spacing: 3px;
-                                        Text { text: " "; font-size: 11px; }
                                         ActionButton {
                                             width: 110px;
                                             height: 28px;

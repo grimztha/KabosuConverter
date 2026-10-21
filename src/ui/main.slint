@@ -3222,88 +3222,111 @@ export component MainWindow inherits Window {
 
                     Rectangle { horizontal-stretch: 1; }
 
-                    // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
+                    // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle (Bottom-Aligned)
+                    VerticalLayout {
+                        alignment: end;
 
-                        Badge {
-                            label: "FFmpeg 7.x Engine";
-                            bg_color: #0f172a;
-                            fg_color: #38bdf8;
-                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: end;
 
-                        Rectangle {
-                            height: 24px;
-                            border-radius: 4px;
-                            background: #0f172a;
-                            border-width: 1px;
-                            border-color: #34d399.with-alpha(0.3);
+                            // FFmpeg Engine Badge
+                            Rectangle {
+                                height: 28px;
+                                border-radius: 4px;
+                                background: #0f172a;
+                                border-width: 1px;
+                                border-color: #38bdf8.with-alpha(0.3);
 
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                spacing: 5px;
-                                alignment: center;
-
-                                VerticalLayout {
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
                                     alignment: center;
-                                    Image {
-                                        source: @image-url("icons/zap.svg");
-                                        width: 12px;
-                                        height: 12px;
-                                        colorize: #34d399;
-                                    }
-                                }
-                                VerticalLayout {
-                                    alignment: center;
-                                    Text {
-                                        text: "GPU Accelerated";
-                                        font-size: 11px;
-                                        color: #34d399;
-                                        font-weight: 600;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Compact "Show Logs" Toggle in Bottom-Right Corner
-                        Rectangle {
-                            height: 28px;
-                            border-radius: 4px;
-                            background: AppData.show_logs ? #334155 : #0f172a;
-                            border-width: 1px;
-                            border-color: AppData.show_logs ? #38bdf8 : #334155;
-
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                spacing: 5px;
-                                alignment: center;
-
-                                VerticalLayout {
-                                    alignment: center;
-                                    Image {
-                                        source: @image-url("icons/logs.svg");
-                                        width: 12px;
-                                        height: 12px;
-                                        colorize: AppData.show_logs ? #38bdf8 : #94a3b8;
-                                    }
-                                }
-                                VerticalLayout {
-                                    alignment: center;
-                                    Text {
-                                        text: AppData.show_logs ? "Hide Logs" : "Show Logs";
-                                        font-size: 10px;
-                                        font-weight: 600;
-                                        color: AppData.show_logs ? #f8fafc : #94a3b8;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: "FFmpeg 7.x Engine";
+                                            font-size: 11px;
+                                            color: #38bdf8;
+                                            font-weight: 600;
+                                        }
                                     }
                                 }
                             }
 
-                            TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => { AppLogic.toggle_logs(); }
+                            // GPU Acceleration Pill
+                            Rectangle {
+                                height: 28px;
+                                border-radius: 4px;
+                                background: #0f172a;
+                                border-width: 1px;
+                                border-color: #34d399.with-alpha(0.3);
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 5px;
+                                    alignment: center;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("icons/zap.svg");
+                                            width: 12px;
+                                            height: 12px;
+                                            colorize: #34d399;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: "GPU Accelerated";
+                                            font-size: 11px;
+                                            color: #34d399;
+                                            font-weight: 600;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Compact "Show Logs" Toggle in Bottom-Right Corner
+                            Rectangle {
+                                height: 28px;
+                                border-radius: 4px;
+                                background: AppData.show_logs ? #334155 : #0f172a;
+                                border-width: 1px;
+                                border-color: AppData.show_logs ? #38bdf8 : #334155;
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 5px;
+                                    alignment: center;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("icons/logs.svg");
+                                            width: 12px;
+                                            height: 12px;
+                                            colorize: AppData.show_logs ? #38bdf8 : #94a3b8;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: AppData.show_logs ? "Hide Logs" : "Show Logs";
+                                            font-size: 10px;
+                                            font-weight: 600;
+                                            color: AppData.show_logs ? #f8fafc : #94a3b8;
+                                        }
+                                    }
+                                }
+
+                                TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { AppLogic.toggle_logs(); }
+                                }
                             }
                         }
                     }

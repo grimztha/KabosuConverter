@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 pub mod locator;
 pub mod probe;
 pub mod builder;
@@ -12,3 +14,12 @@ pub use builder::{
 };
 pub use runner::{FFmpegRunner, ProgressUpdate};
 pub use preview::{parse_timecode_to_seconds, extract_frame, extract_frame_rgba, spawn_playback_stream, spawn_ffplay, spawn_audio_playback, extract_waveform_rgba};
+
+/// Spawn an FFmpeg-related process (ffprobe, ffmpeg, ffplay) with proper setup.
+/// Automatically applies platform-specific flags (CREATE_NO_WINDOW on Windows).
+/// Returns the output on success, or an anyhow error with context on failure.
+pub fn spawn_with_output(mut cmd: std::process::Command, operation: &str) -> anyhow::Result<std::process::Output> {
+    crate::set_no_window(&mut cmd);
+    cmd.output()
+        .with_context(|| format!("Failed to run {} process", operation))
+}

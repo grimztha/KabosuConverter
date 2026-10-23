@@ -51,30 +51,47 @@ pub fn extract_frame<P: AsRef<Path>, B: AsRef<Path>>(
     out_img_path: P,
 ) -> Result<()> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    cmd.args([
-        "-ss",
-        &format!("{:.3}", time_seconds.max(0.0)),
-        "-i",
-        media_path,
-        "-frames:v",
-        "1",
-        "-q:v",
-        "2",
-        "-vf",
-        "scale='min(640,iw)':-2",
-        "-update",
-        "1",
-        "-y",
-    ]);
+    let target = time_seconds.max(0.0);
+    if target > 2.0 {
+        let coarse = target - 2.0;
+        cmd.args([
+            "-ss",
+            &format!("{:.3}", coarse),
+            "-copyts",
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            "-vf",
+            "scale='min(640,iw)':-2",
+            "-update",
+            "1",
+            "-y",
+        ]);
+    } else {
+        cmd.args([
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            "-vf",
+            "scale='min(640,iw)':-2",
+            "-update",
+            "1",
+            "-y",
+        ]);
+    }
     cmd.arg(out_img_path.as_ref());
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    let output = cmd.output().context("Failed to run ffmpeg for frame extraction")?;
+    let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("ffmpeg frame extraction failed: {}", err);
@@ -90,8 +107,12 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
     start_seconds: f64,
     duration: Option<f64>,
     audio_only: bool,
+    volume: Option<i32>,
 ) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffplay_bin.as_ref());
+    if let Some(vol) = volume {
+        cmd.arg("-volume").arg(vol.clamp(0, 100).to_string());
+    }
     if start_seconds > 0.05 {
         cmd.arg("-ss").arg(format!("{:.3}", start_seconds));
     }
@@ -120,40 +141,66 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
 }
 
 /// Extracts a single preview video frame directly into an in-memory RGBA byte buffer (640x360x4).
+/// Uses two-stage seeking with `-copyts` to provide fast, sub-frame accurate positioning on timeline scrubs.
 pub fn extract_frame_rgba<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
     time_seconds: f64,
 ) -> Result<Vec<u8>> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    cmd.args([
-        "-ss",
-        &format!("{:.3}", time_seconds.max(0.0)),
-        "-i",
-        media_path,
-        "-vf",
-        "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
-        "-frames:v",
-        "1",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgba",
-        "-an",
-        "-sn",
-        "pipe:1",
-    ]);
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let target = time_seconds.max(0.0);
+    if target > 2.0 {
+        let coarse = target - 2.0;
+        cmd.args([
+            "-threads",
+            "2",
+            "-ss",
+            &format!("{:.3}", coarse),
+            "-copyts",
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-vf",
+            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-an",
+            "-sn",
+            "-dn",
+            "pipe:1",
+        ]);
+    } else {
+        cmd.args([
+            "-threads",
+            "2",
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-vf",
+            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-an",
+            "-sn",
+            "-dn",
+            "pipe:1",
+        ]);
     }
 
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let output = cmd.output().context("Failed to run ffmpeg memory extraction")?;
+    let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
     let expected = 640 * 360 * 4;
     if output.stdout.len() < expected {
         anyhow::bail!("Incomplete raw frame: got {} vs expected {}", output.stdout.len(), expected);
@@ -163,36 +210,57 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
 }
 
 /// Spawns a persistent continuous ffmpeg decode stream that pipes raw RGBA frames (640x360x4) at 24fps.
+/// Uses fast-seek with -copyts to begin streaming exactly at `start_seconds` without frame drift.
 pub fn spawn_playback_stream<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
     start_seconds: f64,
 ) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    cmd.args([
-        "-ss",
-        &format!("{:.3}", start_seconds.max(0.0)),
-        "-re",
-        "-i",
-        media_path,
-        "-vf",
-        "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgba",
-        "-r",
-        "24",
-        "-an",
-        "-sn",
-        "pipe:1",
-    ]);
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let target = start_seconds.max(0.0);
+    if target > 2.0 {
+        let coarse = target - 2.0;
+        cmd.args([
+            "-ss",
+            &format!("{:.3}", coarse),
+            "-copyts",
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-vf",
+            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-r",
+            "24",
+            "-an",
+            "-sn",
+            "pipe:1",
+        ]);
+    } else {
+        cmd.args([
+            "-i",
+            media_path,
+            "-ss",
+            &format!("{:.3}", target),
+            "-vf",
+            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-r",
+            "24",
+            "-an",
+            "-sn",
+            "pipe:1",
+        ]);
     }
+
+    crate::set_no_window(&mut cmd);
 
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
@@ -207,10 +275,13 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     media_path: &str,
     start_seconds: f64,
     duration: Option<f64>,
+    volume: i32,
 ) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffplay_bin.as_ref());
     cmd.arg("-nodisp");
     cmd.arg("-autoexit");
+    let vol_clamped = volume.clamp(0, 100);
+    cmd.arg("-volume").arg(vol_clamped.to_string());
     if start_seconds > 0.05 {
         cmd.arg("-ss").arg(format!("{:.3}", start_seconds));
     }
@@ -221,11 +292,7 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     }
     cmd.arg("--").arg(media_path);
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+    crate::set_no_window(&mut cmd);
 
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());
@@ -243,10 +310,17 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
 ) -> Result<Vec<u8>> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let filter = format!(
-        "aformat=channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8|0x10b981",
+        "aresample=8000,aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8|0x10b981",
         width, height
     );
     cmd.args([
+        "-threads",
+        "2",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-t",
+        "600",
         "-i",
         media_path,
         "-filter_complex",
@@ -260,16 +334,10 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
         "pipe:1",
     ]);
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let output = cmd.output().context("Failed to generate waveform via ffmpeg")?;
+    let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
     let expected = (width * height * 4) as usize;
     if output.stdout.len() < expected {
         anyhow::bail!("Incomplete waveform data: got {} vs expected {}", output.stdout.len(), expected);
@@ -277,4 +345,3 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
 
     Ok(output.stdout[..expected].to_vec())
 }
-

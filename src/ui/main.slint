@@ -81,6 +81,9 @@ export global AppData {
     in-out property <string> player_time_text: "00:00.000";
     in-out property <string> player_duration_text: "00:00.000";
     in-out property <bool> player_is_playing: false;
+    in-out property <float> player_volume: 1.0;
+    in-out property <bool> player_is_muted: false;
+    in-out property <float> player_pre_mute_volume: 1.0;
     in-out property <image> preview_frame;
     in-out property <bool> preview_frame_loading: false;
     in-out property <image> timeline_waveform;
@@ -136,6 +139,8 @@ export global AppLogic {
     callback player_play_pause();
     callback player_stop();
     callback player_step(float);
+    callback player_volume_changed(float);
+    callback player_toggle_mute();
     callback set_in_point_current();
     callback set_out_point_current();
     callback jump_to_in_point();
@@ -292,6 +297,122 @@ component ActionButton inherits Rectangle {
     }
 }
 
+component VolumeBar inherits Rectangle {
+    in-out property <float> volume: 1.0;
+    in-out property <bool> is_muted: false;
+    callback volume_changed(float);
+    callback toggle_mute();
+
+    height: 28px;
+    border-radius: 6px;
+    background: #1e293b;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+        alignment: center;
+
+        // Mute / Unmute Button with Speaker Icon
+        mute_box := Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            background: mute_ta.has-hover ? #334155 : #00000000;
+
+            Image {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 14px;
+                height: 14px;
+                source: root.is_muted || root.volume <= 0.01 ? @image-url("icons/volume-x.svg") : (root.volume > 0.5 ? @image-url("icons/volume-2.svg") : @image-url("icons/volume-1.svg"));
+                colorize: root.is_muted || root.volume <= 0.01 ? #ef4444 : (mute_ta.has-hover ? #38bdf8 : #94a3b8);
+            }
+
+            mute_ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.toggle_mute(); }
+            }
+        }
+
+        // Interactive Volume Slider Bar Track
+        slider_track := Rectangle {
+            width: 80px;
+            height: 18px;
+
+            // Background Track
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 100%;
+                height: 5px;
+                border-radius: 2.5px;
+                background: #334155;
+
+                // Filled Track (colored)
+                Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    height: 100%;
+                    width: root.is_muted || root.volume <= 0.0 ? 0px : min(parent.width, (parent.width - 12px) * root.volume.clamp(0.0, 1.0) + 6px);
+                    border-radius: 2.5px;
+                    background: root.is_muted ? #64748b : @linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
+                }
+            }
+
+            // Draggable Knob / Thumb
+            Rectangle {
+                property <float> norm: root.is_muted ? 0.0 : root.volume.clamp(0.0, 1.0);
+                x: max(0px, min(parent.width - 12px, (parent.width - 12px) * self.norm));
+                y: (parent.height - self.height) / 2;
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: root.is_muted ? #94a3b8 : (slider_ta.has-hover || slider_ta.pressed ? #38bdf8 : #ffffff);
+                border-width: 1.5px;
+                border-color: root.is_muted ? #64748b : #0284c7;
+            }
+
+            slider_ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    if parent.width > 0px {
+                        root.volume_changed((self.mouse-x / parent.width).clamp(0.0, 1.0));
+                    }
+                }
+                moved => {
+                    if self.pressed && parent.width > 0px {
+                        root.volume_changed((self.mouse-x / parent.width).clamp(0.0, 1.0));
+                    }
+                }
+                scroll-event(event) => {
+                    if event.delta-y > 0px {
+                        root.volume_changed((root.volume + 0.05).clamp(0.0, 1.0));
+                        return accept;
+                    }
+                    if event.delta-y < 0px {
+                        root.volume_changed((root.volume - 0.05).clamp(0.0, 1.0));
+                        return accept;
+                    }
+                    reject
+                }
+            }
+        }
+
+        // Percentage Text Readout
+        VerticalLayout {
+            alignment: center;
+            width: 32px;
+            Text {
+                text: root.is_muted ? "0%" : "\{Math.round(root.volume * 100)}%";
+                font-size: 11px;
+                font-weight: 700;
+                color: root.is_muted ? #ef4444 : #94a3b8;
+                horizontal-alignment: right;
+            }
+        }
+    }
+}
+
 component VisualTimeline inherits Rectangle {
     in property <float> duration: 1.0;
     in property <float> current_time: 0.0;
@@ -358,29 +479,6 @@ component VisualTimeline inherits Rectangle {
             width: 2px;
             height: 100%;
             background: #f59e0b;
-        }
-
-        HorizontalLayout {
-            alignment: center;
-            spacing: 5px;
-            VerticalLayout {
-                alignment: center;
-                Image {
-                    source: @image-url("icons/scissors.svg");
-                    width: 11px;
-                    height: 11px;
-                    colorize: #fbbf24;
-                }
-            }
-            VerticalLayout {
-                alignment: center;
-                Text {
-                    text: "TRIMMED SELECTION";
-                    font-size: 10px;
-                    font-weight: 800;
-                    color: #fbbf24;
-                }
-            }
         }
     }
 
@@ -485,433 +583,505 @@ component VisualTimeline inherits Rectangle {
 
 export component MainWindow inherits Window {
     title: "Another Encoder — Professional Media Transcoder";
-    min-width: 1100px;
-    min-height: 750px;
+    min-width: 1000px;
+    min-height: 650px;
     preferred-width: 1280px;
     preferred-height: 850px;
     background: #0f172a; // Deep slate background
 
-    VerticalLayout {
-        spacing: 0px;
+    forward-focus: fs;
 
-        // TOP HEADER BAR
+    property <length> queue_panel_width: 295px;
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if event.text == " " {
+                if AppData.active_tab == 0 && AppData.player_has_media {
+                    AppLogic.player_play_pause();
+                    return accept;
+                }
+            }
+            reject
+        }
+
+        VerticalLayout {
+            spacing: 0px;
+
+        // TOP HEADER BAR (Brand Title on Left + Workspace Navigation Tabs)
         Rectangle {
-            height: 60px;
+            height: 42px;
             background: #1e293b;
 
+            // Left: Brand Logo & Title (Top-Left Corner)
             HorizontalLayout {
-                padding-left: 20px;
-                padding-right: 20px;
-                spacing: 16px;
-                alignment: center;
+                padding-left: 12px;
+                padding-right: 16px;
+                spacing: 8px;
+                alignment: start;
 
-                // Brand Logo & Title
-                HorizontalLayout {
-                    spacing: 10px;
+                VerticalLayout {
                     alignment: center;
-
                     Rectangle {
-                        width: 32px;
-                        height: 32px;
-                        border-radius: 8px;
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 6px;
                         background: @linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
                         Text {
                             text: "AE";
                             color: #ffffff;
-                            font-size: 14px;
+                            font-size: 11px;
                             font-weight: 800;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
                     }
+                }
 
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 2px;
-                        Text {
-                            text: "ANOTHER ENCODER";
-                            font-size: 15px;
-                            font-weight: 700;
-                            color: #f8fafc;
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: "ANOTHER ENCODER";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #f8fafc;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // Center-Right: Workspace Navigation Tabs (aligned above right workspace panel)
+            HorizontalLayout {
+                x: root.queue_panel_width + 1px;
+                width: parent.width - root.queue_panel_width - 1px;
+                height: 100%;
+                spacing: 14px;
+                alignment: center;
+
+                // Tab 0: Player & Trimming Studio
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 180px;
+                        height: 30px;
+                        border-radius: 6px;
+                        background: AppData.active_tab == 0 ? #0f172a : #00000000;
+                        border-width: 1px;
+                        border-color: AppData.active_tab == 0 ? #38bdf8 : #00000000;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            spacing: 6px;
+                            alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/film.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: AppData.active_tab == 0 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Media Player & Trimmer";
+                                    font-size: 12px;
+                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
+                                    color: AppData.active_tab == 0 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            if AppData.has_active_trim : VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 6px;
+                                    height: 6px;
+                                    border-radius: 3px;
+                                    background: #f59e0b;
+                                }
+                            }
                         }
-                        Text {
-                            text: "Rust & FFmpeg High-Performance Engine";
-                            font-size: 11px;
-                            color: #94a3b8;
+
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { AppLogic.switch_tab(0); }
                         }
                     }
                 }
 
-                // Spacer
-                Rectangle { horizontal-stretch: 1; }
+                // Tab 1: Downloader
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 114px;
+                        height: 30px;
+                        border-radius: 6px;
+                        background: AppData.active_tab == 1 ? #0f172a : #00000000;
+                        border-width: 1px;
+                        border-color: AppData.active_tab == 1 ? #38bdf8 : #00000000;
 
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            spacing: 6px;
+                            alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/download.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: AppData.active_tab == 1 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Downloader";
+                                    font-size: 12px;
+                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
+                                    color: AppData.active_tab == 1 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            if AppData.ytdlp_is_downloading : VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 6px;
+                                    height: 6px;
+                                    border-radius: 3px;
+                                    background: #34d399;
+                                }
+                            }
+                        }
 
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { AppLogic.switch_tab(1); }
+                        }
+                    }
+                }
+
+                // Tab 2: Transcoder Settings
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 160px;
+                        height: 30px;
+                        border-radius: 6px;
+                        background: AppData.active_tab == 2 ? #0f172a : #00000000;
+                        border-width: 1px;
+                        border-color: AppData.active_tab == 2 ? #38bdf8 : #00000000;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            spacing: 6px;
+                            alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("icons/settings.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: AppData.active_tab == 2 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Transcoder Settings";
+                                    font-size: 12px;
+                                    font-weight: AppData.active_tab == 2 ? 700 : 500;
+                                    color: AppData.active_tab == 2 ? #38bdf8 : #94a3b8;
+                                }
+                            }
+                        }
+
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { AppLogic.switch_tab(2); }
+                        }
+                    }
+                }
             }
         }
 
         // Header Divider
         Rectangle { height: 1px; background: #334155; }
 
-        // WORKSPACE TABS BAR
-        Rectangle {
-            height: 46px;
-            background: #111827;
-
-            HorizontalLayout {
-                padding-left: 20px;
-                padding-right: 20px;
-                spacing: 12px;
-                alignment: center;
-
-                // Tab 0: Player & Trimming Studio
-                Rectangle {
-                    width: 230px;
-                    height: 36px;
-                    border-radius: 6px;
-                    background: AppData.active_tab == 0 ? #1e293b : #00000000;
-                    border-width: 1px;
-                    border-color: AppData.active_tab == 0 ? #38bdf8 : #00000000;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-                        VerticalLayout {
-                            alignment: center;
-                            Image {
-                                source: @image-url("icons/film.svg");
-                                width: 15px;
-                                height: 15px;
-                                colorize: AppData.active_tab == 0 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "Media Player & Trimmer";
-                                font-size: 13px;
-                                font-weight: AppData.active_tab == 0 ? 700 : 500;
-                                color: AppData.active_tab == 0 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                        if AppData.has_active_trim : VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 8px;
-                                height: 8px;
-                                border-radius: 4px;
-                                background: #f59e0b;
-                            }
-                        }
-                    }
-
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { AppLogic.switch_tab(0); }
-                    }
-                }
-
-                // Tab 1: Downloader
-                Rectangle {
-                    width: 140px;
-                    height: 36px;
-                    border-radius: 6px;
-                    background: AppData.active_tab == 1 ? #1e293b : #00000000;
-                    border-width: 1px;
-                    border-color: AppData.active_tab == 1 ? #38bdf8 : #00000000;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-                        VerticalLayout {
-                            alignment: center;
-                            Image {
-                                source: @image-url("icons/download.svg");
-                                width: 15px;
-                                height: 15px;
-                                colorize: AppData.active_tab == 1 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "Downloader";
-                                font-size: 13px;
-                                font-weight: AppData.active_tab == 1 ? 700 : 500;
-                                color: AppData.active_tab == 1 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                        if AppData.ytdlp_is_downloading : VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 8px;
-                                height: 8px;
-                                border-radius: 4px;
-                                background: #34d399;
-                            }
-                        }
-                    }
-
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { AppLogic.switch_tab(1); }
-                    }
-                }
-
-                // Tab 2: Transcoder Settings
-                Rectangle {
-                    width: 190px;
-                    height: 36px;
-                    border-radius: 6px;
-                    background: AppData.active_tab == 2 ? #1e293b : #00000000;
-                    border-width: 1px;
-                    border-color: AppData.active_tab == 2 ? #38bdf8 : #00000000;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-                        VerticalLayout {
-                            alignment: center;
-                            Image {
-                                source: @image-url("icons/settings.svg");
-                                width: 15px;
-                                height: 15px;
-                                colorize: AppData.active_tab == 2 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "Transcoder Settings";
-                                font-size: 13px;
-                                font-weight: AppData.active_tab == 2 ? 700 : 500;
-                                color: AppData.active_tab == 2 ? #38bdf8 : #94a3b8;
-                            }
-                        }
-                    }
-
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { AppLogic.switch_tab(2); }
-                    }
-                }
-
-                Rectangle { horizontal-stretch: 1; }
-            }
-        }
-
-        // Tab Divider
-        Rectangle { height: 1px; background: #1f2937; }
-
         // MAIN BODY (Split Left: Queue, Right: Inspector)
         HorizontalLayout {
             spacing: 0px;
             vertical-stretch: 1;
 
-            // LEFT PANEL: FILE QUEUE (340px width)
+            // LEFT PANEL: FILE QUEUE
             Rectangle {
-                width: 340px;
+                width: root.queue_panel_width;
                 background: #111827;
 
                 VerticalLayout {
-                    padding: 16px;
-                    spacing: 12px;
+                    padding: 10px;
+                    spacing: 10px;
 
                     // Section Title
                     HorizontalLayout {
+                        padding-left: 2px;
+                        padding-right: 2px;
                         Text {
                             text: "Input Files Queue";
-                            font-size: 14px;
+                            font-size: 13px;
                             font-weight: 600;
                             color: #f1f5f9;
                         }
                         Rectangle { horizontal-stretch: 1; }
                         Text {
                             text: "\{AppData.queue.length} file(s)";
-                            font-size: 12px;
+                            font-size: 11px;
                             color: #64748b;
                         }
                     }
 
-                    // Empty State if no files
-                    if AppData.queue.length == 0 : Rectangle {
+                    // Queue Container Box (Surrounds file list AND Add Files/Clear List buttons)
+                    Rectangle {
                         vertical-stretch: 1;
                         border-radius: 8px;
-                        background: #1f2937.with-alpha(0.3);
+                        background: #1f2937.with-alpha(0.15);
                         border-width: 1px;
-                        border-color: #374151;
+                        border-color: #334155;
 
                         VerticalLayout {
-                            alignment: center;
-                            spacing: 8px;
-                            Text {
-                                text: "No files in queue";
-                                font-size: 15px;
-                                font-weight: 600;
-                                color: #94a3b8;
-                                horizontal-alignment: center;
-                            }
-                            Text {
-                                text: "Click '+ Add Files' to load videos or audio clips";
-                                font-size: 12px;
-                                color: #64748b;
-                                horizontal-alignment: center;
-                            }
-                        }
-                    }
-
-                    // Scrollable File List
-                    if AppData.queue.length > 0 : ScrollView {
-                        vertical-stretch: 1;
-                        VerticalLayout {
+                            padding: 8px;
                             spacing: 8px;
 
-                            for file[idx] in AppData.queue : Rectangle {
-                                height: 52px;
-                                border-radius: 6px;
-                                background: AppData.selected_file_index == idx ? #1e293b : (card_ta.has-hover ? #1f293d : #182234);
-                                border-width: 1px;
-                                border-color: AppData.selected_file_index == idx ? #38bdf8 : (card_ta.has-hover ? #475569 : #1f2937);
-                                clip: true;
-
-                                animate background { duration: 150ms; }
-                                animate border-color { duration: 150ms; }
-
-                                card_ta := TouchArea {
-                                    mouse-cursor: pointer;
-                                    clicked => { AppLogic.select_file(idx); }
+                            // Empty State if no files
+                            if AppData.queue.length == 0 : VerticalLayout {
+                                vertical-stretch: 1;
+                                alignment: center;
+                                spacing: 8px;
+                                Text {
+                                    text: "No files in queue";
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    color: #94a3b8;
+                                    horizontal-alignment: center;
                                 }
-
-                                // Status Accent Bar on left edge
-                                Rectangle {
-                                    x: 0px;
-                                    y: 0px;
-                                    width: 3px;
-                                    height: 100%;
-                                    background: AppData.selected_file_index == idx ? #38bdf8 : (file.status == "Completed" ? #10b981 : (file.status == "Failed" ? #ef4444 : (file.status == "Processing" ? #f59e0b : #334155)));
+                                Text {
+                                    text: "Drag & drop media files here, or click '+ Add Files'";
+                                    font-size: 11px;
+                                    color: #64748b;
+                                    horizontal-alignment: center;
+                                    wrap: word-wrap;
                                 }
+                            }
 
-                                HorizontalLayout {
-                                    padding-left: 10px;
-                                    padding-right: 8px;
-                                    padding-top: 5px;
-                                    padding-bottom: 5px;
-                                    spacing: 8px;
-                                    alignment: center;
+                            // Scrollable File List
+                            if AppData.queue.length > 0 : ScrollView {
+                                vertical-stretch: 1;
+                                VerticalLayout {
+                                    spacing: 6px;
 
-                                    VerticalLayout {
-                                        horizontal-stretch: 1;
-                                        spacing: 2px;
+                                    for file[idx] in AppData.queue : Rectangle {
+                                        height: 48px;
+                                        border-radius: 6px;
+                                        background: AppData.selected_file_index == idx ? #1e293b : (card_ta.has-hover ? #1f293d : #182234);
+                                        border-width: 1px;
+                                        border-color: AppData.selected_file_index == idx ? #38bdf8 : (card_ta.has-hover ? #475569 : #1f2937);
+                                        clip: true;
 
-                                        // Row 1: File Name + Active Pill + Duration
+                                        animate background { duration: 150ms; }
+                                        animate border-color { duration: 150ms; }
+
+                                        card_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.select_file(idx); }
+                                        }
+
+                                        // Status Accent Bar on left edge
+                                        Rectangle {
+                                            x: 0px;
+                                            y: 0px;
+                                            width: 3px;
+                                            height: 100%;
+                                            background: AppData.selected_file_index == idx ? #38bdf8 : (file.status == "Completed" ? #10b981 : (file.status == "Probing..." ? #818cf8 : (file.status == "Ready" ? #334155 : (file.progress > 0.0 && file.progress < 1.0 ? #f59e0b : #ef4444))));
+                                        }
+
+                                        // Bottom inline encoding progress bar
+                                        if file.progress > 0.0 && file.progress < 1.0 : Rectangle {
+                                            x: 3px;
+                                            y: parent.height - 2px;
+                                            width: max(4px, (parent.width - 3px) * file.progress);
+                                            height: 2px;
+                                            background: @linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #10b981 100%);
+                                        }
+
                                         HorizontalLayout {
+                                            padding-left: 8px;
+                                            padding-right: 6px;
+                                            padding-top: 4px;
+                                            padding-bottom: 4px;
                                             spacing: 6px;
+                                            alignment: center;
 
-                                            Text {
+                                            VerticalLayout {
                                                 horizontal-stretch: 1;
-                                                text: file.file_name;
-                                                font-size: 12px;
-                                                font-weight: 600;
-                                                color: AppData.selected_file_index == idx ? #38bdf8 : #f8fafc;
-                                                overflow: elide;
-                                            }
+                                                spacing: 2px;
 
-                                            if AppData.selected_file_index == idx : Rectangle {
-                                                height: 16px;
-                                                border-radius: 3px;
-                                                background: #0284c733;
-                                                border-width: 1px;
-                                                border-color: #38bdf888;
+                                                // Row 1: File Name + Active Pill + Duration
                                                 HorizontalLayout {
-                                                    padding-left: 5px;
-                                                    padding-right: 5px;
-                                                    alignment: center;
-                                                    VerticalLayout {
-                                                        alignment: center;
-                                                        Text {
-                                                            text: "ACTIVE";
-                                                            font-size: 8px;
-                                                            font-weight: 800;
-                                                            color: #38bdf8;
+                                                    spacing: 4px;
+
+                                                    Text {
+                                                        horizontal-stretch: 1;
+                                                        text: file.file_name;
+                                                        font-size: 11px;
+                                                        font-weight: 600;
+                                                        color: AppData.selected_file_index == idx ? #38bdf8 : #f8fafc;
+                                                        overflow: elide;
+                                                    }
+
+                                                    if AppData.selected_file_index == idx : Rectangle {
+                                                        height: 14px;
+                                                        border-radius: 3px;
+                                                        background: #0284c733;
+                                                        border-width: 1px;
+                                                        border-color: #38bdf888;
+                                                        HorizontalLayout {
+                                                            padding-left: 4px;
+                                                            padding-right: 4px;
+                                                            alignment: center;
+                                                            VerticalLayout {
+                                                                alignment: center;
+                                                                Text {
+                                                                    text: "ACTIVE";
+                                                                    font-size: 8px;
+                                                                    font-weight: 800;
+                                                                    color: #38bdf8;
+                                                                }
+                                                            }
                                                         }
+                                                    }
+
+                                                    Text {
+                                                        text: file.duration;
+                                                        font-size: 10px;
+                                                        font-weight: 600;
+                                                        color: #94a3b8;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+
+                                                // Row 2: Metadata chips + Status
+                                                HorizontalLayout {
+                                                    spacing: 4px;
+
+                                                    Badge { label: file.resolution; bg_color: #0f172a; fg_color: #38bdf8; }
+                                                    Badge { label: file.codecs; bg_color: #0f172a; fg_color: #94a3b8; }
+                                                    if file.file_size_formatted != "" && file.file_size_formatted != "Unknown size" : Badge {
+                                                        label: file.file_size_formatted;
+                                                        bg_color: #0f172a;
+                                                        fg_color: #64748b;
+                                                    }
+
+                                                    Rectangle { horizontal-stretch: 1; }
+
+                                                    Text {
+                                                        text: file.status;
+                                                        font-size: 9px;
+                                                        font-weight: 600;
+                                                        color: file.status == "Completed" ? #34d399 : (file.status == "Probing..." ? #818cf8 : (file.status == "Ready" ? #64748b : (file.progress > 0.0 && file.progress < 1.0 ? #fbbf24 : #f87171)));
+                                                        vertical-alignment: center;
                                                     }
                                                 }
                                             }
 
-                                            Text {
-                                                text: file.duration;
-                                                font-size: 11px;
-                                                font-weight: 600;
-                                                color: #94a3b8;
-                                                vertical-alignment: center;
-                                            }
-                                        }
-
-                                        // Row 2: Metadata chips + Status
-                                        HorizontalLayout {
-                                            spacing: 5px;
-
-                                            Badge { label: file.resolution; bg_color: #0f172a; fg_color: #38bdf8; }
-                                            Badge { label: file.codecs; bg_color: #0f172a; fg_color: #94a3b8; }
-                                            Badge { label: file.file_size_formatted; bg_color: #0f172a; fg_color: #cbd5e1; }
-
-                                            Rectangle { horizontal-stretch: 1; }
-
-                                            Text {
-                                                text: file.status;
-                                                font-size: 10px;
-                                                font-weight: 500;
-                                                color: file.status == "Completed" ? #34d399 : (file.status == "Failed" ? #f87171 : #64748b);
-                                                vertical-alignment: center;
+                                            // Remove Item Button
+                                            IconButton {
+                                                icon_source: @image-url("icons/x.svg");
+                                                has_icon: true;
+                                                icon_size: 10px;
+                                                btn_width: 20px;
+                                                btn_height: 20px;
+                                                hover_bg: #ef444433;
+                                                clicked => { AppLogic.remove_file(idx); }
                                             }
                                         }
                                     }
+                                }
+                            }
 
-                                    // Remove Item Button
-                                    IconButton {
-                                        icon_source: @image-url("icons/x.svg");
-                                        has_icon: true;
-                                        icon_size: 11px;
-                                        btn_width: 22px;
-                                        btn_height: 22px;
-                                        hover_bg: #ef444433;
-                                        clicked => { AppLogic.remove_file(idx); }
-                                    }
+                            // Bottom Queue Actions: Add Files & Clear List (inside queue container box)
+                            HorizontalLayout {
+                                spacing: 6px;
+                                height: 30px;
+
+                                ActionButton {
+                                    horizontal-stretch: 13;
+                                    height: 30px;
+                                    title: "Add Files";
+                                    icon_source: @image-url("icons/plus.svg");
+                                    has_icon: true;
+                                    icon_size: 12px;
+                                    fill_color: #0284c7;
+                                    hover_color: #0369a1;
+                                    font_size: 12px;
+                                    clicked => { AppLogic.add_files(); }
+                                }
+
+                                ActionButton {
+                                    horizontal-stretch: 10;
+                                    height: 30px;
+                                    title: "Clear List";
+                                    icon_source: @image-url("icons/trash.svg");
+                                    has_icon: true;
+                                    icon_size: 12px;
+                                    fill_color: #1e293b;
+                                    hover_color: #334155;
+                                    text_color: #94a3b8;
+                                    font_size: 11px;
+                                    is_disabled: AppData.queue.length == 0;
+                                    clicked => { AppLogic.clear_queue(); }
                                 }
                             }
                         }
                     }
 
-                    // Bottom Queue Actions: Add Files & Clear List
+                    // START FUNCTION Button: Under the queue box, aligned with queue list column
                     HorizontalLayout {
-                        spacing: 8px;
-                        height: 38px;
+                        alignment: center;
+                        height: 34px;
 
-                        ActionButton {
-                            horizontal-stretch: 2;
-                            height: 38px;
-                            title: "Add Files";
-                            icon_source: @image-url("icons/plus.svg");
-                            has_icon: true;
-                            icon_size: 14px;
-                            fill_color: #0284c7;
-                            hover_color: #0369a1;
-                            font_size: 13px;
-                            clicked => { AppLogic.add_files(); }
-                        }
-
-                        ActionButton {
-                            horizontal-stretch: 1;
-                            height: 38px;
-                            title: "Clear List";
-                            icon_source: @image-url("icons/trash.svg");
+                        if !AppData.is_processing : ActionButton {
+                            width: 160px;
+                            height: 34px;
+                            title: "START FUNCTION";
+                            icon_source: @image-url("icons/play.svg");
                             has_icon: true;
                             icon_size: 13px;
-                            fill_color: #1e293b;
-                            hover_color: #334155;
-                            text_color: #94a3b8;
-                            font_size: 12px;
+                            fill_color: AppData.queue.length == 0 ? #334155 : #10b981;
+                            hover_color: AppData.queue.length == 0 ? #334155 : #059669;
+                            text_color: AppData.queue.length == 0 ? #64748b : #ffffff;
                             is_disabled: AppData.queue.length == 0;
-                            clicked => { AppLogic.clear_queue(); }
+                            font_size: 12px;
+                            clicked => { AppLogic.start_processing(); }
+                        }
+
+                        if AppData.is_processing : ActionButton {
+                            width: 160px;
+                            height: 34px;
+                            title: "STOP / CANCEL";
+                            icon_source: @image-url("icons/stop.svg");
+                            has_icon: true;
+                            icon_size: 13px;
+                            fill_color: #ef4444;
+                            hover_color: #dc2626;
+                            font_size: 12px;
+                            clicked => { AppLogic.cancel_processing(); }
                         }
                     }
                 }
@@ -928,16 +1098,17 @@ export component MainWindow inherits Window {
                 // TAB 0: MEDIA PLAYER & TRIMMING STUDIO
                 if AppData.active_tab == 0 : ScrollView {
                     VerticalLayout {
-                        padding: 20px;
+                        padding: 16px;
                         spacing: 16px;
 
                         // MEDIA PLAYER & TRIMMING STUDIO EMPTY STATE
                         if !AppData.player_has_media : Rectangle {
+                            vertical-stretch: 1;
+                            min-height: 480px;
                             border-radius: 12px;
                             background: #131d31;
                             border-width: 1px;
                             border-color: #1e293b;
-                            min-height: 440px;
 
                             VerticalLayout {
                                 padding: 36px;
@@ -1108,6 +1279,13 @@ export component MainWindow inherits Window {
                                             image-fit: contain;
                                         }
 
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => {
+                                                fs.focus();
+                                                AppLogic.player_play_pause();
+                                            }
+                                        }
 
                                         // Loading indicator
                                         if AppData.preview_frame_loading : Rectangle {
@@ -1124,6 +1302,14 @@ export component MainWindow inherits Window {
 
                                     // Audio Visualizer Screen
                                     if !AppData.selected_is_video : Rectangle {
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => {
+                                                fs.focus();
+                                                AppLogic.player_play_pause();
+                                            }
+                                        }
+
                                         VerticalLayout {
                                             alignment: center;
                                             spacing: 24px;
@@ -1200,6 +1386,18 @@ export component MainWindow inherits Window {
                                                 alignment: center;
                                                 Text { text: "PLAYHEAD:"; font-size: 11px; font-weight: 700; color: #64748b; vertical-alignment: center; }
                                                 Text { text: AppData.player_time_text; font-size: 13px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
+                                            }
+                                        }
+
+                                        // Functional Volume Control Bar Pill under video player
+                                        VolumeBar {
+                                            volume: AppData.player_volume;
+                                            is_muted: AppData.player_is_muted;
+                                            volume_changed(val) => {
+                                                AppLogic.player_volume_changed(val);
+                                            }
+                                            toggle_mute() => {
+                                                AppLogic.player_toggle_mute();
                                             }
                                         }
 
@@ -1984,8 +2182,8 @@ export component MainWindow inherits Window {
                                             alignment: center;
 
                                             LineEdit {
+                                                width: 320px;
                                                 height: 28px;
-                                                horizontal-stretch: 1;
                                                 font-size: 11px;
                                                 placeholder-text: "Enter custom file name (without extension)...";
                                                 text <=> AppData.ytdlp_custom_filename;
@@ -2103,8 +2301,8 @@ export component MainWindow inherits Window {
                                         alignment: center;
 
                                         LineEdit {
+                                            width: 320px;
                                             height: 28px;
-                                            horizontal-stretch: 1;
                                             font-size: 11px;
                                             placeholder-text: "Choose or paste folder path to save downloaded media";
                                             text <=> AppData.ytdlp_output_dir;
@@ -3142,46 +3340,64 @@ export component MainWindow inherits Window {
         // Bottom Divider
         Rectangle { height: 1px; background: #334155; }
 
-        // BOTTOM ACTION BAR
+        // BOTTOM STATUS BAR
         Rectangle {
-            height: 56px;
+            height: 42px;
             background: #1e293b;
 
+            // Left: Live Queue / Encoding Status Telemetry
             HorizontalLayout {
-                padding-right: 20px;
-                alignment: center;
+                x: 16px;
+                y: 0px;
+                height: parent.height;
+                spacing: 8px;
+                alignment: start;
 
-                // Left Column: 340px width matching the Left File Queue panel, center-aligned
-                HorizontalLayout {
-                    width: 340px;
+                VerticalLayout {
                     alignment: center;
-
-                    // Action Controls
-                    if !AppData.is_processing : ActionButton {
-                        width: 200px;
-                        height: 36px;
-                        title: "START FUNCTION";
-                        icon_source: @image-url("icons/play.svg");
-                        has_icon: true;
-                        icon_size: 13px;
-                        fill_color: #10b981;
-                        hover_color: #059669;
-                        is_disabled: AppData.queue.length == 0;
-                        clicked => { AppLogic.start_processing(); }
-                    }
-
-                    if AppData.is_processing : ActionButton {
-                        width: 200px;
-                        height: 36px;
-                        title: "STOP / CANCEL";
-                        icon_source: @image-url("icons/stop.svg");
-                        has_icon: true;
-                        icon_size: 13px;
-                        fill_color: #ef4444;
-                        hover_color: #dc2626;
-                        clicked => { AppLogic.cancel_processing(); }
+                    Rectangle {
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 4px;
+                        background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : #64748b);
                     }
                 }
+
+                Text {
+                    text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: AppData.is_processing ? #fbbf24 : #cbd5e1;
+                    vertical-alignment: center;
+                }
+
+                if AppData.is_processing : VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 90px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: #0f172a;
+                        clip: true;
+
+                        Rectangle {
+                            x: 0px;
+                            y: 0px;
+                            width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
+                            height: 100%;
+                            border-radius: 3px;
+                            background: @linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #10b981 100%);
+                        }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 7px;
+                padding-bottom: 7px;
+                alignment: center;
 
                 // Spacer pushing right-hand controls to the far right
                 Rectangle { horizontal-stretch: 1; }
@@ -3202,6 +3418,8 @@ export component MainWindow inherits Window {
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
                             alignment: center;
                             VerticalLayout {
                                 alignment: center;
@@ -3226,6 +3444,8 @@ export component MainWindow inherits Window {
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
                             spacing: 5px;
                             alignment: center;
 
@@ -3261,6 +3481,8 @@ export component MainWindow inherits Window {
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
                             spacing: 5px;
                             alignment: center;
 
@@ -3277,7 +3499,7 @@ export component MainWindow inherits Window {
                                 alignment: center;
                                 Text {
                                     text: AppData.show_logs ? "Hide Logs" : "Show Logs";
-                                    font-size: 10px;
+                                    font-size: 11px;
                                     font-weight: 600;
                                     color: AppData.show_logs ? #f8fafc : #94a3b8;
                                 }
@@ -3291,6 +3513,18 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+
+            // Bottom-Right Engine Subtitle
+            Text {
+                x: parent.width - self.width - 16px;
+                y: (parent.height - self.height) / 2;
+                text: "Rust & FFmpeg High-Performance Engine";
+                font-size: 10px;
+                color: #94a3b8;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
         }
     }
+}
 }

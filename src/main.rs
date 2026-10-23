@@ -19,18 +19,47 @@ use another_encoder::ffmpeg::{
 use another_encoder::settings;
 use another_encoder::ytdlp;
 
+#[cfg(windows)]
+mod win_drag_drop;
+
 fn get_clipboard_string() -> Option<String> {
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        let mut cmd = std::process::Command::new("powershell");
-        cmd.args(["-NoProfile", "-Command", "Get-Clipboard"]);
-        cmd.creation_flags(0x08000000);
-        if let Ok(output) = cmd.output() {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !text.is_empty() {
-                    return Some(text);
+        #[link(name = "user32")]
+        extern "system" {
+            fn OpenClipboard(hWndNewOwner: *mut std::ffi::c_void) -> i32;
+            fn CloseClipboard() -> i32;
+            fn GetClipboardData(uFormat: u32) -> *mut std::ffi::c_void;
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GlobalLock(hMem: *mut std::ffi::c_void) -> *const u16;
+            fn GlobalUnlock(hMem: *mut std::ffi::c_void) -> i32;
+        }
+        const CF_UNICODETEXT: u32 = 13;
+
+        unsafe {
+            if OpenClipboard(std::ptr::null_mut()) != 0 {
+                let h_mem = GetClipboardData(CF_UNICODETEXT);
+                let mut result = None;
+                if !h_mem.is_null() {
+                    let ptr = GlobalLock(h_mem);
+                    if !ptr.is_null() {
+                        let mut len = 0usize;
+                        while *ptr.add(len) != 0 && len < 32_768 {
+                            len += 1;
+                        }
+                        let slice = std::slice::from_raw_parts(ptr, len);
+                        let text = String::from_utf16_lossy(slice).trim().to_string();
+                        GlobalUnlock(h_mem);
+                        if !text.is_empty() {
+                            result = Some(text);
+                        }
+                    }
+                }
+                CloseClipboard();
+                if result.is_some() {
+                    return result;
                 }
             }
         }
@@ -140,13 +169,15 @@ fn load_selected_file(
     app_data.set_out_point_seconds(-1.0);
     update_trim_indicators(app_data);
 
-    // Request audio waveform visualization for the timeline
+    // Request audio waveform visualization for the timeline only when audio stream is present
     app_data.set_has_waveform(false);
-    let wf_id = latest_wf_id.fetch_add(1, Ordering::SeqCst) + 1;
-    let _ = waveform_tx.send(WaveformTask {
-        media_path: item.file_path.to_string(),
-        id: wf_id,
-    });
+    if item.is_audio {
+        let wf_id = latest_wf_id.fetch_add(1, Ordering::SeqCst) + 1;
+        let _ = waveform_tx.send(WaveformTask {
+            media_path: item.file_path.to_string(),
+            id: wf_id,
+        });
+    }
 
     // Request initial preview frame if video
     if item.is_video {
@@ -158,6 +189,253 @@ fn load_selected_file(
             id,
         });
     }
+}
+
+fn format_bytes_fast(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    let b = bytes as f64;
+    if b >= GB {
+        format!("{:.2} GB", b / GB)
+    } else if b >= MB {
+        format!("{:.1} MB", b / MB)
+    } else if b >= KB {
+        format!("{:.0} KB", b / KB)
+    } else if bytes > 0 {
+        format!("{} B", bytes)
+    } else {
+        "Unknown size".to_string()
+    }
+}
+
+fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>, exts: &[&str]) {
+    if depth > 4 {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let child = entry.path();
+            if child.is_dir() {
+                collect_media_files_from_dir(&child, depth + 1, out, exts);
+            } else if child.is_file() {
+                if let Some(ext) = child.extension().and_then(|e| e.to_str()) {
+                    if exts.iter().any(|&m| m.eq_ignore_ascii_case(ext)) {
+                        out.push(child);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn process_incoming_paths(
+    paths: Vec<PathBuf>,
+    ui_weak: slint::Weak<MainWindow>,
+    binaries: Arc<FFmpegBinaries>,
+    preview_tx: std::sync::mpsc::Sender<PreviewTask>,
+    latest_id: Arc<AtomicU64>,
+    wf_tx: std::sync::mpsc::Sender<WaveformTask>,
+    l_wf_id: Arc<AtomicU64>,
+) {
+    const MEDIA_EXTS: &[&str] = &[
+        "mp4", "mkv", "mov", "avi", "webm", "ts", "m4v", "flv", "wmv",
+        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "m4b",
+    ];
+    const AUDIO_ONLY_EXTS: &[&str] = &[
+        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "m4b",
+    ];
+
+    thread::spawn(move || {
+        let mut expanded = Vec::new();
+        for path in paths {
+            if path.is_dir() {
+                collect_media_files_from_dir(&path, 0, &mut expanded, MEDIA_EXTS);
+            } else if path.is_file() {
+                expanded.push(path);
+            }
+        }
+
+        if expanded.is_empty() {
+            return;
+        }
+
+        // Build lightweight placeholder items immediately (no external process spawns)
+        let mut initial_items = Vec::with_capacity(expanded.len());
+        for path in expanded {
+            let path_str = path.to_string_lossy().to_string();
+            let file_name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default();
+            let is_audio_only = AUDIO_ONLY_EXTS.iter().any(|&a| a.eq_ignore_ascii_case(ext));
+
+            let placeholder = QueueFile {
+                id: 0,
+                file_name: SharedString::from(file_name),
+                file_path: SharedString::from(path_str),
+                file_size_formatted: SharedString::from(format_bytes_fast(size_bytes)),
+                resolution: SharedString::from(if is_audio_only { "Audio Only" } else { "Probing..." }),
+                duration: SharedString::from("--:--"),
+                codecs: SharedString::from("Probing..."),
+                status: SharedString::from("Probing..."),
+                progress: 0.0,
+                duration_seconds: 0.0,
+                is_video: !is_audio_only,
+                is_audio: true,
+            };
+            initial_items.push((path, placeholder));
+        }
+
+        // Batch-insert placeholders on UI thread in a single layout pass
+        let (added_tx, added_rx) = std::sync::mpsc::channel::<Vec<(usize, PathBuf, QueueFile)>>();
+        let ui_w_init = ui_weak.clone();
+        let _ = slint::invoke_from_event_loop(move || {
+            let mut to_probe = Vec::new();
+            if let Some(ui) = ui_w_init.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let queue_model = app_data.get_queue();
+                let mut existing: Vec<QueueFile> = queue_model.iter().collect();
+
+                for (path, mut item) in initial_items {
+                    if existing.iter().any(|q| q.file_path == item.file_path) {
+                        continue;
+                    }
+                    let row_idx = existing.len();
+                    item.id = row_idx as i32;
+                    existing.push(item.clone());
+                    to_probe.push((row_idx, path, item));
+                }
+
+                if !to_probe.is_empty() {
+                    let count = existing.len();
+                    app_data.set_queue(ModelRc::new(VecModel::from(existing)));
+                    app_data.set_status_summary(SharedString::from(format!(
+                        "{} file(s) in queue",
+                        count
+                    )));
+
+                    if app_data.get_selected_file_index() == -1 {
+                        if let Some((first_idx, _, ref first_item)) = to_probe.first() {
+                            app_data.set_selected_file_index(*first_idx as i32);
+                            app_data.set_selected_file_name(first_item.file_name.clone());
+                            app_data.set_selected_file_path(first_item.file_path.clone());
+                            app_data.set_selected_is_video(first_item.is_video);
+                            app_data.set_selected_is_audio(first_item.is_audio);
+                            app_data.set_selected_resolution(first_item.resolution.clone());
+                            app_data.set_selected_audio_desc(first_item.codecs.clone());
+                            app_data.set_player_has_media(true);
+                        }
+                    }
+                }
+            }
+            let _ = added_tx.send(to_probe);
+        });
+
+        let to_probe = match added_rx.recv() {
+            Ok(v) if !v.is_empty() => Arc::new(v),
+            _ => return,
+        };
+
+        // Probe metadata concurrently using a bounded worker pool (up to 4 threads)
+        let worker_count = to_probe.len().clamp(1, 4);
+        let next_idx = Arc::new( std::sync::atomic::AtomicUsize::new(0));
+
+        for _ in 0..worker_count {
+            let queue_arc = to_probe.clone();
+            let idx_counter = next_idx.clone();
+            let bins = binaries.clone();
+            let ui_w = ui_weak.clone();
+            let p_tx_sub = preview_tx.clone();
+            let l_id_sub = latest_id.clone();
+            let wf_tx_sub = wf_tx.clone();
+            let l_wf_sub = l_wf_id.clone();
+
+            thread::spawn(move || {
+                loop {
+                    let i = idx_counter.fetch_add(1, Ordering::SeqCst);
+                    if i >= queue_arc.len() {
+                        break;
+                    }
+                    let (hint_row_idx, ref path, ref base_item) = queue_arc[i];
+                    let mut updated = base_item.clone();
+
+                    match probe_file(path, &bins.ffprobe) {
+                        Ok(meta) => {
+                            let codecs = meta.codecs_summary();
+                            let is_video = meta.primary_video().is_some();
+                            let is_audio = meta.primary_audio().is_some();
+                            updated.file_size_formatted = SharedString::from(meta.file_size_formatted());
+                            updated.resolution = SharedString::from(meta.resolution_str());
+                            updated.duration = SharedString::from(meta.duration_formatted);
+                            updated.codecs = SharedString::from(codecs);
+                            updated.status = SharedString::from("Ready");
+                            updated.duration_seconds = meta.duration_seconds as f32;
+                            updated.is_video = is_video;
+                            updated.is_audio = is_audio;
+                        }
+                        Err(_) => {
+                            updated.resolution = SharedString::from("Unknown");
+                            updated.duration = SharedString::from("00:00.000");
+                            updated.codecs = SharedString::from("Unknown");
+                            updated.status = SharedString::from("Ready");
+                        }
+                    }
+
+                    let ui_w_row = ui_w.clone();
+                    let p_tx_row = p_tx_sub.clone();
+                    let l_id_row = l_id_sub.clone();
+                    let wf_tx_row = wf_tx_sub.clone();
+                    let l_wf_row = l_wf_sub.clone();
+
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(ui) = ui_w_row.upgrade() {
+                            let app_data = ui.global::<AppData>();
+                            let model = app_data.get_queue();
+                            let mut target_row = None;
+
+                            if let Some(existing) = model.row_data(hint_row_idx) {
+                                if existing.file_path == updated.file_path {
+                                    target_row = Some(hint_row_idx);
+                                }
+                            }
+                            if target_row.is_none() {
+                                for r in 0..model.row_count() {
+                                    if let Some(existing) = model.row_data(r) {
+                                        if existing.file_path == updated.file_path {
+                                            target_row = Some(r);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if let Some(r) = target_row {
+                                updated.id = r as i32;
+                                model.set_row_data(r, updated.clone());
+                                if app_data.get_selected_file_path() == updated.file_path {
+                                    load_selected_file(
+                                        &app_data,
+                                        &updated,
+                                        &p_tx_row,
+                                        &l_id_row,
+                                        &wf_tx_row,
+                                        &l_wf_row,
+                                    );
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    });
 }
 
 fn main() -> Result<()> {
@@ -346,93 +624,15 @@ fn main() -> Result<()> {
                 .pick_files();
 
             if let Some(paths) = files {
-                let ui_weak = ui_handle.clone();
-                let bins = binaries.clone();
-                let p_tx = preview_tx.clone();
-                let l_id = latest_id.clone();
-                let wf_tx_th = wf_tx.clone();
-                let l_wf_th = l_wf_id.clone();
-
-                thread::spawn(move || {
-                    for path in paths {
-                        let path_str = path.to_string_lossy().to_string();
-                        let file_name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-
-                        let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio) =
-                            match probe_file(&path, &bins.ffprobe) {
-                                Ok(meta) => {
-                                    let codecs = meta.codecs_summary();
-                                    let is_video = meta.primary_video().is_some();
-                                    let is_audio = meta.primary_audio().is_some();
-                                    (
-                                        meta.file_size_formatted(),
-                                        meta.resolution_str(),
-                                        meta.duration_formatted,
-                                        codecs,
-                                        meta.duration_seconds as f32,
-                                        is_video,
-                                        is_audio,
-                                    )
-                                }
-                                Err(_) => (
-                                    "Unknown size".to_string(),
-                                    "Unknown".to_string(),
-                                    "00:00.000".to_string(),
-                                    "Unknown".to_string(),
-                                    0.0,
-                                    false,
-                                    false,
-                                ),
-                            };
-
-                        let ui_w = ui_weak.clone();
-                        let p_tx_sub = p_tx.clone();
-                        let l_id_sub = l_id.clone();
-                        let wf_tx_sub = wf_tx_th.clone();
-                        let l_wf_sub = l_wf_th.clone();
-                        let item = QueueFile {
-                            id: 0,
-                            file_name: SharedString::from(file_name),
-                            file_path: SharedString::from(path_str),
-                            file_size_formatted: SharedString::from(file_size_formatted),
-                            resolution: SharedString::from(resolution),
-                            duration: SharedString::from(duration),
-                            codecs: SharedString::from(codecs),
-                            status: SharedString::from("Ready"),
-                            progress: 0.0,
-                            duration_seconds,
-                            is_video,
-                            is_audio,
-                        };
-
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(ui) = ui_w.upgrade() {
-                                let app_data = ui.global::<AppData>();
-                                let mut list: Vec<QueueFile> =
-                                    app_data.get_queue().iter().collect();
-                                let mut new_item = item;
-                                new_item.id = list.len() as i32;
-                                list.push(new_item.clone());
-                                let count = list.len();
-                                app_data.set_queue(ModelRc::new(VecModel::from(list)));
-                                app_data.set_status_summary(SharedString::from(format!(
-                                    "{} file(s) in queue",
-                                    count
-                                )));
-
-                                // Automatically select the first file if none selected
-                                if app_data.get_selected_file_index() == -1 {
-                                    app_data.set_selected_file_index(0);
-                                    load_selected_file(&app_data, &new_item, &p_tx_sub, &l_id_sub, &wf_tx_sub, &l_wf_sub);
-                                }
-                            }
-                        });
-                    }
-                });
+                process_incoming_paths(
+                    paths,
+                    ui_handle.clone(),
+                    binaries.clone(),
+                    preview_tx.clone(),
+                    latest_id.clone(),
+                    wf_tx.clone(),
+                    l_wf_id.clone(),
+                );
             }
         });
     }
@@ -885,16 +1085,25 @@ fn main() -> Result<()> {
                         let dur_sec = app_data.get_player_duration() as f64;
                         let ffmpeg_bin = binaries.ffmpeg.clone();
 
+                        let vol_float = if app_data.get_player_is_muted() {
+                            0.0
+                        } else {
+                            app_data.get_player_volume()
+                        };
+                        let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+
                         // Launch audio playback in parallel via ffplay in headless mode (-nodisp)
-                        if let Some(ref ffplay_bin) = binaries.ffplay {
-                            let dur_opt = if out_sec > start_sec {
-                                Some(out_sec - start_sec)
-                            } else {
-                                None
-                            };
-                            if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt) {
-                                if let Ok(mut lock) = active_ffplay_clone.lock() {
-                                    *lock = Some(ff_child);
+                        if vol_int > 0 {
+                            if let Some(ref ffplay_bin) = binaries.ffplay {
+                                let dur_opt = if out_sec > start_sec {
+                                    Some(out_sec - start_sec)
+                                } else {
+                                    None
+                                };
+                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int) {
+                                    if let Ok(mut lock) = active_ffplay_clone.lock() {
+                                        *lock = Some(ff_child);
+                                    }
                                 }
                             }
                         }
@@ -921,15 +1130,14 @@ fn main() -> Result<()> {
 
                                     let expected = 640 * 360 * 4;
                                     let mut buf = vec![0u8; expected];
-                                    let mut frame_count: u64 = 0;
-                                    let frame_interval = std::time::Duration::from_millis(41); // ~24fps
+                                    let mut frame_index: u64 = 0;
+                                    let frame_dur = 1.0 / 24.0;
+                                    let mut playback_start: Option<std::time::Instant> = None;
 
                                     loop {
                                         if session_check.load(Ordering::SeqCst) != my_session {
                                             break;
                                         }
-
-                                        let loop_start = std::time::Instant::now();
 
                                         if stdout.read_exact(&mut buf).is_err() {
                                             let ui_w2 = ui_w.clone();
@@ -941,19 +1149,56 @@ fn main() -> Result<()> {
                                             break;
                                         }
 
-                                        frame_count += 1;
-                                        let cur_time = start_sec + (frame_count as f64) / 24.0;
+                                        let start_instant = match playback_start {
+                                            Some(inst) => inst,
+                                            None => {
+                                                let inst = std::time::Instant::now();
+                                                playback_start = Some(inst);
+                                                inst
+                                            }
+                                        };
 
-                                        if (out_sec >= 0.0 && cur_time >= out_sec) || cur_time >= dur_sec {
+                                        let frame_target_sec = (frame_index as f64) * frame_dur;
+                                        let elapsed_sec = start_instant.elapsed().as_secs_f64();
+                                        let diff = frame_target_sec - elapsed_sec;
+
+                                        let master_current_time = start_sec + elapsed_sec;
+                                        if (out_sec >= 0.0 && master_current_time >= out_sec) || master_current_time >= dur_sec {
+                                            let final_time = if out_sec >= 0.0 && master_current_time >= out_sec {
+                                                out_sec
+                                            } else {
+                                                dur_sec
+                                            };
                                             let ui_w2 = ui_w.clone();
                                             let _ = slint::invoke_from_event_loop(move || {
                                                 if let Some(ui) = ui_w2.upgrade() {
-                                                    ui.global::<AppData>().set_player_is_playing(false);
+                                                    let app_data = ui.global::<AppData>();
+                                                    app_data.set_player_is_playing(false);
+                                                    app_data.set_player_current_time(final_time as f32);
+                                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
                                                 }
                                             });
                                             break;
                                         }
 
+                                        frame_index += 1;
+
+                                        // If this frame is significantly behind wall clock (> 40ms / 1 frame late),
+                                        // drop it so video catches up with audio immediately!
+                                        if diff < -0.040 {
+                                            continue;
+                                        }
+
+                                        // If this frame is early, sleep until its exact presentation time
+                                        if diff > 0.002 {
+                                            thread::sleep(std::time::Duration::from_secs_f64(diff));
+                                        }
+
+                                        if session_check.load(Ordering::SeqCst) != my_session {
+                                            break;
+                                        }
+
+                                        let current_render_time = start_sec + start_instant.elapsed().as_secs_f64();
                                         let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
                                         pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
 
@@ -964,15 +1209,11 @@ fn main() -> Result<()> {
                                                 if app_data.get_player_is_playing() {
                                                     let img = slint::Image::from_rgba8(pixel_buffer);
                                                     app_data.set_preview_frame(img);
-                                                    app_data.set_player_current_time(cur_time as f32);
-                                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(cur_time)));
+                                                    app_data.set_player_current_time(current_render_time as f32);
+                                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(current_render_time)));
                                                 }
                                             }
                                         });
-
-                                        if let Some(rem) = frame_interval.checked_sub(loop_start.elapsed()) {
-                                            thread::sleep(rem);
-                                        }
                                     }
 
                                     if let Ok(mut lock) = stream_child_ref.lock() {
@@ -998,15 +1239,24 @@ fn main() -> Result<()> {
                         let start_sec = start_at as f64;
                         let out_sec = app_data.get_out_point_seconds() as f64;
 
-                        if let Some(ref ffplay_bin) = binaries.ffplay {
-                            let dur_opt = if out_sec > start_sec {
-                                Some(out_sec - start_sec)
-                            } else {
-                                None
-                            };
-                            if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt) {
-                                if let Ok(mut lock) = active_ffplay_clone.lock() {
-                                    *lock = Some(ff_child);
+                        let vol_float = if app_data.get_player_is_muted() {
+                            0.0
+                        } else {
+                            app_data.get_player_volume()
+                        };
+                        let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+
+                        if vol_int > 0 {
+                            if let Some(ref ffplay_bin) = binaries.ffplay {
+                                let dur_opt = if out_sec > start_sec {
+                                    Some(out_sec - start_sec)
+                                } else {
+                                    None
+                                };
+                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int) {
+                                    if let Ok(mut lock) = active_ffplay_clone.lock() {
+                                        *lock = Some(ff_child);
+                                    }
                                 }
                             }
                         }
@@ -1016,10 +1266,11 @@ fn main() -> Result<()> {
                         let ffplay_child_ref = active_ffplay_clone.clone();
                         let my_session = session_id_clone.fetch_add(1, Ordering::SeqCst) + 1;
                         let session_check = session_id_clone.clone();
+                        let audio_start_instant = std::time::Instant::now();
 
                         play_timer_clone.borrow().start(
                             slint::TimerMode::Repeated,
-                            std::time::Duration::from_millis(50),
+                            std::time::Duration::from_millis(40),
                             move || {
                                 if session_check.load(Ordering::SeqCst) != my_session {
                                     timer_ref.borrow().stop();
@@ -1033,12 +1284,20 @@ fn main() -> Result<()> {
                                         return;
                                     }
 
-                                    let cur = app_data.get_player_current_time() + 0.05;
+                                    let elapsed = audio_start_instant.elapsed().as_secs_f64();
+                                    let cur = (start_sec + elapsed) as f32;
                                     let dur = app_data.get_player_duration();
                                     let out_sec = app_data.get_out_point_seconds();
 
                                     if (out_sec >= 0.0 && cur >= out_sec) || cur >= dur {
+                                        let final_time = if out_sec >= 0.0 && cur >= out_sec {
+                                            out_sec
+                                        } else {
+                                            dur
+                                        };
                                         app_data.set_player_is_playing(false);
+                                        app_data.set_player_current_time(final_time);
+                                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time as f64)));
                                         timer_ref.borrow().stop();
                                         if let Ok(mut lock) = ffplay_child_ref.lock() {
                                             if let Some(mut c) = lock.take() {
@@ -1161,12 +1420,137 @@ fn main() -> Result<()> {
                         .with_file_name(if cfg!(windows) { "ffplay.exe" } else { "ffplay" })
                 });
 
+                let vol_float = if app_data.get_player_is_muted() {
+                    0.0
+                } else {
+                    app_data.get_player_volume()
+                };
+                let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+
                 if let Ok(mut lock) = active_child_clone.lock() {
                     if let Some(mut old) = lock.take() {
                         let _ = old.kill();
                     }
-                    if let Ok(child) = spawn_ffplay(&ffplay_bin, &media_path, cur, duration, !is_video) {
+                    if let Ok(child) = spawn_ffplay(&ffplay_bin, &media_path, cur, duration, !is_video, Some(vol_int)) {
                         *lock = Some(child);
+                    }
+                }
+            }
+        });
+    }
+
+    // Handle Player Volume Changed
+    {
+        let ui_handle = ui.as_weak();
+        let binaries = binaries.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let last_restart = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
+
+        ui.global::<AppLogic>().on_player_volume_changed(move |val| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let clamped = val.clamp(0.0, 1.0);
+                app_data.set_player_volume(clamped);
+
+                if clamped <= 0.001 {
+                    app_data.set_player_is_muted(true);
+                } else if app_data.get_player_is_muted() {
+                    app_data.set_player_is_muted(false);
+                }
+
+                if app_data.get_player_is_playing() {
+                    let mut lr = last_restart.lock().unwrap();
+                    let now = std::time::Instant::now();
+                    if now.duration_since(*lr) >= std::time::Duration::from_millis(120) {
+                        *lr = now;
+                        let vol_int = if app_data.get_player_is_muted() {
+                            0
+                        } else {
+                            (clamped * 100.0).round().clamp(0.0, 100.0) as i32
+                        };
+
+                        if let Ok(mut lock) = active_ffplay_clone.lock() {
+                            if let Some(mut old) = lock.take() {
+                                let _ = old.kill();
+                            }
+                            if vol_int > 0 {
+                                if let Some(ref ffplay_bin) = binaries.ffplay {
+                                    let cur_time = app_data.get_player_current_time() as f64;
+                                    let out_sec = app_data.get_out_point_seconds() as f64;
+                                    let dur_opt = if out_sec > cur_time {
+                                        Some(out_sec - cur_time)
+                                    } else {
+                                        None
+                                    };
+                                    let path = app_data.get_selected_file_path().to_string();
+                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int) {
+                                        *lock = Some(child);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Handle Player Toggle Mute
+    {
+        let ui_handle = ui.as_weak();
+        let binaries = binaries.clone();
+        let active_ffplay_clone = active_player_child.clone();
+
+        ui.global::<AppLogic>().on_player_toggle_mute(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let is_muted = app_data.get_player_is_muted();
+                if is_muted {
+                    // Unmute
+                    let mut restore_vol = app_data.get_player_pre_mute_volume();
+                    if restore_vol < 0.05 {
+                        restore_vol = 0.8;
+                    }
+                    app_data.set_player_volume(restore_vol);
+                    app_data.set_player_is_muted(false);
+
+                    if app_data.get_player_is_playing() {
+                        let cur_time = app_data.get_player_current_time() as f64;
+                        let out_sec = app_data.get_out_point_seconds() as f64;
+                        let dur_opt = if out_sec > cur_time {
+                            Some(out_sec - cur_time)
+                        } else {
+                            None
+                        };
+                        let path = app_data.get_selected_file_path().to_string();
+                        let vol_int = (restore_vol * 100.0).round().clamp(0.0, 100.0) as i32;
+
+                        if let Ok(mut lock) = active_ffplay_clone.lock() {
+                            if let Some(mut old) = lock.take() {
+                                let _ = old.kill();
+                            }
+                            if vol_int > 0 {
+                                if let Some(ref ffplay_bin) = binaries.ffplay {
+                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int) {
+                                        *lock = Some(child);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Mute
+                    let cur_vol = app_data.get_player_volume();
+                    if cur_vol > 0.01 {
+                        app_data.set_player_pre_mute_volume(cur_vol);
+                    }
+                    app_data.set_player_is_muted(true);
+
+                    // Silence audio immediately
+                    if let Ok(mut lock) = active_ffplay_clone.lock() {
+                        if let Some(mut old) = lock.take() {
+                            let _ = old.kill();
+                        }
                     }
                 }
             }
@@ -1300,7 +1684,8 @@ fn main() -> Result<()> {
                 let func_idx = ui.global::<AppData>().get_function_index();
                 let hw_accel_idx = ui.global::<AppData>().get_hw_accel_index();
                 let rate_ctrl_idx = ui.global::<AppData>().get_rate_control_index();
-                let crf = ui.global::<AppData>().get_crf_value().round() as u32;
+                let crf_raw = ui.global::<AppData>().get_crf_value().round() as u32;
+                let crf = crf_raw.min(51); // Clamp to valid range [0, 51]
                 let video_br_idx = ui.global::<AppData>().get_video_bitrate_index();
                 let preset_idx = ui.global::<AppData>().get_preset_index();
                 let res_idx = ui.global::<AppData>().get_resolution_index();
@@ -1521,6 +1906,66 @@ fn main() -> Result<()> {
                             Some(out_point_str.clone())
                         };
 
+                        // Reuse already-probed duration if available, otherwise probe on demand
+                        let total_duration = if item.duration_seconds > 0.0 {
+                            item.duration_seconds as f64
+                        } else {
+                            match probe_file(&input_path, &bins.ffprobe) {
+                                Ok(m) => m.duration_seconds,
+                                Err(_) => 0.0,
+                            }
+                        };
+
+                        // Validate timecodes
+                        let in_secs = in_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
+                        let out_secs = out_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
+
+                        if in_secs.is_some() && out_secs.is_some() && in_secs.unwrap() >= out_secs.unwrap() {
+                            let ui_w = ui_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_w.upgrade() {
+                                    ui.global::<AppData>().set_status_summary(SharedString::from("In point must be before out point"));
+                                }
+                            });
+                            continue;
+                        }
+
+                        if let Some(in_s) = in_secs {
+                            if total_duration > 0.0 && in_s >= total_duration {
+                                let ui_w = ui_weak.clone();
+                                let in_s_c = in_s;
+                                let dur_c = total_duration;
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_w.upgrade() {
+                                        ui.global::<AppData>().set_status_summary(SharedString::from(format!("In point ({:.1}s) is beyond video duration ({:.1}s)", in_s_c, dur_c)));
+                                    }
+                                });
+                                continue;
+                            }
+                        }
+
+                        if let Some(out_s) = out_secs {
+                            if total_duration > 0.0 && out_s > total_duration {
+                                let ui_w = ui_weak.clone();
+                                let out_s_c = out_s;
+                                let dur_c = total_duration;
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_w.upgrade() {
+                                        ui.global::<AppData>().set_status_summary(SharedString::from(format!("Out point ({:.1}s) is beyond video duration ({:.1}s)", out_s_c, dur_c)));
+                                    }
+                                });
+                                continue;
+                            }
+                        }
+
+                        let start_sec = in_secs.unwrap_or(0.0).max(0.0);
+                        let end_sec = out_secs.unwrap_or(total_duration);
+                        let effective_duration = if end_sec > start_sec {
+                            end_sec - start_sec
+                        } else {
+                            total_duration
+                        };
+
                         let config = EncodeJobConfig {
                             function,
                             input_path: input_path.clone(),
@@ -1552,28 +1997,21 @@ fn main() -> Result<()> {
                             out_point,
                         };
 
-                        // Probe total duration of file
-                        let total_duration = match probe_file(&input_path, &bins.ffprobe) {
-                            Ok(m) => m.duration_seconds,
-                            Err(_) => 0.0,
-                        };
-
                         // Build FFmpeg command
                         let cmd_args = FFmpegCommandBuilder::build(&config, &bins.ffmpeg);
                         let cmd_str = cmd_args.join(" ");
 
-                        // Update current file status to Encoding
+                        // Update current file status to Encoding in-place
                         {
                             let ui_w = ui_weak.clone();
                             let idx = item_idx;
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_w.upgrade() {
                                     let app_data = ui.global::<AppData>();
-                                    let mut list: Vec<QueueFile> =
-                                        app_data.get_queue().iter().collect();
-                                    if idx < list.len() {
-                                        list[idx].status = SharedString::from("Encoding...");
-                                        app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                                    let model = app_data.get_queue();
+                                    if let Some(mut row) = model.row_data(idx) {
+                                        row.status = SharedString::from("Encoding...");
+                                        model.set_row_data(idx, row);
                                     }
                                 }
                             });
@@ -1594,22 +2032,32 @@ fn main() -> Result<()> {
 
                         let ui_w_progress = ui_weak.clone();
                         let idx = item_idx;
+                        let mut last_ui_tick = std::time::Instant::now()
+                            .checked_sub(std::time::Duration::from_millis(100))
+                            .unwrap_or_else(std::time::Instant::now);
 
                         let progress_callback =
                             move |p: another_encoder::ffmpeg::ProgressUpdate| {
+                                let now = std::time::Instant::now();
+                                if p.percentage < 1.0
+                                    && now.duration_since(last_ui_tick).as_millis() < 45
+                                {
+                                    return;
+                                }
+                                last_ui_tick = now;
+
                                 let ui_w = ui_w_progress.clone();
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(ui) = ui_w.upgrade() {
                                         let app_data = ui.global::<AppData>();
-                                        let mut list: Vec<QueueFile> =
-                                            app_data.get_queue().iter().collect();
-                                        if idx < list.len() {
-                                            list[idx].progress = p.percentage;
-                                            list[idx].status = SharedString::from(format!(
+                                        let model = app_data.get_queue();
+                                        if let Some(mut row) = model.row_data(idx) {
+                                            row.progress = p.percentage;
+                                            row.status = SharedString::from(format!(
                                                 "{:.1}%",
                                                 p.percentage * 100.0
                                             ));
-                                            app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                                            model.set_row_data(idx, row);
                                         }
 
                                         let overall =
@@ -1644,7 +2092,11 @@ fn main() -> Result<()> {
                                     let mut cur =
                                         ui.global::<AppData>().get_log_preview().to_string();
                                     if cur.len() > 4000 {
-                                        cur = cur[cur.len() - 3000..].to_string();
+                                        let mut split_idx = cur.len() - 3000;
+                                        while !cur.is_char_boundary(split_idx) {
+                                            split_idx += 1;
+                                        }
+                                        cur = cur[split_idx..].to_string();
                                     }
                                     cur.push_str(&line);
                                     cur.push('\n');
@@ -1657,7 +2109,7 @@ fn main() -> Result<()> {
                         // Run execution
                         let result = FFmpegRunner::run_with_progress(
                             &cmd_args,
-                            total_duration,
+                            effective_duration,
                             cancel.clone(),
                             progress_callback,
                             log_callback,
@@ -1679,14 +2131,13 @@ fn main() -> Result<()> {
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_w_done.upgrade() {
                                 let app_data = ui.global::<AppData>();
-                                let mut list: Vec<QueueFile> =
-                                    app_data.get_queue().iter().collect();
-                                if idx < list.len() {
-                                    list[idx].status = SharedString::from(status_str);
+                                let model = app_data.get_queue();
+                                if let Some(mut row) = model.row_data(idx) {
+                                    row.status = SharedString::from(status_str);
                                     if is_ok {
-                                        list[idx].progress = 1.0;
+                                        row.progress = 1.0;
                                     }
-                                    app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                                    model.set_row_data(idx, row);
                                 }
                             }
                         });
@@ -2102,8 +2553,8 @@ fn main() -> Result<()> {
                 Some(u) => u,
                 None => return,
             };
-            let file_path_str = ui
-                .global::<AppData>()
+            let app_data = ui.global::<AppData>();
+            let file_path_str = app_data
                 .get_ytdlp_last_downloaded_file()
                 .to_string();
             if file_path_str.is_empty() {
@@ -2114,60 +2565,73 @@ fn main() -> Result<()> {
                 return;
             }
 
-            let file_name = path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio) =
-                match probe_file(&path, &bins.ffprobe) {
-                    Ok(meta) => {
-                        let codecs = meta.codecs_summary();
-                        let is_video = meta.primary_video().is_some();
-                        let is_audio = meta.primary_audio().is_some();
-                        (
-                            meta.file_size_formatted(),
-                            meta.resolution_str(),
-                            meta.duration_formatted,
-                            codecs,
-                            meta.duration_seconds as f32,
+            app_data.set_active_tab(0);
+            let ui_w = ui_handle.clone();
+            let bins_c = bins.clone();
+            let p_tx_c = p_tx.clone();
+            let l_id_c = l_id.clone();
+            let wf_tx_c = wf_tx.clone();
+            let l_wf_c = l_wf.clone();
+
+            thread::spawn(move || {
+                let file_name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio) =
+                    match probe_file(&path, &bins_c.ffprobe) {
+                        Ok(meta) => {
+                            let codecs = meta.codecs_summary();
+                            let is_video = meta.primary_video().is_some();
+                            let is_audio = meta.primary_audio().is_some();
+                            (
+                                meta.file_size_formatted(),
+                                meta.resolution_str(),
+                                meta.duration_formatted,
+                                codecs,
+                                meta.duration_seconds as f32,
+                                is_video,
+                                is_audio,
+                            )
+                        }
+                        Err(_) => (
+                            "Unknown size".to_string(),
+                            "Unknown".to_string(),
+                            "00:00.000".to_string(),
+                            "Unknown".to_string(),
+                            0.0,
+                            false,
+                            false,
+                        ),
+                    };
+
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_w.upgrade() {
+                        let app_data = ui.global::<AppData>();
+                        let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
+                        let item = QueueFile {
+                            id: list.len() as i32,
+                            file_name: SharedString::from(file_name),
+                            file_path: SharedString::from(file_path_str),
+                            file_size_formatted: SharedString::from(file_size_formatted),
+                            resolution: SharedString::from(resolution),
+                            duration: SharedString::from(duration),
+                            codecs: SharedString::from(codecs),
+                            status: SharedString::from("Ready"),
+                            progress: 0.0,
+                            duration_seconds,
                             is_video,
                             is_audio,
-                        )
+                        };
+                        list.push(item.clone());
+                        let idx = (list.len() - 1) as i32;
+                        app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                        app_data.set_selected_file_index(idx);
+                        load_selected_file(&app_data, &item, &p_tx_c, &l_id_c, &wf_tx_c, &l_wf_c);
                     }
-                    Err(_) => (
-                        "Unknown size".to_string(),
-                        "Unknown".to_string(),
-                        "00:00.000".to_string(),
-                        "Unknown".to_string(),
-                        0.0,
-                        false,
-                        false,
-                    ),
-                };
-
-            let app_data = ui.global::<AppData>();
-            let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
-            let item = QueueFile {
-                id: list.len() as i32,
-                file_name: SharedString::from(file_name),
-                file_path: SharedString::from(file_path_str),
-                file_size_formatted: SharedString::from(file_size_formatted),
-                resolution: SharedString::from(resolution),
-                duration: SharedString::from(duration),
-                codecs: SharedString::from(codecs),
-                status: SharedString::from("Ready"),
-                progress: 0.0,
-                duration_seconds,
-                is_video,
-                is_audio,
-            };
-            list.push(item.clone());
-            let idx = (list.len() - 1) as i32;
-            app_data.set_queue(ModelRc::new(VecModel::from(list)));
-            app_data.set_selected_file_index(idx);
-            load_selected_file(&app_data, &item, &p_tx, &l_id, &wf_tx, &l_wf);
-            app_data.set_active_tab(0);
+                });
+            });
         });
     }
 
@@ -2175,14 +2639,18 @@ fn main() -> Result<()> {
     {
         let ui_handle = ui.as_weak();
         let bins = binaries.clone();
+        let p_tx = preview_tx.clone();
+        let l_id = latest_preview_id.clone();
+        let wf_tx = waveform_tx.clone();
+        let l_wf = latest_waveform_id.clone();
 
         ui.global::<AppLogic>().on_ytdlp_send_to_queue(move || {
             let ui = match ui_handle.upgrade() {
                 Some(u) => u,
                 None => return,
             };
-            let file_path_str = ui
-                .global::<AppData>()
+            let app_data = ui.global::<AppData>();
+            let file_path_str = app_data
                 .get_ytdlp_last_downloaded_file()
                 .to_string();
             if file_path_str.is_empty() {
@@ -2193,63 +2661,75 @@ fn main() -> Result<()> {
                 return;
             }
 
-            let file_name = path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio) =
-                match probe_file(&path, &bins.ffprobe) {
-                    Ok(meta) => {
-                        let codecs = meta.codecs_summary();
-                        let is_video = meta.primary_video().is_some();
-                        let is_audio = meta.primary_audio().is_some();
-                        (
-                            meta.file_size_formatted(),
-                            meta.resolution_str(),
-                            meta.duration_formatted,
-                            codecs,
-                            meta.duration_seconds as f32,
-                            is_video,
-                            is_audio,
-                        )
-                    }
-                    Err(_) => (
-                        "Unknown size".to_string(),
-                        "Unknown".to_string(),
-                        "00:00.000".to_string(),
-                        "Unknown".to_string(),
-                        0.0,
-                        false,
-                        false,
-                    ),
-                };
-
-            let app_data = ui.global::<AppData>();
-            let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
-            let item = QueueFile {
-                id: list.len() as i32,
-                file_name: SharedString::from(file_name),
-                file_path: SharedString::from(file_path_str),
-                file_size_formatted: SharedString::from(file_size_formatted),
-                resolution: SharedString::from(resolution),
-                duration: SharedString::from(duration),
-                codecs: SharedString::from(codecs),
-                status: SharedString::from("Ready"),
-                progress: 0.0,
-                duration_seconds,
-                is_video,
-                is_audio,
-            };
-            list.push(item);
-            let count = list.len();
-            app_data.set_queue(ModelRc::new(VecModel::from(list)));
-            app_data.set_status_summary(SharedString::from(format!(
-                "{} file(s) in queue",
-                count
-            )));
             app_data.set_active_tab(2);
+            process_incoming_paths(
+                vec![path],
+                ui_handle.clone(),
+                bins.clone(),
+                p_tx.clone(),
+                l_id.clone(),
+                wf_tx.clone(),
+                l_wf.clone(),
+            );
         });
+    }
+
+    ui.show()
+        .map_err(|e| anyhow::anyhow!("Failed to show window: {:?}", e))?;
+
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let native_hwnd = ui
+            .window()
+            .window_handle()
+            .window_handle()
+            .ok()
+            .and_then(|handle| {
+                if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                    Some(win32.hwnd.get() as *mut std::ffi::c_void)
+                } else {
+                    None
+                }
+            })
+            .or_else(win_drag_drop::find_app_window);
+
+        let ui_weak = ui.as_weak();
+        let bins = binaries.clone();
+        let p_tx = preview_tx.clone();
+        let l_id = latest_preview_id.clone();
+        let wf_tx_th = waveform_tx.clone();
+        let l_wf_th = latest_waveform_id.clone();
+
+        let initial_hwnd = native_hwnd.unwrap_or(std::ptr::null_mut());
+        win_drag_drop::setup_drop_target(initial_hwnd, move |dropped_paths| {
+            println!("Dropped {} file(s) into queue", dropped_paths.len());
+            process_incoming_paths(
+                dropped_paths,
+                ui_weak.clone(),
+                bins.clone(),
+                p_tx.clone(),
+                l_id.clone(),
+                wf_tx_th.clone(),
+                l_wf_th.clone(),
+            );
+        });
+
+        // Poll during early window lifecycle until attached to the real application HWND
+        let check_timer = Rc::new(RefCell::new(slint::Timer::default()));
+        let check_timer_clone = check_timer.clone();
+        let mut attempts = 0;
+        check_timer.borrow_mut().start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_millis(150),
+            move || {
+                attempts += 1;
+                win_drag_drop::reapply_drop_target();
+                if win_drag_drop::is_attached() || attempts >= 20 {
+                    check_timer_clone.borrow().stop();
+                }
+            },
+        );
     }
 
     ui.run()

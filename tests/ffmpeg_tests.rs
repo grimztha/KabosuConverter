@@ -315,7 +315,7 @@ fn test_audio_playback_spawning() {
             }
             if let Ok(status) = cmd.status() {
                 if status.success() {
-                    let child = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.2));
+                    let child = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.2), 80);
                     assert!(child.is_ok(), "spawn_audio_playback should succeed");
                     if let Ok(mut c) = child {
                         let _ = c.kill();
@@ -326,5 +326,51 @@ fn test_audio_playback_spawning() {
         }
     }
 }
+
+#[test]
+fn test_extract_frame_rgba_accurate_seeking() {
+    use another_encoder::ffmpeg::{extract_frame_rgba, FFmpegBinaries};
+
+    if let Ok(binaries) = FFmpegBinaries::locate() {
+        let test_vid = Path::new("target/test_seek_input.mp4");
+        let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+        cmd.args([
+            "-f", "lavfi",
+            "-i", "testsrc=duration=4:size=640x360:rate=24",
+            "-g", "48", // Keyframes every 2.0s
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-y",
+        ]).arg(test_vid);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        if let Ok(status) = cmd.status() {
+            if status.success() {
+                // Test 1: Extract at 0.5s (short seek, target <= 2.0)
+                let frame_05 = extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 0.5);
+                assert!(frame_05.is_ok(), "extract_frame_rgba at 0.5s failed: {:?}", frame_05.err());
+                let buf_05 = frame_05.unwrap();
+                assert_eq!(buf_05.len(), 640 * 360 * 4);
+
+                // Test 2: Extract at 3.0s (two-stage seek, target > 2.0)
+                let frame_30 = extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 3.0);
+                assert!(frame_30.is_ok(), "extract_frame_rgba at 3.0s failed: {:?}", frame_30.err());
+                let buf_30 = frame_30.unwrap();
+                assert_eq!(buf_30.len(), 640 * 360 * 4);
+
+                // Test 3: The two frames must not be identical (verifies accurate temporal decoding rather than snapping to 0.0s)
+                assert_ne!(buf_05, buf_30, "Frame at 0.5s and 3.0s must have different visual contents");
+
+                let _ = std::fs::remove_file(test_vid);
+            }
+        }
+    }
+}
+
 
 

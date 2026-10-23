@@ -1,7 +1,7 @@
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, Read};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use anyhow::{Context, Result};
 use regex::Regex;
 
@@ -14,6 +14,18 @@ pub struct ProgressUpdate {
     pub speed: f32,
     pub bitrate_kbps: f32,
     pub raw_line: String,
+}
+
+fn progress_regexes() -> &'static (Regex, Regex, Regex, Regex) {
+    static REGEXES: OnceLock<(Regex, Regex, Regex, Regex)> = OnceLock::new();
+    REGEXES.get_or_init(|| {
+        (
+            Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d+)").unwrap(),
+            Regex::new(r"fps=\s*([\d\.]+)").unwrap(),
+            Regex::new(r"speed=\s*([\d\.]+)x").unwrap(),
+            Regex::new(r"bitrate=\s*([\d\.]+)kbits/s").unwrap(),
+        )
+    })
 }
 
 pub struct FFmpegRunner;
@@ -49,35 +61,24 @@ impl FFmpegRunner {
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
 
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        }
+        crate::set_no_window(&mut cmd);
 
         let mut child = cmd
             .spawn()
             .with_context(|| format!("Failed to spawn ffmpeg executable: {}", exe))?;
 
         let stderr = child.stderr.take().context("Failed to capture stderr")?;
-        let reader = BufReader::new(stderr);
+        let mut reader = BufReader::new(stderr);
+        let (time_regex, fps_regex, speed_regex, bitrate_regex) = progress_regexes();
 
-        let time_regex = Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d+)").unwrap();
-        let fps_regex = Regex::new(r"fps=\s*([\d\.]+)").unwrap();
-        let speed_regex = Regex::new(r"speed=\s*([\d\.]+)x").unwrap();
-        let bitrate_regex = Regex::new(r"bitrate=\s*([\d\.]+)kbits/s").unwrap();
+        let mut buf = [0u8; 4096];
+        let mut line_bytes: Vec<u8> = Vec::with_capacity(256);
 
-        for line_res in reader.lines() {
-            // Check cancellation request
-            if cancel_flag.load(Ordering::SeqCst) {
-                let _ = child.kill();
-                anyhow::bail!("Process cancelled by user");
+        let mut handle_line = |raw_bytes: &[u8]| {
+            let line = String::from_utf8_lossy(raw_bytes).trim().to_string();
+            if line.is_empty() {
+                return;
             }
-
-            let line = match line_res {
-                Ok(l) => l,
-                Err(_) => break,
-            };
 
             log_cb(line.clone());
 
@@ -126,6 +127,36 @@ impl FFmpegRunner {
                     raw_line: line,
                 });
             }
+        };
+
+        loop {
+            // Check cancellation request
+            if cancel_flag.load(Ordering::SeqCst) {
+                let _ = child.kill();
+                anyhow::bail!("Process cancelled by user");
+            }
+
+            let n = match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            };
+
+            for &b in &buf[..n] {
+                if b == b'\r' || b == b'\n' {
+                    if !line_bytes.is_empty() {
+                        handle_line(&line_bytes);
+                        line_bytes.clear();
+                    }
+                } else {
+                    line_bytes.push(b);
+                }
+            }
+        }
+
+        if !line_bytes.is_empty() {
+            handle_line(&line_bytes);
         }
 
         let status = child.wait().context("Failed to wait on ffmpeg process")?;

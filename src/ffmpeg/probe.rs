@@ -126,13 +126,7 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
         &file_path_str,
     ]);
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    let output = cmd.output().context("Failed to run ffprobe command")?;
+    let output = crate::ffmpeg::spawn_with_output(cmd, "ffprobe")?;
 
     if !output.status.success() {
         let err_msg = String::from_utf8_lossy(&output.stderr);

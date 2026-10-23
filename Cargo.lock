@@ -207,12 +207,13 @@ dependencies = [
 
 [[package]]
 name = "another-encoder"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
  "dirs",
  "flate2",
+ "raw-window-handle",
  "regex",
  "rfd",
  "serde",
@@ -4086,6 +4087,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "pin-weak",
+ "raw-window-handle",
  "slint-macros",
  "unicode-segmentation",
  "vtable",

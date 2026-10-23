@@ -96,13 +96,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
         .arg("--")
         .arg(trimmed);
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    let output = cmd.output()?;
+    let output = crate::ffmpeg::spawn_with_output(cmd, "yt-dlp")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow!("yt-dlp detection failed: {}", stderr.trim()));
@@ -322,11 +316,7 @@ pub fn start_download(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+    crate::set_no_window(&mut cmd);
 
     let mut child = cmd.spawn()?;
     let stdout = child.stdout.take().ok_or_else(|| anyhow!("Failed to capture yt-dlp stdout"))?;

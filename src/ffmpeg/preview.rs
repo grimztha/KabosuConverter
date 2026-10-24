@@ -1,6 +1,49 @@
 use std::path::Path;
 use std::process::Command;
 use anyhow::{Context, Result};
+use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
+
+/// Computes the normalized `(vx, vy, vw, vh)` active video sub-rectangle inside a `640x360`
+/// preview buffer when `force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2` is used.
+pub fn compute_letterbox_viewport(eff_width: u32, eff_height: u32) -> (f32, f32, f32, f32) {
+    if eff_width == 0 || eff_height == 0 {
+        return (0.0, 0.0, 1.0, 1.0);
+    }
+    let target_w = 640.0f32;
+    let target_h = 360.0f32;
+    let src_r = eff_width as f32 / eff_height as f32;
+    let dst_r = target_w / target_h;
+
+    let (scaled_w, scaled_h) = if src_r > dst_r {
+        let w = target_w;
+        let h = (target_w / src_r).round().clamp(1.0, target_h);
+        (w, h)
+    } else {
+        let h = target_h;
+        let w = (target_h * src_r).round().clamp(1.0, target_w);
+        (w, h)
+    };
+
+    let pad_x = (target_w - scaled_w) * 0.5;
+    let pad_y = (target_h - scaled_h) * 0.5;
+    (
+        (pad_x / target_w).clamp(0.0, 1.0),
+        (pad_y / target_h).clamp(0.0, 1.0),
+        (scaled_w / target_w).clamp(0.01, 1.0),
+        (scaled_h / target_h).clamp(0.01, 1.0),
+    )
+}
+
+fn build_preview_vf_chain(rotation: VideoRotation, flip_h: bool, flip_v: bool) -> String {
+    let mut filters = FFmpegCommandBuilder::build_transform_and_crop_filters(
+        rotation,
+        flip_h,
+        flip_v,
+        None,
+    );
+    filters.push("scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black".to_string());
+    filters.join(",")
+}
 
 /// Parses various timestamp formats into seconds (f64).
 /// Supported:
@@ -147,8 +190,28 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
     media_path: &str,
     time_seconds: f64,
 ) -> Result<Vec<u8>> {
+    extract_frame_rgba_transformed(
+        ffmpeg_bin,
+        media_path,
+        time_seconds,
+        VideoRotation::None,
+        false,
+        false,
+    )
+}
+
+/// Extracts a single preview video frame with rotation and horizontal/vertical mirror flip applied.
+pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
+    ffmpeg_bin: B,
+    media_path: &str,
+    time_seconds: f64,
+    rotation: VideoRotation,
+    flip_h: bool,
+    flip_v: bool,
+) -> Result<Vec<u8>> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = time_seconds.max(0.0);
+    let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
     if target > 2.0 {
         let coarse = target - 2.0;
         cmd.args([
@@ -162,7 +225,7 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
             "-ss",
             &format!("{:.3}", target),
             "-vf",
-            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            &vf_chain,
             "-frames:v",
             "1",
             "-f",
@@ -183,7 +246,7 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
             "-ss",
             &format!("{:.3}", target),
             "-vf",
-            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            &vf_chain,
             "-frames:v",
             "1",
             "-f",
@@ -216,8 +279,28 @@ pub fn spawn_playback_stream<B: AsRef<Path>>(
     media_path: &str,
     start_seconds: f64,
 ) -> Result<std::process::Child> {
+    spawn_playback_stream_transformed(
+        ffmpeg_bin,
+        media_path,
+        start_seconds,
+        VideoRotation::None,
+        false,
+        false,
+    )
+}
+
+/// Spawns a persistent continuous ffmpeg decode stream with rotation and mirror flip applied.
+pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
+    ffmpeg_bin: B,
+    media_path: &str,
+    start_seconds: f64,
+    rotation: VideoRotation,
+    flip_h: bool,
+    flip_v: bool,
+) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = start_seconds.max(0.0);
+    let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
     if target > 2.0 {
         let coarse = target - 2.0;
         cmd.args([
@@ -229,7 +312,7 @@ pub fn spawn_playback_stream<B: AsRef<Path>>(
             "-ss",
             &format!("{:.3}", target),
             "-vf",
-            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            &vf_chain,
             "-f",
             "rawvideo",
             "-pix_fmt",
@@ -247,7 +330,7 @@ pub fn spawn_playback_stream<B: AsRef<Path>>(
             "-ss",
             &format!("{:.3}", target),
             "-vf",
-            "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black",
+            &vf_chain,
             "-f",
             "rawvideo",
             "-pix_fmt",
@@ -270,18 +353,35 @@ pub fn spawn_playback_stream<B: AsRef<Path>>(
 }
 
 /// Spawns audio playback via ffplay in headless mode (-nodisp) directly to the system default audio device.
+/// Optionally applies real-time audio filters such as volume gain in dB and loudness normalization.
 pub fn spawn_audio_playback<B: AsRef<Path>>(
     ffplay_bin: B,
     media_path: &str,
     start_seconds: f64,
     duration: Option<f64>,
     volume: i32,
+    gain_db: Option<f32>,
+    normalize: Option<f32>,
 ) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffplay_bin.as_ref());
     cmd.arg("-nodisp");
     cmd.arg("-autoexit");
     let vol_clamped = volume.clamp(0, 100);
     cmd.arg("-volume").arg(vol_clamped.to_string());
+
+    let mut af_filters = Vec::new();
+    if let Some(lufs) = normalize {
+        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.5:LRA=11", lufs));
+    }
+    if let Some(gain) = gain_db {
+        if gain.abs() > 0.05 {
+            af_filters.push(format!("volume={:.1}dB", gain));
+        }
+    }
+    if !af_filters.is_empty() {
+        cmd.arg("-af").arg(af_filters.join(","));
+    }
+
     if start_seconds > 0.05 {
         cmd.arg("-ss").arg(format!("{:.3}", start_seconds));
     }
@@ -309,10 +409,17 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
     height: u32,
 ) -> Result<Vec<u8>> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    let filter = format!(
-        "aresample=8000,aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8|0x10b981",
-        width, height
-    );
+    let filter = if height >= 100 {
+        format!(
+            "aresample=24000,aformat=channel_layouts=stereo,showwavespic=s={}x{}:split_channels=1:colors=0x38bdf8|0xa855f7:filter=peak:scale=sqrt",
+            width, height
+        )
+    } else {
+        format!(
+            "aresample=24000,aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8:filter=peak:scale=sqrt",
+            width, height
+        )
+    };
     cmd.args([
         "-threads",
         "2",

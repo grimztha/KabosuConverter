@@ -315,8 +315,8 @@ fn test_audio_playback_spawning() {
             }
             if let Ok(status) = cmd.status() {
                 if status.success() {
-                    let child = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.2), 80);
-                    assert!(child.is_ok(), "spawn_audio_playback should succeed");
+                    let child = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.2), 80, Some(3.0), Some(-16.0));
+                    assert!(child.is_ok(), "spawn_audio_playback with gain and normalization filters should succeed");
                     if let Ok(mut c) = child {
                         let _ = c.kill();
                     }
@@ -371,6 +371,331 @@ fn test_extract_frame_rgba_accurate_seeking() {
         }
     }
 }
+
+#[test]
+fn test_video_rotation_filters() {
+    use another_encoder::ffmpeg::VideoRotation;
+
+    assert_eq!(VideoRotation::from_degrees(0), VideoRotation::None);
+    assert_eq!(VideoRotation::from_degrees(90), VideoRotation::Rotate90);
+    assert_eq!(VideoRotation::from_degrees(-90), VideoRotation::RotateNeg90);
+    assert_eq!(VideoRotation::from_degrees(270), VideoRotation::RotateNeg90);
+    assert_eq!(VideoRotation::from_degrees(180), VideoRotation::Rotate180);
+
+    assert_eq!(VideoRotation::None.effective_dimensions(1920, 1080), (1920, 1080));
+    assert_eq!(VideoRotation::Rotate90.effective_dimensions(1920, 1080), (1080, 1920));
+    assert_eq!(VideoRotation::RotateNeg90.effective_dimensions(1920, 1080), (1080, 1920));
+    assert_eq!(VideoRotation::Rotate180.effective_dimensions(1920, 1080), (1920, 1080));
+
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, false, false, None),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate90, false, false, None),
+        vec!["transpose=1".to_string()]
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::RotateNeg90, false, false, None),
+        vec!["transpose=2".to_string()]
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate180, false, false, None),
+        vec!["hflip".to_string(), "vflip".to_string()]
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate180, true, false, None),
+        vec!["hflip".to_string(), "vflip".to_string(), "hflip".to_string()]
+    );
+}
+
+#[test]
+fn test_video_flip_filters() {
+    use another_encoder::ffmpeg::VideoRotation;
+
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, true, false, None),
+        vec!["hflip".to_string()]
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, false, true, None),
+        vec!["vflip".to_string()]
+    );
+    assert_eq!(
+        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate90, true, true, None),
+        vec!["transpose=1".to_string(), "hflip".to_string(), "vflip".to_string()]
+    );
+}
+
+#[test]
+fn test_crop_rect_sanitization_and_nudge() {
+    use another_encoder::ffmpeg::CropRect;
+
+    // Odd values and out-of-bounds should be clamped and rounded to even numbers
+    let raw = CropRect {
+        x: 15,
+        y: 23,
+        width: 2001,
+        height: 1205,
+    };
+    let sanitized = raw.sanitize(1920, 1080);
+    assert_eq!(sanitized.width, 1920);
+    assert_eq!(sanitized.height, 1080);
+    assert_eq!(sanitized.x, 0);
+    assert_eq!(sanitized.y, 0);
+
+    // Sub-region crop
+    let box_crop = CropRect {
+        x: 101,
+        y: 55,
+        width: 801,
+        height: 601,
+    }
+    .sanitize(1920, 1080);
+    assert_eq!(box_crop.x, 100);
+    assert_eq!(box_crop.y, 54);
+    assert_eq!(box_crop.width, 800);
+    assert_eq!(box_crop.height, 600);
+    assert_eq!(box_crop.to_ffmpeg_filter(), "crop=800:600:100:54");
+
+    // Arrow key nudging
+    let nudged_right_down = box_crop.nudge(10, 20, 1920, 1080);
+    assert_eq!(nudged_right_down.x, 110);
+    assert_eq!(nudged_right_down.y, 74);
+
+    // Nudging past top-left boundary clamps to (0, 0)
+    let nudged_tl = box_crop.nudge(-500, -500, 1920, 1080);
+    assert_eq!(nudged_tl.x, 0);
+    assert_eq!(nudged_tl.y, 0);
+
+    // Nudging past bottom-right boundary clamps to (1920 - 800, 1080 - 600) = (1120, 480)
+    let nudged_br = box_crop.nudge(5000, 5000, 1920, 1080);
+    assert_eq!(nudged_br.x, 1120);
+    assert_eq!(nudged_br.y, 480);
+}
+
+#[test]
+fn test_crop_aspect_ratio_presets() {
+    use another_encoder::ffmpeg::CropAspectRatio;
+
+    // 1. 9:16 preset inside 1920x1080 landscape
+    let r_9_16 = CropAspectRatio::Ratio9x16.compute_centered_rect(1920, 1080);
+    assert_eq!(r_9_16.height, 1080);
+    assert_eq!(r_9_16.width, 608); // (1080 * 9 / 16) = 607.5 -> rounded & even-aligned 608
+    assert_eq!(r_9_16.x, 656);
+    assert_eq!(r_9_16.y, 0);
+
+    // 2. 1:1 square preset inside 1920x1080 landscape
+    let r_1_1 = CropAspectRatio::Ratio1x1.compute_centered_rect(1920, 1080);
+    assert_eq!(r_1_1.width, 1080);
+    assert_eq!(r_1_1.height, 1080);
+    assert_eq!(r_1_1.x, 420);
+    assert_eq!(r_1_1.y, 0);
+
+    // 3. 4:3 preset inside 1920x1080 landscape
+    let r_4_3 = CropAspectRatio::Ratio4x3.compute_centered_rect(1920, 1080);
+    assert_eq!(r_4_3.width, 1440);
+    assert_eq!(r_4_3.height, 1080);
+    assert_eq!(r_4_3.x, 240);
+    assert_eq!(r_4_3.y, 0);
+
+    // 4. 2:3 preset inside 1920x1080 landscape
+    let r_2_3 = CropAspectRatio::Ratio2x3.compute_centered_rect(1920, 1080);
+    assert_eq!(r_2_3.width, 720);
+    assert_eq!(r_2_3.height, 1080);
+    assert_eq!(r_2_3.x, 600);
+    assert_eq!(r_2_3.y, 0);
+
+    // 5. 16:9 preset inside rotated 1080x1920 portrait video
+    let r_16_9_portrait = CropAspectRatio::Ratio16x9.compute_centered_rect(1080, 1920);
+    assert_eq!(r_16_9_portrait.width, 1080);
+    assert_eq!(r_16_9_portrait.height, 608);
+    assert_eq!(r_16_9_portrait.x, 0);
+    assert_eq!(r_16_9_portrait.y, 656);
+}
+
+#[test]
+fn test_combined_transform_crop_scale_filter_order() {
+    use another_encoder::ffmpeg::{
+        CropRect, DeinterlaceMode, ResolutionPreset, VideoRotation,
+    };
+
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        deinterlace: DeinterlaceMode::Yadif,
+        rotation: VideoRotation::Rotate90,
+        flip_horizontal: true,
+        flip_vertical: false,
+        crop: Some(CropRect {
+            x: 40,
+            y: 80,
+            width: 720,
+            height: 1280,
+        }),
+        resolution: ResolutionPreset::HD720p,
+        fps: Some(30.0),
+        ..Default::default()
+    };
+
+    let cmd = FFmpegCommandBuilder::build(&config, Path::new("ffmpeg.exe"));
+    let vf_idx = cmd.iter().position(|arg| arg == "-vf").expect("Must contain -vf");
+    let vf_chain = &cmd[vf_idx + 1];
+    assert_eq!(
+        vf_chain,
+        "yadif=0:-1:0,transpose=1,hflip,crop=720:1280:40:80,scale=1280:-2:flags=lanczos,fps=fps=30"
+    );
+}
+
+#[test]
+fn test_letterbox_viewport_calculation() {
+    use another_encoder::ffmpeg::compute_letterbox_viewport;
+
+    // 16:9 fills the entire 640x360 preview frame
+    let (nx, ny, nw, nh) = compute_letterbox_viewport(1920, 1080);
+    assert!((nx - 0.0).abs() < 1e-4);
+    assert!((ny - 0.0).abs() < 1e-4);
+    assert!((nw - 1.0).abs() < 1e-4);
+    assert!((nh - 1.0).abs() < 1e-4);
+
+    // 9:16 (e.g. rotated 1080x1920) is pillarboxed in 640x360: height=360, width=202.5
+    let (px, py, pw, ph) = compute_letterbox_viewport(1080, 1920);
+    assert!((py - 0.0).abs() < 1e-4);
+    assert!((ph - 1.0).abs() < 1e-4);
+    assert!((pw - (202.5 / 640.0)).abs() < 1e-3);
+    assert!((px - ((1.0 - pw) * 0.5)).abs() < 1e-3);
+}
+
+#[test]
+fn test_live_transcode_with_rotation_flip_and_crop() {
+    use another_encoder::ffmpeg::{
+        probe_file, CropRect, FFmpegBinaries, FFmpegRunner, VideoRotation,
+    };
+
+    let binaries = FFmpegBinaries::locate().expect("Must locate local project binaries");
+    let test_in = Path::new("target/test_edit_transform_in.mp4");
+    let test_out = Path::new("target/test_edit_transform_out.mp4");
+    let _ = std::fs::remove_file(test_in);
+    let _ = std::fs::remove_file(test_out);
+
+    // Generate 1-second 640x360 synthetic video
+    let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+    cmd.args([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=duration=1:size=640x360:rate=24",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-y",
+    ])
+    .arg(test_in);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let status = cmd.status().expect("Failed to run local ffmpeg");
+    assert!(status.success(), "Synthetic input generation must succeed");
+
+    // Rotate 90° (640x360 -> 360x640), flip horizontally, and crop to 300x400 at (30, 60)
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: test_in.to_string_lossy().to_string(),
+        output_path: test_out.to_string_lossy().to_string(),
+        video_codec: VideoCodec::H264,
+        crf: 24,
+        preset: "ultrafast".to_string(),
+        rotation: VideoRotation::Rotate90,
+        flip_horizontal: true,
+        flip_vertical: false,
+        crop: Some(CropRect {
+            x: 30,
+            y: 60,
+            width: 300,
+            height: 400,
+        }),
+        ..Default::default()
+    };
+
+    let cmd_args = FFmpegCommandBuilder::build(&config, &binaries.ffmpeg);
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let res = FFmpegRunner::run_with_progress(&cmd_args, 1.0, cancel, |_| {}, |_| {});
+    assert!(res.is_ok(), "Transformed & cropped transcode should succeed: {:?}", res);
+
+    let probed = probe_file(test_out, &binaries.ffprobe).expect("Must probe output file");
+    let v_stream = probed.primary_video().expect("Must have video stream");
+    assert_eq!(v_stream.width, 300, "Cropped output width must be 300");
+    assert_eq!(v_stream.height, 400, "Cropped output height must be 400");
+
+    let _ = std::fs::remove_file(test_in);
+    let _ = std::fs::remove_file(test_out);
+}
+
+#[test]
+fn test_audio_gain_command_generation() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_gained.mp4".to_string(),
+        audio_gain_db: Some(6.0),
+        audio_codec: AudioCodecChoice::AAC,
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(cmd.contains(&"-af".to_string()));
+    let af_idx = cmd.iter().position(|r| r == "-af").unwrap();
+    assert_eq!(cmd[af_idx + 1], "volume=6.0dB");
+}
+
+#[test]
+fn test_audio_gain_and_normalize_combined() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_norm_gain.mp4".to_string(),
+        audio_gain_db: Some(-3.5),
+        normalize_lufs: Some(-16.0),
+        audio_codec: AudioCodecChoice::AAC,
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(cmd.contains(&"-af".to_string()));
+    let af_idx = cmd.iter().position(|r| r == "-af").unwrap();
+    assert_eq!(cmd[af_idx + 1], "volume=-3.5dB,loudnorm=I=-16.0:TP=-1.0:LRA=7.0");
+}
+
+#[test]
+fn test_audio_filter_forces_reencode_when_copy_selected() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_auto_aac.mp4".to_string(),
+        audio_gain_db: Some(4.0),
+        audio_codec: AudioCodecChoice::Copy, // User selected Copy, but audio filter requires re-encoding
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(cmd.contains(&"-af".to_string()));
+    assert!(cmd.contains(&"-c:a".to_string()));
+    let ca_idx = cmd.iter().position(|r| r == "-c:a").unwrap();
+    assert_eq!(cmd[ca_idx + 1], "aac", "Copy should be automatically replaced with AAC when audio filters are active");
+}
+
+
 
 
 

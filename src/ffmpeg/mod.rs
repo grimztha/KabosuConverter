@@ -10,10 +10,15 @@ pub use locator::FFmpegBinaries;
 pub use probe::{probe_file, format_duration_hms, MediaMetadata, VideoStreamInfo, AudioStreamInfo};
 pub use builder::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
-    RateControlMode, AudioCodecChoice, ResolutionPreset, DeinterlaceMode, ProResProfile
+    RateControlMode, AudioCodecChoice, ResolutionPreset, DeinterlaceMode, ProResProfile,
+    VideoRotation, CropAspectRatio, CropRect
 };
 pub use runner::{FFmpegRunner, ProgressUpdate};
-pub use preview::{parse_timecode_to_seconds, extract_frame, extract_frame_rgba, spawn_playback_stream, spawn_ffplay, spawn_audio_playback, extract_waveform_rgba};
+pub use preview::{
+    parse_timecode_to_seconds, extract_frame, extract_frame_rgba, extract_frame_rgba_transformed,
+    spawn_playback_stream, spawn_playback_stream_transformed, spawn_ffplay, spawn_audio_playback,
+    extract_waveform_rgba, compute_letterbox_viewport
+};
 
 /// Spawn an FFmpeg-related process (ffprobe, ffmpeg, ffplay) with proper setup.
 /// Automatically applies platform-specific flags (CREATE_NO_WINDOW on Windows).

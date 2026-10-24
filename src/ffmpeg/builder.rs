@@ -102,6 +102,177 @@ pub enum ProResProfile {
     FourFourFourFourXQ = 5,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum VideoRotation {
+    #[default]
+    None,
+    Rotate90,
+    RotateNeg90,
+    Rotate180,
+}
+
+impl VideoRotation {
+    pub fn from_degrees(deg: i32) -> Self {
+        match deg {
+            90 => Self::Rotate90,
+            -90 | 270 => Self::RotateNeg90,
+            180 | -180 => Self::Rotate180,
+            _ => Self::None,
+        }
+    }
+
+    pub fn degrees(&self) -> i32 {
+        match self {
+            Self::None => 0,
+            Self::Rotate90 => 90,
+            Self::RotateNeg90 => -90,
+            Self::Rotate180 => 180,
+        }
+    }
+
+    pub fn swaps_dimensions(&self) -> bool {
+        matches!(self, Self::Rotate90 | Self::RotateNeg90)
+    }
+
+    pub fn effective_dimensions(&self, width: u32, height: u32) -> (u32, u32) {
+        if self.swaps_dimensions() {
+            (height, width)
+        } else {
+            (width, height)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum CropAspectRatio {
+    #[default]
+    Free,
+    Ratio16x9,
+    Ratio9x16,
+    Ratio4x3,
+    Ratio3x4,
+    Ratio1x1,
+    Ratio2x3,
+    Ratio3x2,
+    Ratio21x9,
+    Ratio4x5,
+}
+
+impl CropAspectRatio {
+    pub fn from_index(index: i32) -> Self {
+        match index {
+            1 => Self::Ratio16x9,
+            2 => Self::Ratio9x16,
+            3 => Self::Ratio4x3,
+            4 => Self::Ratio3x4,
+            5 => Self::Ratio1x1,
+            6 => Self::Ratio2x3,
+            7 => Self::Ratio3x2,
+            8 => Self::Ratio21x9,
+            9 => Self::Ratio4x5,
+            _ => Self::Free,
+        }
+    }
+
+    pub fn ratio(&self) -> Option<(u32, u32)> {
+        match self {
+            Self::Free => None,
+            Self::Ratio16x9 => Some((16, 9)),
+            Self::Ratio9x16 => Some((9, 16)),
+            Self::Ratio4x3 => Some((4, 3)),
+            Self::Ratio3x4 => Some((3, 4)),
+            Self::Ratio1x1 => Some((1, 1)),
+            Self::Ratio2x3 => Some((2, 3)),
+            Self::Ratio3x2 => Some((3, 2)),
+            Self::Ratio21x9 => Some((21, 9)),
+            Self::Ratio4x5 => Some((4, 5)),
+        }
+    }
+
+    /// Computes a centered CropRect within `(max_w, max_h)` that fits this aspect ratio.
+    pub fn compute_centered_rect(&self, max_w: u32, max_h: u32) -> CropRect {
+        let max_w = (max_w & !1).max(2);
+        let max_h = (max_h & !1).max(2);
+        if let Some((num, den)) = self.ratio() {
+            let target_r = num as f64 / den as f64;
+            let frame_r = max_w as f64 / max_h as f64;
+            let (mut w, mut h) = if frame_r > target_r {
+                let h = max_h;
+                let w = ((h as f64 * target_r).round() as u32).min(max_w);
+                (w, h)
+            } else {
+                let w = max_w;
+                let h = ((w as f64 / target_r).round() as u32).min(max_h);
+                (w, h)
+            };
+            w = (w & !1).max(2);
+            h = (h & !1).max(2);
+            let x = ((max_w.saturating_sub(w)) / 2) & !1;
+            let y = ((max_h.saturating_sub(h)) / 2) & !1;
+            CropRect { x, y, width: w, height: h }
+        } else {
+            CropRect {
+                x: 0,
+                y: 0,
+                width: max_w,
+                height: max_h,
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct CropRect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl CropRect {
+    pub fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
+        Self { x, y, width, height }
+    }
+
+    /// Ensures even dimensions and bounds within `(max_w, max_h)`.
+    pub fn sanitize(&self, max_w: u32, max_h: u32) -> Self {
+        let max_w = (max_w & !1).max(2);
+        let max_h = (max_h & !1).max(2);
+        let w = (self.width & !1).clamp(2, max_w);
+        let h = (self.height & !1).clamp(2, max_h);
+        let x = (self.x & !1).min(max_w.saturating_sub(w));
+        let y = (self.y & !1).min(max_h.saturating_sub(h));
+        Self { x, y, width: w, height: h }
+    }
+
+    /// Moves the crop rectangle by `(dx, dy)` pixels while clamping inside `(max_w, max_h)`.
+    pub fn nudge(&self, dx: i32, dy: i32, max_w: u32, max_h: u32) -> Self {
+        let max_w = (max_w & !1).max(2);
+        let max_h = (max_h & !1).max(2);
+        let w = (self.width & !1).clamp(2, max_w);
+        let h = (self.height & !1).clamp(2, max_h);
+        let max_x = max_w.saturating_sub(w) as i32;
+        let max_y = max_h.saturating_sub(h) as i32;
+        let new_x = (self.x as i32 + dx).clamp(0, max_x) as u32;
+        let new_y = (self.y as i32 + dy).clamp(0, max_y) as u32;
+        Self {
+            x: new_x & !1,
+            y: new_y & !1,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Formats as an FFmpeg crop filter string: `crop=w:h:x:y`
+    pub fn to_ffmpeg_filter(&self) -> String {
+        let w = (self.width & !1).max(2);
+        let h = (self.height & !1).max(2);
+        let x = self.x & !1;
+        let y = self.y & !1;
+        format!("crop={}:{}:{}:{}", w, h, x, y)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncodeJobConfig {
     pub function: EncoderFunction,
@@ -135,6 +306,12 @@ pub struct EncodeJobConfig {
     // Trimming / Cutting
     pub in_point: Option<String>,  // "00:00:10.000" or seconds
     pub out_point: Option<String>, // "00:01:25.500"
+
+    // Video Editing / Transform & Crop
+    pub rotation: VideoRotation,
+    pub flip_horizontal: bool,
+    pub flip_vertical: bool,
+    pub crop: Option<CropRect>,
 }
 
 impl Default for EncodeJobConfig {
@@ -168,7 +345,22 @@ impl Default for EncodeJobConfig {
 
             in_point: None,
             out_point: None,
+
+            rotation: VideoRotation::None,
+            flip_horizontal: false,
+            flip_vertical: false,
+            crop: None,
         }
+    }
+}
+
+impl EncodeJobConfig {
+    /// Returns true if any video transform (rotation, flip) or crop is active.
+    pub fn has_video_edits(&self) -> bool {
+        self.rotation != VideoRotation::None
+            || self.flip_horizontal
+            || self.flip_vertical
+            || self.crop.is_some()
     }
 }
 
@@ -229,6 +421,44 @@ impl FFmpegCommandBuilder {
         }
     }
 
+    /// Builds the FFmpeg video filter list for rotation, horizontal/vertical mirror flip, and crop.
+    pub fn build_transform_and_crop_filters(
+        rotation: VideoRotation,
+        flip_horizontal: bool,
+        flip_vertical: bool,
+        crop: Option<CropRect>,
+    ) -> Vec<String> {
+        let mut filters = Vec::new();
+
+        // 1. Rotation
+        match rotation {
+            VideoRotation::None => {}
+            VideoRotation::Rotate90 => filters.push("transpose=1".to_string()),
+            VideoRotation::RotateNeg90 => filters.push("transpose=2".to_string()),
+            VideoRotation::Rotate180 => {
+                filters.push("hflip".to_string());
+                filters.push("vflip".to_string());
+            }
+        }
+
+        // 2. Mirror / Flip (Horizontal & Vertical)
+        if flip_horizontal {
+            filters.push("hflip".to_string());
+        }
+        if flip_vertical {
+            filters.push("vflip".to_string());
+        }
+
+        // 3. Crop (in post-rotation/flip space so it matches the visual preview)
+        if let Some(c) = crop {
+            if c.width >= 2 && c.height >= 2 {
+                filters.push(c.to_ffmpeg_filter());
+            }
+        }
+
+        filters
+    }
+
     fn build_transcode(config: &EncodeJobConfig, args: &mut Vec<String>) {
         // In & Out points (fast seek before input)
         Self::apply_trim(config, args);
@@ -255,6 +485,14 @@ impl FFmpegCommandBuilder {
             DeinterlaceMode::Bwdif => vf_filters.push("bwdif=mode=0".to_string()),
             DeinterlaceMode::None => {}
         }
+
+        // Rotation, Flip & Crop
+        vf_filters.extend(Self::build_transform_and_crop_filters(
+            config.rotation,
+            config.flip_horizontal,
+            config.flip_vertical,
+            config.crop,
+        ));
 
         // Scaling
         let target_dims = config.custom_resolution.or_else(|| config.resolution.dimensions());
@@ -458,7 +696,14 @@ impl FFmpegCommandBuilder {
     }
 
     fn apply_audio_encoder(config: &EncodeJobConfig, args: &mut Vec<String>) {
-        match config.audio_codec {
+        let has_af = config.audio_gain_db.map_or(false, |g| g.abs() > 0.05) || config.normalize_lufs.is_some();
+        let effective_codec = if has_af && config.audio_codec == AudioCodecChoice::Copy {
+            AudioCodecChoice::AAC
+        } else {
+            config.audio_codec
+        };
+
+        match effective_codec {
             AudioCodecChoice::Copy => {
                 args.push("-c:a".to_string());
                 args.push("copy".to_string());
@@ -568,6 +813,22 @@ impl FFmpegCommandBuilder {
         args.push("-vn".to_string());
         args.push("-sn".to_string());
 
+        // Audio filters
+        let mut af_filters: Vec<String> = Vec::new();
+        if let Some(gain) = config.audio_gain_db {
+            if gain.abs() > 0.05 {
+                af_filters.push(format!("volume={:.1}dB", gain));
+            }
+        }
+        if let Some(lufs) = config.normalize_lufs {
+            af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
+        }
+
+        if !af_filters.is_empty() {
+            args.push("-af".to_string());
+            args.push(af_filters.join(","));
+        }
+
         Self::apply_audio_encoder(config, args);
 
         args.push("-map".to_string());
@@ -637,9 +898,17 @@ impl FFmpegCommandBuilder {
         args.push("-c:v".to_string());
         args.push("copy".to_string());
 
+        let mut af_filters: Vec<String> = Vec::new();
+        if let Some(gain) = config.audio_gain_db {
+            if gain.abs() > 0.05 {
+                af_filters.push(format!("volume={:.1}dB", gain));
+            }
+        }
         let lufs = config.normalize_lufs.unwrap_or(-23.0);
+        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
+
         args.push("-af".to_string());
-        args.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
+        args.push(af_filters.join(","));
 
         Self::apply_audio_encoder(config, args);
 

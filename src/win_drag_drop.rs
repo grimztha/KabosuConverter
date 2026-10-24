@@ -372,17 +372,12 @@ pub unsafe fn parse_hdrop(hdrop: *mut std::ffi::c_void) -> Vec<PathBuf> {
     debug_assert!(!hdrop.is_null());
     let count = DragQueryFileW(hdrop, 0xFFFFFFFF, std::ptr::null_mut(), 0);
     let mut paths = Vec::with_capacity(count as usize);
-    let mut buffer: Vec<u16> = Vec::with_capacity(260);
+    let mut buffer = [0u16; 2048];
     for i in 0..count {
-        let required_len = DragQueryFileW(hdrop, i, std::ptr::null_mut(), 0);
-        if required_len > 0 {
-            let cap = (required_len + 1) as usize;
-            buffer.resize(cap, 0);
-            let len = DragQueryFileW(hdrop, i, buffer.as_mut_ptr(), required_len + 1);
-            if len > 0 {
-                let path_str = String::from_utf16_lossy(&buffer[..len as usize]);
-                paths.push(PathBuf::from(path_str));
-            }
+        let len = DragQueryFileW(hdrop, i, buffer.as_mut_ptr(), buffer.len() as u32);
+        if len > 0 {
+            let path_str = String::from_utf16_lossy(&buffer[..len as usize]);
+            paths.push(PathBuf::from(path_str));
         }
     }
     paths
@@ -425,14 +420,18 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
             GetWindowThreadProcessId(hwnd, &mut pid);
             if pid == *target_pid {
                 let class = get_window_class(hwnd);
-                if class != "Winit Thread Event Target" && class != "IME" && class != "NVOpenGLPbuffer" {
-                    let title = get_window_title(hwnd);
-                    let visible = IsWindowVisible(hwnd) != 0;
-                    if title.contains("Another Encoder") || visible || out.is_none() {
+                let title = get_window_title(hwnd);
+                let visible = IsWindowVisible(hwnd) != 0;
+                if class != "Winit Thread Event Target"
+                    && class != "IME"
+                    && class != "MSCTFIME UI"
+                    && class != "NVOpenGLPbuffer"
+                {
+                    if title.contains("Another Encoder") {
                         *out = Some(hwnd);
-                        if title.contains("Another Encoder") && visible {
-                            return 0; // Found exact main window, stop enumeration early
-                        }
+                        return 0;
+                    } else if visible && out.is_none() {
+                        *out = Some(hwnd);
                     }
                 }
             }
@@ -482,13 +481,15 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
     }
     let title = get_window_title(hwnd);
     let class = get_window_class(hwnd);
+    let visible = IsWindowVisible(hwnd) != 0;
 
-    let is_real = class != "Winit Thread Event Target" && class != "IME" && class != "NVOpenGLPbuffer";
+    let is_real = visible
+        && title.contains("Another Encoder")
+        && class != "Winit Thread Event Target"
+        && class != "IME"
+        && class != "MSCTFIME UI"
+        && class != "NVOpenGLPbuffer";
     if is_real {
-        let prev = ATTACHED_REAL_HWND.load(Ordering::SeqCst);
-        if prev == hwnd as usize {
-            return;
-        }
         ATTACHED_REAL_HWND.store(hwnd as usize, Ordering::SeqCst);
     }
 
@@ -553,9 +554,6 @@ where
 
 /// Re-scans for any newly created top-level or child windows and attaches the drop target
 pub fn reapply_drop_target() {
-    if is_attached() {
-        return;
-    }
     let ptr = REGISTERED_TARGET.load(Ordering::SeqCst);
     if ptr != 0 {
         unsafe {

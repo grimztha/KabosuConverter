@@ -11,10 +11,12 @@ use anyhow::Result;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, SharedPixelBuffer, Rgba8Pixel};
 
 use another_encoder::ffmpeg::{
-    extract_frame_rgba, extract_waveform_rgba, format_duration_hms, parse_timecode_to_seconds,
-    probe_file, spawn_audio_playback, spawn_ffplay, spawn_playback_stream, AudioCodecChoice,
+    compute_letterbox_viewport, extract_frame_rgba_transformed, extract_waveform_rgba,
+    format_duration_hms, parse_timecode_to_seconds, probe_file, spawn_audio_playback,
+    spawn_ffplay, spawn_playback_stream_transformed, AudioCodecChoice, CropAspectRatio, CropRect,
     DeinterlaceMode, EncodeJobConfig, EncoderFunction, FFmpegBinaries, FFmpegCommandBuilder,
     FFmpegRunner, HwAccel, ProResProfile, RateControlMode, ResolutionPreset, VideoCodec,
+    VideoRotation,
 };
 use another_encoder::settings;
 use another_encoder::ytdlp;
@@ -93,11 +95,127 @@ struct PreviewTask {
     media_path: String,
     time: f64,
     id: u64,
+    rotation: VideoRotation,
+    flip_h: bool,
+    flip_v: bool,
 }
 
 struct WaveformTask {
     media_path: String,
     id: u64,
+    is_video: bool,
+}
+
+fn rotation_from_index(idx: i32) -> VideoRotation {
+    match idx {
+        1 => VideoRotation::Rotate90,
+        2 => VideoRotation::RotateNeg90,
+        3 => VideoRotation::Rotate180,
+        _ => VideoRotation::None,
+    }
+}
+
+fn update_video_edit_indicators(app_data: &AppData) {
+    let rot_idx = app_data.get_video_rotation_index();
+    let flip_h = app_data.get_video_flip_horizontal();
+    let flip_v = app_data.get_video_flip_vertical();
+    let crop_en = app_data.get_crop_enabled();
+    app_data.set_has_active_video_edits(rot_idx != 0 || flip_h || flip_v || crop_en);
+}
+
+fn sync_crop_rect_to_ui(app_data: &AppData, rect: CropRect, update_text_fields: bool) {
+    let eff_w = (app_data.get_effective_video_width().max(2) as u32) & !1;
+    let eff_h = (app_data.get_effective_video_height().max(2) as u32) & !1;
+    let clean = rect.sanitize(eff_w, eff_h);
+
+    app_data.set_crop_x(clean.x as i32);
+    app_data.set_crop_y(clean.y as i32);
+    app_data.set_crop_width(clean.width as i32);
+    app_data.set_crop_height(clean.height as i32);
+
+    if update_text_fields {
+        app_data.set_crop_x_text(SharedString::from(clean.x.to_string()));
+        app_data.set_crop_y_text(SharedString::from(clean.y.to_string()));
+        app_data.set_crop_width_text(SharedString::from(clean.width.to_string()));
+        app_data.set_crop_height_text(SharedString::from(clean.height.to_string()));
+    }
+
+    let nx = (clean.x as f32 / eff_w as f32).clamp(0.0, 1.0);
+    let ny = (clean.y as f32 / eff_h as f32).clamp(0.0, 1.0);
+    let nw = (clean.width as f32 / eff_w as f32).clamp(0.01, 1.0 - nx);
+    let nh = (clean.height as f32 / eff_h as f32).clamp(0.01, 1.0 - ny);
+
+    app_data.set_crop_norm_x(nx);
+    app_data.set_crop_norm_y(ny);
+    app_data.set_crop_norm_w(nw);
+    app_data.set_crop_norm_h(nh);
+    update_video_edit_indicators(app_data);
+}
+
+fn sync_effective_dimensions_and_viewport(app_data: &AppData, reset_crop_rect: bool) {
+    let src_w = app_data.get_selected_video_width().max(2) as u32;
+    let src_h = app_data.get_selected_video_height().max(2) as u32;
+    let rot = rotation_from_index(app_data.get_video_rotation_index());
+    let (eff_w, eff_h) = rot.effective_dimensions(src_w, src_h);
+    let eff_w = (eff_w & !1).max(2);
+    let eff_h = (eff_h & !1).max(2);
+
+    app_data.set_effective_video_width(eff_w as i32);
+    app_data.set_effective_video_height(eff_h as i32);
+
+    let (vx, vy, vw, vh) = compute_letterbox_viewport(eff_w, eff_h);
+    app_data.set_preview_video_norm_x(vx);
+    app_data.set_preview_video_norm_y(vy);
+    app_data.set_preview_video_norm_w(vw);
+    app_data.set_preview_video_norm_h(vh);
+
+    if reset_crop_rect {
+        let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+        let rect = aspect.compute_centered_rect(eff_w, eff_h);
+        sync_crop_rect_to_ui(app_data, rect, true);
+    } else {
+        let cur = CropRect {
+            x: app_data.get_crop_x().max(0) as u32,
+            y: app_data.get_crop_y().max(0) as u32,
+            width: app_data.get_crop_width().max(2) as u32,
+            height: app_data.get_crop_height().max(2) as u32,
+        };
+        let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+        let adjusted = if aspect != CropAspectRatio::Free {
+            aspect.compute_centered_rect(eff_w, eff_h)
+        } else {
+            cur.sanitize(eff_w, eff_h)
+        };
+        sync_crop_rect_to_ui(app_data, adjusted, true);
+    }
+}
+
+fn request_current_preview_frame(
+    app_data: &AppData,
+    preview_tx: &std::sync::mpsc::Sender<PreviewTask>,
+    latest_id: &Arc<AtomicU64>,
+) {
+    if !app_data.get_selected_is_video() || !app_data.get_player_has_media() {
+        return;
+    }
+    let path = app_data.get_selected_file_path().to_string();
+    if path.is_empty() {
+        return;
+    }
+    app_data.set_preview_frame_loading(true);
+    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
+    let time = app_data.get_player_current_time() as f64;
+    let rotation = rotation_from_index(app_data.get_video_rotation_index());
+    let flip_h = app_data.get_video_flip_horizontal();
+    let flip_v = app_data.get_video_flip_vertical();
+    let _ = preview_tx.send(PreviewTask {
+        media_path: path,
+        time,
+        id,
+        rotation,
+        flip_h,
+        flip_v,
+    });
 }
 
 fn update_trim_indicators(app_data: &AppData) {
@@ -169,6 +287,30 @@ fn load_selected_file(
     app_data.set_out_point_seconds(-1.0);
     update_trim_indicators(app_data);
 
+    // Initialize video dimensions and reset video editing state for newly selected file
+    let vw = if item.video_width > 0 { item.video_width } else { 1920 };
+    let vh = if item.video_height > 0 { item.video_height } else { 1080 };
+    app_data.set_selected_video_width(vw);
+    app_data.set_selected_video_height(vh);
+    app_data.set_video_rotation_index(0);
+    app_data.set_video_flip_horizontal(false);
+    app_data.set_video_flip_vertical(false);
+    app_data.set_crop_enabled(false);
+    app_data.set_crop_aspect_index(0);
+    sync_effective_dimensions_and_viewport(app_data, true);
+    update_video_edit_indicators(app_data);
+
+    // Reset audio edits for newly selected file
+    app_data.set_audio_gain_db(0.0);
+    app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
+    app_data.set_audio_normalize_enabled(false);
+    app_data.set_audio_normalize_lufs(-16.0);
+    app_data.set_audio_normalize_preset_index(0);
+    app_data.set_has_active_audio_edits(false);
+
+    // Reset timeline zoom to fit 1.0x on file load
+    app_data.set_timeline_zoom(1.0);
+
     // Request audio waveform visualization for the timeline only when audio stream is present
     app_data.set_has_waveform(false);
     if item.is_audio {
@@ -176,18 +318,13 @@ fn load_selected_file(
         let _ = waveform_tx.send(WaveformTask {
             media_path: item.file_path.to_string(),
             id: wf_id,
+            is_video: item.is_video,
         });
     }
 
     // Request initial preview frame if video
     if item.is_video {
-        app_data.set_preview_frame_loading(true);
-        let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-        let _ = preview_tx.send(PreviewTask {
-            media_path: item.file_path.to_string(),
-            time: 0.0f64,
-            id,
-        });
+        request_current_preview_frame(app_data, preview_tx, latest_id);
     }
 }
 
@@ -226,6 +363,41 @@ fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>
                 }
             }
         }
+    }
+}
+
+fn normalize_path_for_explorer(path: &Path) -> PathBuf {
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    let resolved = std::fs::canonicalize(&abs).unwrap_or(abs);
+    let s = resolved.to_string_lossy();
+    let stripped = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    let mut clean = stripped.replace('/', r"\");
+    while clean.len() > 3 && clean.ends_with('\\') {
+        clean.pop();
+    }
+    PathBuf::from(clean)
+}
+
+fn open_folder_in_explorer(folder: &Path) {
+    let _ = std::fs::create_dir_all(folder);
+    let clean_dir = normalize_path_for_explorer(folder);
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("explorer")
+            .arg(&clean_dir)
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(&clean_dir)
+            .spawn();
     }
 }
 
@@ -289,63 +461,57 @@ fn process_incoming_paths(
                 duration_seconds: 0.0,
                 is_video: !is_audio_only,
                 is_audio: true,
+                video_width: 1920,
+                video_height: 1080,
             };
             initial_items.push((path, placeholder));
         }
 
-        // Batch-insert placeholders on UI thread in a single layout pass
-        let (added_tx, added_rx) = std::sync::mpsc::channel::<Vec<(usize, PathBuf, QueueFile)>>();
+        // Batch-insert placeholders on UI thread immediately
         let ui_w_init = ui_weak.clone();
+        let placeholders_for_ui: Vec<QueueFile> =
+            initial_items.iter().map(|(_, item)| item.clone()).collect();
         let _ = slint::invoke_from_event_loop(move || {
-            let mut to_probe = Vec::new();
             if let Some(ui) = ui_w_init.upgrade() {
                 let app_data = ui.global::<AppData>();
-                let queue_model = app_data.get_queue();
-                let mut existing: Vec<QueueFile> = queue_model.iter().collect();
+                let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
+                let mut first_added: Option<(usize, QueueFile)> = None;
 
-                for (path, mut item) in initial_items {
-                    if existing.iter().any(|q| q.file_path == item.file_path) {
-                        continue;
-                    }
-                    let row_idx = existing.len();
+                for mut item in placeholders_for_ui {
+                    let row_idx = list.len();
                     item.id = row_idx as i32;
-                    existing.push(item.clone());
-                    to_probe.push((row_idx, path, item));
+                    if first_added.is_none() {
+                        first_added = Some((row_idx, item.clone()));
+                    }
+                    list.push(item);
                 }
 
-                if !to_probe.is_empty() {
-                    let count = existing.len();
-                    app_data.set_queue(ModelRc::new(VecModel::from(existing)));
-                    app_data.set_status_summary(SharedString::from(format!(
-                        "{} file(s) in queue",
-                        count
-                    )));
+                let count = list.len();
+                app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                app_data.set_status_summary(SharedString::from(format!(
+                    "{} file(s) in queue",
+                    count
+                )));
 
-                    if app_data.get_selected_file_index() == -1 {
-                        if let Some((first_idx, _, ref first_item)) = to_probe.first() {
-                            app_data.set_selected_file_index(*first_idx as i32);
-                            app_data.set_selected_file_name(first_item.file_name.clone());
-                            app_data.set_selected_file_path(first_item.file_path.clone());
-                            app_data.set_selected_is_video(first_item.is_video);
-                            app_data.set_selected_is_audio(first_item.is_audio);
-                            app_data.set_selected_resolution(first_item.resolution.clone());
-                            app_data.set_selected_audio_desc(first_item.codecs.clone());
-                            app_data.set_player_has_media(true);
-                        }
+                if app_data.get_selected_file_index() == -1 {
+                    if let Some((first_idx, first_item)) = first_added {
+                        app_data.set_selected_file_index(first_idx as i32);
+                        app_data.set_selected_file_name(first_item.file_name.clone());
+                        app_data.set_selected_file_path(first_item.file_path.clone());
+                        app_data.set_selected_is_video(first_item.is_video);
+                        app_data.set_selected_is_audio(first_item.is_audio);
+                        app_data.set_selected_resolution(first_item.resolution.clone());
+                        app_data.set_selected_audio_desc(first_item.codecs.clone());
+                        app_data.set_player_has_media(true);
                     }
                 }
             }
-            let _ = added_tx.send(to_probe);
         });
 
-        let to_probe = match added_rx.recv() {
-            Ok(v) if !v.is_empty() => Arc::new(v),
-            _ => return,
-        };
-
         // Probe metadata concurrently using a bounded worker pool (up to 4 threads)
+        let to_probe = Arc::new(initial_items);
         let worker_count = to_probe.len().clamp(1, 4);
-        let next_idx = Arc::new( std::sync::atomic::AtomicUsize::new(0));
+        let next_idx = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
         for _ in 0..worker_count {
             let queue_arc = to_probe.clone();
@@ -363,7 +529,7 @@ fn process_incoming_paths(
                     if i >= queue_arc.len() {
                         break;
                     }
-                    let (hint_row_idx, ref path, ref base_item) = queue_arc[i];
+                    let (ref path, ref base_item) = queue_arc[i];
                     let mut updated = base_item.clone();
 
                     match probe_file(path, &bins.ffprobe) {
@@ -371,6 +537,10 @@ fn process_incoming_paths(
                             let codecs = meta.codecs_summary();
                             let is_video = meta.primary_video().is_some();
                             let is_audio = meta.primary_audio().is_some();
+                            let (vw, vh) = meta
+                                .primary_video()
+                                .map(|v| (v.width as i32, v.height as i32))
+                                .unwrap_or((0, 0));
                             updated.file_size_formatted = SharedString::from(meta.file_size_formatted());
                             updated.resolution = SharedString::from(meta.resolution_str());
                             updated.duration = SharedString::from(meta.duration_formatted);
@@ -379,6 +549,8 @@ fn process_incoming_paths(
                             updated.duration_seconds = meta.duration_seconds as f32;
                             updated.is_video = is_video;
                             updated.is_audio = is_audio;
+                            updated.video_width = vw;
+                            updated.video_height = vh;
                         }
                         Err(_) => {
                             updated.resolution = SharedString::from("Unknown");
@@ -397,28 +569,28 @@ fn process_incoming_paths(
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w_row.upgrade() {
                             let app_data = ui.global::<AppData>();
-                            let model = app_data.get_queue();
-                            let mut target_row = None;
-
-                            if let Some(existing) = model.row_data(hint_row_idx) {
-                                if existing.file_path == updated.file_path {
-                                    target_row = Some(hint_row_idx);
+                            let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
+                            let mut matched = false;
+                            for (r, item) in list.iter_mut().enumerate() {
+                                if item.file_path == updated.file_path && item.status == "Probing..." {
+                                    updated.id = r as i32;
+                                    *item = updated.clone();
+                                    matched = true;
+                                    break;
                                 }
                             }
-                            if target_row.is_none() {
-                                for r in 0..model.row_count() {
-                                    if let Some(existing) = model.row_data(r) {
-                                        if existing.file_path == updated.file_path {
-                                            target_row = Some(r);
-                                            break;
-                                        }
+                            if !matched {
+                                for (r, item) in list.iter_mut().enumerate() {
+                                    if item.file_path == updated.file_path {
+                                        updated.id = r as i32;
+                                        *item = updated.clone();
+                                        matched = true;
+                                        break;
                                     }
                                 }
                             }
-
-                            if let Some(r) = target_row {
-                                updated.id = r as i32;
-                                model.set_row_data(r, updated.clone());
+                            if matched {
+                                app_data.set_queue(ModelRc::new(VecModel::from(list)));
                                 if app_data.get_selected_file_path() == updated.file_path {
                                     load_selected_file(
                                         &app_data,
@@ -523,7 +695,14 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                let res = extract_frame_rgba(&ffmpeg_bin, &current_task.media_path, current_task.time);
+                let res = extract_frame_rgba_transformed(
+                    &ffmpeg_bin,
+                    &current_task.media_path,
+                    current_task.time,
+                    current_task.rotation,
+                    current_task.flip_h,
+                    current_task.flip_v,
+                );
                 if let Ok(rgba_bytes) = res {
                     if current_task.id < latest_id.load(Ordering::SeqCst) {
                         continue;
@@ -567,13 +746,19 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                match extract_waveform_rgba(&ffmpeg_bin, &current_task.media_path, 800, 44) {
+                let (wf_w, wf_h) = if current_task.is_video {
+                    (2400, 68)
+                } else {
+                    (2400, 180)
+                };
+
+                match extract_waveform_rgba(&ffmpeg_bin, &current_task.media_path, wf_w, wf_h) {
                     Ok(rgba) => {
                         if current_task.id == latest_id.load(Ordering::SeqCst) {
                             let ui_w = ui_weak.clone();
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_w.upgrade() {
-                                    let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(800, 44);
+                                    let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(wf_w, wf_h);
                                     pixel_buffer.make_mut_bytes().copy_from_slice(&rgba);
                                     let img = slint::Image::from_rgba8(pixel_buffer);
                                     let data = ui.global::<AppData>();
@@ -765,14 +950,7 @@ fn main() -> Result<()> {
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
 
                 if app_data.get_selected_is_video() {
-                    app_data.set_preview_frame_loading(true);
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: clamped as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
             }
         });
@@ -802,14 +980,7 @@ fn main() -> Result<()> {
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(new_val as f64)));
 
                 if app_data.get_selected_is_video() {
-                    app_data.set_preview_frame_loading(true);
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: new_val as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
             }
         });
@@ -871,14 +1042,7 @@ fn main() -> Result<()> {
                 app_data.set_player_current_time(clamped);
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
                 if app_data.get_selected_is_video() {
-                    app_data.set_preview_frame_loading(true);
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: clamped as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
             }
         });
@@ -910,14 +1074,7 @@ fn main() -> Result<()> {
                 app_data.set_player_current_time(clamped);
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
                 if app_data.get_selected_is_video() {
-                    app_data.set_preview_frame_loading(true);
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: clamped as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
             }
         });
@@ -937,14 +1094,7 @@ fn main() -> Result<()> {
                     app_data.set_player_current_time(in_sec);
                     app_data.set_player_time_text(SharedString::from(format_duration_hms(in_sec as f64)));
                     if app_data.get_selected_is_video() {
-                        app_data.set_preview_frame_loading(true);
-                        let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                        let path = app_data.get_selected_file_path().to_string();
-                        let _ = preview_tx.send(PreviewTask {
-                            media_path: path,
-                            time: in_sec as f64,
-                            id,
-                        });
+                        request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                     }
                 }
             }
@@ -965,14 +1115,7 @@ fn main() -> Result<()> {
                     app_data.set_player_current_time(out_sec);
                     app_data.set_player_time_text(SharedString::from(format_duration_hms(out_sec as f64)));
                     if app_data.get_selected_is_video() {
-                        app_data.set_preview_frame_loading(true);
-                        let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                        let path = app_data.get_selected_file_path().to_string();
-                        let _ = preview_tx.send(PreviewTask {
-                            media_path: path,
-                            time: out_sec as f64,
-                            id,
-                        });
+                        request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                     }
                 }
             }
@@ -1100,7 +1243,10 @@ fn main() -> Result<()> {
                                 } else {
                                     None
                                 };
-                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int) {
+                                let edit_gain_db = app_data.get_audio_gain_db();
+                                let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                                let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
                                     if let Ok(mut lock) = active_ffplay_clone.lock() {
                                         *lock = Some(ff_child);
                                     }
@@ -1108,7 +1254,11 @@ fn main() -> Result<()> {
                             }
                         }
 
-                        match spawn_playback_stream(&ffmpeg_bin, &path, start_sec) {
+                        let rot = rotation_from_index(app_data.get_video_rotation_index());
+                        let flip_h = app_data.get_video_flip_horizontal();
+                        let flip_v = app_data.get_video_flip_vertical();
+
+                        match spawn_playback_stream_transformed(&ffmpeg_bin, &path, start_sec, rot, flip_h, flip_v) {
                             Ok(mut child) => {
                                 let my_session = session_id_clone.fetch_add(1, Ordering::SeqCst) + 1;
                                 let session_check = session_id_clone.clone();
@@ -1253,7 +1403,10 @@ fn main() -> Result<()> {
                                 } else {
                                     None
                                 };
-                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int) {
+                                let edit_gain_db = app_data.get_audio_gain_db();
+                                let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                                let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                                if let Ok(ff_child) = spawn_audio_playback(ffplay_bin, &path, start_sec, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
                                     if let Ok(mut lock) = active_ffplay_clone.lock() {
                                         *lock = Some(ff_child);
                                     }
@@ -1343,13 +1496,7 @@ fn main() -> Result<()> {
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(reset_pos as f64)));
 
                 if app_data.get_selected_is_video() {
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: reset_pos as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
             }
         });
@@ -1373,13 +1520,7 @@ fn main() -> Result<()> {
                 app_data.set_player_time_text(SharedString::from(format_duration_hms(start as f64)));
 
                 if app_data.get_selected_is_video() {
-                    let id = latest_id.fetch_add(1, Ordering::SeqCst) + 1;
-                    let path = app_data.get_selected_file_path().to_string();
-                    let _ = preview_tx.send(PreviewTask {
-                        media_path: path,
-                        time: start as f64,
-                        id,
-                    });
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
                 }
 
                 // If currently playing, stop first then restart at trimmed start
@@ -1483,7 +1624,10 @@ fn main() -> Result<()> {
                                         None
                                     };
                                     let path = app_data.get_selected_file_path().to_string();
-                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int) {
+                                    let edit_gain_db = app_data.get_audio_gain_db();
+                                    let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                                    let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
                                         *lock = Some(child);
                                     }
                                 }
@@ -1531,7 +1675,10 @@ fn main() -> Result<()> {
                             }
                             if vol_int > 0 {
                                 if let Some(ref ffplay_bin) = binaries.ffplay {
-                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int) {
+                                    let edit_gain_db = app_data.get_audio_gain_db();
+                                    let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                                    let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
                                         *lock = Some(child);
                                     }
                                 }
@@ -1553,6 +1700,758 @@ fn main() -> Result<()> {
                         }
                     }
                 }
+            }
+        });
+    }
+
+    // =========================================================================
+    // VIDEO EDITING STUDIO CALLBACKS (ROTATE, FLIP, CROP)
+    // =========================================================================
+
+    // Handle Toggle Edit Panel
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_toggle_edit_panel(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_edit_panel_expanded(!app_data.get_edit_panel_expanded());
+            }
+        });
+    }
+
+    // Handle Set Video Rotation (0: 0°, 1: 90°, 2: -90°, 3: 180°)
+    {
+        let ui_handle = ui.as_weak();
+        let preview_tx = preview_tx.clone();
+        let latest_id = latest_preview_id.clone();
+        let active_stream_clone = active_playback_child.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let session_id_clone = playback_session_id.clone();
+        let play_timer_clone = playback_timer.clone();
+
+        ui.global::<AppLogic>().on_set_video_rotation(move |rot_idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    stop_active_playback(
+                        &active_stream_clone,
+                        &active_ffplay_clone,
+                        &session_id_clone,
+                        &play_timer_clone,
+                        &app_data,
+                    );
+                }
+
+                app_data.set_video_rotation_index(rot_idx.clamp(0, 3));
+                sync_effective_dimensions_and_viewport(&app_data, false);
+                update_video_edit_indicators(&app_data);
+                request_current_preview_frame(&app_data, &preview_tx, &latest_id);
+            }
+        });
+    }
+
+    // Handle Toggle Flip Horizontal
+    {
+        let ui_handle = ui.as_weak();
+        let preview_tx = preview_tx.clone();
+        let latest_id = latest_preview_id.clone();
+        let active_stream_clone = active_playback_child.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let session_id_clone = playback_session_id.clone();
+        let play_timer_clone = playback_timer.clone();
+
+        ui.global::<AppLogic>().on_toggle_flip_horizontal(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    stop_active_playback(
+                        &active_stream_clone,
+                        &active_ffplay_clone,
+                        &session_id_clone,
+                        &play_timer_clone,
+                        &app_data,
+                    );
+                }
+
+                app_data.set_video_flip_horizontal(!app_data.get_video_flip_horizontal());
+                update_video_edit_indicators(&app_data);
+                request_current_preview_frame(&app_data, &preview_tx, &latest_id);
+            }
+        });
+    }
+
+    // Handle Toggle Flip Vertical
+    {
+        let ui_handle = ui.as_weak();
+        let preview_tx = preview_tx.clone();
+        let latest_id = latest_preview_id.clone();
+        let active_stream_clone = active_playback_child.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let session_id_clone = playback_session_id.clone();
+        let play_timer_clone = playback_timer.clone();
+
+        ui.global::<AppLogic>().on_toggle_flip_vertical(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    stop_active_playback(
+                        &active_stream_clone,
+                        &active_ffplay_clone,
+                        &session_id_clone,
+                        &play_timer_clone,
+                        &app_data,
+                    );
+                }
+
+                app_data.set_video_flip_vertical(!app_data.get_video_flip_vertical());
+                update_video_edit_indicators(&app_data);
+                request_current_preview_frame(&app_data, &preview_tx, &latest_id);
+            }
+        });
+    }
+
+    // Handle Toggle Crop Enabled
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_toggle_crop_enabled(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let next = !app_data.get_crop_enabled();
+                app_data.set_crop_enabled(next);
+                if next {
+                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let rect = CropRect {
+                        x: app_data.get_crop_x().max(0) as u32,
+                        y: app_data.get_crop_y().max(0) as u32,
+                        width: app_data.get_crop_width().max(2) as u32,
+                        height: app_data.get_crop_height().max(2) as u32,
+                    }
+                    .sanitize(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, true);
+                } else {
+                    update_video_edit_indicators(&app_data);
+                }
+            }
+        });
+    }
+
+    // Handle Set Crop Aspect Preset
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_set_crop_aspect_preset(move |preset_idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_crop_aspect_index(preset_idx.max(0));
+                app_data.set_crop_enabled(true);
+
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let aspect = CropAspectRatio::from_index(preset_idx);
+                let rect = aspect.compute_centered_rect(eff_w, eff_h);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Manual Crop Width Edited
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_width_edited(move |txt| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if let Ok(parsed_w) = txt.trim().parse::<u32>() {
+                    app_data.set_crop_enabled(true);
+                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let w = parsed_w.clamp(16, eff_w);
+                    let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio() {
+                        let mut h = ((w as u64 * den as u64) / num as u64) as u32;
+                        let mut adj_w = w;
+                        if h > eff_h {
+                            h = eff_h;
+                            adj_w = ((h as u64 * num as u64) / den as u64) as u32;
+                        }
+                        (adj_w, h.max(16), true)
+                    } else {
+                        (w, app_data.get_crop_height().max(16) as u32, false)
+                    };
+
+                    let rect = CropRect {
+                        x: app_data.get_crop_x().max(0) as u32,
+                        y: app_data.get_crop_y().max(0) as u32,
+                        width: final_w,
+                        height: final_h,
+                    }
+                    .sanitize(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, update_texts);
+                }
+            }
+        });
+    }
+
+    // Handle Manual Crop Height Edited
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_height_edited(move |txt| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if let Ok(parsed_h) = txt.trim().parse::<u32>() {
+                    app_data.set_crop_enabled(true);
+                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let h = parsed_h.clamp(16, eff_h);
+                    let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio() {
+                        let mut w = ((h as u64 * num as u64) / den as u64) as u32;
+                        let mut adj_h = h;
+                        if w > eff_w {
+                            w = eff_w;
+                            adj_h = ((w as u64 * den as u64) / num as u64) as u32;
+                        }
+                        (w.max(16), adj_h, true)
+                    } else {
+                        (app_data.get_crop_width().max(16) as u32, h, false)
+                    };
+
+                    let rect = CropRect {
+                        x: app_data.get_crop_x().max(0) as u32,
+                        y: app_data.get_crop_y().max(0) as u32,
+                        width: final_w,
+                        height: final_h,
+                    }
+                    .sanitize(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, update_texts);
+                }
+            }
+        });
+    }
+
+    // Handle Manual Crop X Edited
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_x_edited(move |txt| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if let Ok(parsed_x) = txt.trim().parse::<u32>() {
+                    app_data.set_crop_enabled(true);
+                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let rect = CropRect {
+                        x: parsed_x,
+                        y: app_data.get_crop_y().max(0) as u32,
+                        width: app_data.get_crop_width().max(16) as u32,
+                        height: app_data.get_crop_height().max(16) as u32,
+                    }
+                    .sanitize(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, false);
+                }
+            }
+        });
+    }
+
+    // Handle Manual Crop Y Edited
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_y_edited(move |txt| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if let Ok(parsed_y) = txt.trim().parse::<u32>() {
+                    app_data.set_crop_enabled(true);
+                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let rect = CropRect {
+                        x: app_data.get_crop_x().max(0) as u32,
+                        y: parsed_y,
+                        width: app_data.get_crop_width().max(16) as u32,
+                        height: app_data.get_crop_height().max(16) as u32,
+                    }
+                    .sanitize(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, false);
+                }
+            }
+        });
+    }
+
+    // Handle Visual Crop Box Drag Start & Move
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_box_drag_start(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                ui.global::<AppData>().set_crop_enabled(true);
+            }
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_box_drag_move(move |norm_dx, norm_dy| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let eff_w = app_data.get_effective_video_width().max(2);
+                let eff_h = app_data.get_effective_video_height().max(2);
+                let dx = (norm_dx * eff_w as f32).round() as i32;
+                let dy = (norm_dy * eff_h as f32).round() as i32;
+                if dx == 0 && dy == 0 {
+                    return;
+                }
+                let rect = CropRect {
+                    x: app_data.get_crop_x().max(0) as u32,
+                    y: app_data.get_crop_y().max(0) as u32,
+                    width: app_data.get_crop_width().max(16) as u32,
+                    height: app_data.get_crop_height().max(16) as u32,
+                }
+                .nudge(dx, dy, eff_w as u32, eff_h as u32);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Visual Crop Resize Handles (0..7)
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_handle_drag(move |handle_id, norm_x, norm_y| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_crop_enabled(true);
+                let eff_w = app_data.get_effective_video_width().max(32);
+                let eff_h = app_data.get_effective_video_height().max(32);
+                let cur_x = app_data.get_crop_x().clamp(0, eff_w - 16);
+                let cur_y = app_data.get_crop_y().clamp(0, eff_h - 16);
+                let cur_w = app_data.get_crop_width().clamp(16, eff_w - cur_x);
+                let cur_h = app_data.get_crop_height().clamp(16, eff_h - cur_y);
+                let right = cur_x + cur_w;
+                let bottom = cur_y + cur_h;
+
+                let px = (norm_x.clamp(0.0, 1.0) * eff_w as f32).round() as i32;
+                let py = (norm_y.clamp(0.0, 1.0) * eff_h as f32).round() as i32;
+                let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+
+                let (mut new_x, mut new_y, mut new_w, mut new_h) = match handle_id {
+                    0 => {
+                        // Top-Left corner (anchor: right, bottom)
+                        let w = (right - px).clamp(16, right);
+                        let h = (bottom - py).clamp(16, bottom);
+                        (right - w, bottom - h, w, h)
+                    }
+                    1 => {
+                        // Top-Right corner (anchor: cur_x, bottom)
+                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
+                        let h = (bottom - py).clamp(16, bottom);
+                        (cur_x, bottom - h, w, h)
+                    }
+                    2 => {
+                        // Bottom-Left corner (anchor: right, cur_y)
+                        let w = (right - px).clamp(16, right);
+                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
+                        (right - w, cur_y, w, h)
+                    }
+                    3 => {
+                        // Bottom-Right corner (anchor: cur_x, cur_y)
+                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
+                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
+                        (cur_x, cur_y, w, h)
+                    }
+                    4 => {
+                        // Top edge (anchor: bottom)
+                        let h = (bottom - py).clamp(16, bottom);
+                        (cur_x, bottom - h, cur_w, h)
+                    }
+                    5 => {
+                        // Bottom edge (anchor: cur_y)
+                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
+                        (cur_x, cur_y, cur_w, h)
+                    }
+                    6 => {
+                        // Left edge (anchor: right)
+                        let w = (right - px).clamp(16, right);
+                        (right - w, cur_y, w, cur_h)
+                    }
+                    _ => {
+                        // Right edge (anchor: cur_x)
+                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
+                        (cur_x, cur_y, w, cur_h)
+                    }
+                };
+
+                // Enforce aspect ratio lock if active
+                if let Some((num, den)) = aspect.ratio() {
+                    let num_i = num as i64;
+                    let den_i = den as i64;
+                    match handle_id {
+                        4 | 5 => {
+                            // Driven primarily by height
+                            let max_h = if handle_id == 4 { bottom } else { eff_h - cur_y };
+                            let mut h = new_h.clamp(16, max_h);
+                            let mut w = ((h as i64 * num_i) / den_i) as i32;
+                            if w > eff_w {
+                                w = eff_w;
+                                h = ((w as i64 * den_i) / num_i) as i32;
+                            }
+                            new_w = w.max(16);
+                            new_h = h.max(16);
+                            new_x = (cur_x + (cur_w - new_w) / 2).clamp(0, (eff_w - new_w).max(0));
+                            new_y = if handle_id == 4 { bottom - new_h } else { cur_y };
+                        }
+                        _ => {
+                            // Driven primarily by width
+                            let max_w = if handle_id == 0 || handle_id == 2 || handle_id == 6 {
+                                right
+                            } else {
+                                eff_w - cur_x
+                            };
+                            let max_h = if handle_id == 0 || handle_id == 1 {
+                                bottom
+                            } else if handle_id == 2 || handle_id == 3 {
+                                eff_h - cur_y
+                            } else {
+                                eff_h
+                            };
+                            let mut w = new_w.clamp(16, max_w);
+                            let mut h = ((w as i64 * den_i) / num_i) as i32;
+                            if h > max_h {
+                                h = max_h;
+                                w = ((h as i64 * num_i) / den_i) as i32;
+                            }
+                            new_w = w.max(16);
+                            new_h = h.max(16);
+                            new_x = if handle_id == 0 || handle_id == 2 || handle_id == 6 {
+                                (right - new_w).max(0)
+                            } else {
+                                cur_x
+                            };
+                            new_y = if handle_id == 0 || handle_id == 1 {
+                                (bottom - new_h).max(0)
+                            } else if handle_id == 2 || handle_id == 3 {
+                                cur_y
+                            } else {
+                                (cur_y + (cur_h - new_h) / 2).clamp(0, (eff_h - new_h).max(0))
+                            };
+                        }
+                    }
+                }
+
+                let rect = CropRect {
+                    x: new_x.max(0) as u32,
+                    y: new_y.max(0) as u32,
+                    width: new_w.max(16) as u32,
+                    height: new_h.max(16) as u32,
+                }
+                .sanitize(eff_w as u32, eff_h as u32);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Crop Nudge (Arrow keys & panel directional buttons)
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_crop_nudge(move |dx, dy| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if !app_data.get_crop_enabled() {
+                    return;
+                }
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let rect = CropRect {
+                    x: app_data.get_crop_x().max(0) as u32,
+                    y: app_data.get_crop_y().max(0) as u32,
+                    width: app_data.get_crop_width().max(16) as u32,
+                    height: app_data.get_crop_height().max(16) as u32,
+                }
+                .nudge(dx, dy, eff_w, eff_h);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Center Crop Box
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_center_crop_box(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let w = (app_data.get_crop_width().max(16) as u32).min(eff_w);
+                let h = (app_data.get_crop_height().max(16) as u32).min(eff_h);
+                let x = (eff_w.saturating_sub(w) / 2) & !1;
+                let y = (eff_h.saturating_sub(h) / 2) & !1;
+                let rect = CropRect {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                }
+                .sanitize(eff_w, eff_h);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Reset Crop
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_reset_crop(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_crop_aspect_index(0);
+                app_data.set_crop_enabled(false);
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let rect = CropRect::new(0, 0, eff_w, eff_h).sanitize(eff_w, eff_h);
+                sync_crop_rect_to_ui(&app_data, rect, true);
+            }
+        });
+    }
+
+    // Handle Reset All Video Edits
+    {
+        let ui_handle = ui.as_weak();
+        let preview_tx = preview_tx.clone();
+        let latest_id = latest_preview_id.clone();
+        let active_stream_clone = active_playback_child.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let session_id_clone = playback_session_id.clone();
+        let play_timer_clone = playback_timer.clone();
+
+        ui.global::<AppLogic>().on_reset_all_video_edits(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    stop_active_playback(
+                        &active_stream_clone,
+                        &active_ffplay_clone,
+                        &session_id_clone,
+                        &play_timer_clone,
+                        &app_data,
+                    );
+                }
+
+                app_data.set_video_rotation_index(0);
+                app_data.set_video_flip_horizontal(false);
+                app_data.set_video_flip_vertical(false);
+                app_data.set_crop_enabled(false);
+                app_data.set_crop_aspect_index(0);
+                sync_effective_dimensions_and_viewport(&app_data, true);
+                update_video_edit_indicators(&app_data);
+                request_current_preview_frame(&app_data, &preview_tx, &latest_id);
+            }
+        });
+    }
+
+    // Helper to restart live audio playback preview with updated audio filters
+    let restart_audio_preview = {
+        let binaries = binaries.clone();
+        let active_ffplay = active_player_child.clone();
+        let last_restart = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
+        move |app_data: &AppData| {
+            if !app_data.get_player_is_playing() {
+                return;
+            }
+            if let Ok(mut t) = last_restart.lock() {
+                if t.elapsed() < std::time::Duration::from_millis(50) {
+                    return;
+                }
+                *t = std::time::Instant::now();
+            }
+
+            let vol_float = if app_data.get_player_is_muted() {
+                0.0
+            } else {
+                app_data.get_player_volume()
+            };
+            let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+            if vol_int <= 0 {
+                return;
+            }
+
+            if let Some(ref ffplay_bin) = binaries.ffplay {
+                let cur_time = app_data.get_player_current_time() as f64;
+                let out_sec = app_data.get_out_point_seconds() as f64;
+                let dur_opt = if out_sec > cur_time {
+                    Some(out_sec - cur_time)
+                } else {
+                    None
+                };
+                let path = app_data.get_selected_file_path().to_string();
+                let edit_gain_db = app_data.get_audio_gain_db();
+                let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
+                    Some(app_data.get_audio_normalize_lufs())
+                } else {
+                    None
+                };
+
+                if let Ok(mut lock) = active_ffplay.lock() {
+                    if let Some(mut old) = lock.take() {
+                        let _ = old.kill();
+                    }
+                    if let Ok(child) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
+                        *lock = Some(child);
+                    }
+                }
+            }
+        }
+    };
+
+    // Handle Reset All Edits (Video + Audio)
+    {
+        let ui_handle = ui.as_weak();
+        let preview_tx = preview_tx.clone();
+        let latest_id = latest_preview_id.clone();
+        let active_stream_clone = active_playback_child.clone();
+        let active_ffplay_clone = active_player_child.clone();
+        let session_id_clone = playback_session_id.clone();
+        let play_timer_clone = playback_timer.clone();
+
+        ui.global::<AppLogic>().on_reset_all_edits(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    stop_active_playback(
+                        &active_stream_clone,
+                        &active_ffplay_clone,
+                        &session_id_clone,
+                        &play_timer_clone,
+                        &app_data,
+                    );
+                }
+
+                // Reset video edits
+                app_data.set_video_rotation_index(0);
+                app_data.set_video_flip_horizontal(false);
+                app_data.set_video_flip_vertical(false);
+                app_data.set_crop_enabled(false);
+                app_data.set_crop_aspect_index(0);
+                sync_effective_dimensions_and_viewport(&app_data, true);
+                update_video_edit_indicators(&app_data);
+
+                // Reset audio edits
+                app_data.set_audio_gain_db(0.0);
+                app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
+                app_data.set_audio_normalize_enabled(false);
+                app_data.set_audio_normalize_lufs(-16.0);
+                app_data.set_audio_normalize_preset_index(0);
+                app_data.set_has_active_audio_edits(false);
+
+                if app_data.get_selected_is_video() {
+                    request_current_preview_frame(&app_data, &preview_tx, &latest_id);
+                }
+            }
+        });
+    }
+
+    // Handle Set Audio Gain (dB)
+    {
+        let ui_handle = ui.as_weak();
+        let restart_preview = restart_audio_preview.clone();
+
+        ui.global::<AppLogic>().on_set_audio_gain_db(move |val| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let clamped = (val * 2.0).round() / 2.0; // round to 0.5 dB
+                let clamped = clamped.clamp(-24.0, 24.0);
+                app_data.set_audio_gain_db(clamped);
+                let text = if clamped.abs() < 0.05 {
+                    "0.0 dB".to_string()
+                } else {
+                    format!("{:+.1} dB", clamped)
+                };
+                app_data.set_audio_gain_text(SharedString::from(text));
+                let is_active = clamped.abs() > 0.05 || app_data.get_audio_normalize_enabled();
+                app_data.set_has_active_audio_edits(is_active);
+
+                restart_preview(&app_data);
+            }
+        });
+    }
+
+    // Handle Step Audio Gain (dB)
+    {
+        let ui_handle = ui.as_weak();
+        let restart_preview = restart_audio_preview.clone();
+
+        ui.global::<AppLogic>().on_step_audio_gain_db(move |delta| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let cur = app_data.get_audio_gain_db();
+                let next = (cur + delta).clamp(-24.0, 24.0);
+                app_data.set_audio_gain_db(next);
+                let text = if next.abs() < 0.05 {
+                    "0.0 dB".to_string()
+                } else {
+                    format!("{:+.1} dB", next)
+                };
+                app_data.set_audio_gain_text(SharedString::from(text));
+                let is_active = next.abs() > 0.05 || app_data.get_audio_normalize_enabled();
+                app_data.set_has_active_audio_edits(is_active);
+
+                restart_preview(&app_data);
+            }
+        });
+    }
+
+    // Handle Toggle Audio Normalization
+    {
+        let ui_handle = ui.as_weak();
+        let restart_preview = restart_audio_preview.clone();
+
+        ui.global::<AppLogic>().on_toggle_audio_normalize(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let next = !app_data.get_audio_normalize_enabled();
+                app_data.set_audio_normalize_enabled(next);
+                let is_active = app_data.get_audio_gain_db().abs() > 0.05 || next;
+                app_data.set_has_active_audio_edits(is_active);
+
+                restart_preview(&app_data);
+            }
+        });
+    }
+
+    // Handle Set Audio Normalize Preset
+    {
+        let ui_handle = ui.as_weak();
+        let restart_preview = restart_audio_preview.clone();
+
+        ui.global::<AppLogic>().on_set_audio_normalize_preset(move |idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let lufs = match idx {
+                    0 => -16.0,
+                    1 => -14.0,
+                    2 => -23.0,
+                    3 => -12.0,
+                    _ => -16.0,
+                };
+                app_data.set_audio_normalize_preset_index(idx);
+                app_data.set_audio_normalize_lufs(lufs);
+                app_data.set_audio_normalize_enabled(true);
+                app_data.set_has_active_audio_edits(true);
+
+                restart_preview(&app_data);
+            }
+        });
+    }
+
+    // Handle Reset Audio Edits
+    {
+        let ui_handle = ui.as_weak();
+        let restart_preview = restart_audio_preview.clone();
+
+        ui.global::<AppLogic>().on_reset_audio_edits(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_audio_gain_db(0.0);
+                app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
+                app_data.set_audio_normalize_enabled(false);
+                app_data.set_audio_normalize_lufs(-16.0);
+                app_data.set_audio_normalize_preset_index(0);
+                app_data.set_has_active_audio_edits(false);
+
+                restart_preview(&app_data);
             }
         });
     }
@@ -1581,21 +2480,23 @@ fn main() -> Result<()> {
 
         ui.global::<AppLogic>().on_open_output_dir(move || {
             if let Some(ui) = ui_handle.upgrade() {
-                let dir_str = ui.global::<AppData>().get_output_directory().to_string();
+                let app_data = ui.global::<AppData>();
+                let dir_str = app_data.get_output_directory().trim().to_string();
                 let target = if dir_str == "Same as source" || dir_str.is_empty() {
-                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    let sel_path = app_data.get_selected_file_path().to_string();
+                    if !sel_path.is_empty() {
+                        Path::new(&sel_path)
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+                    } else {
+                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    }
                 } else {
                     PathBuf::from(dir_str)
                 };
 
-                #[cfg(windows)]
-                {
-                    let _ = std::process::Command::new("explorer").arg(target).spawn();
-                }
-                #[cfg(not(windows))]
-                {
-                    let _ = std::process::Command::new("xdg-open").arg(target).spawn();
-                }
+                open_folder_in_explorer(&target);
             }
         });
     }
@@ -1635,7 +2536,7 @@ fn main() -> Result<()> {
                 }
                 // Function 7 corresponds to LosslessCut
                 app_data.set_function_index(7);
-                ui.global::<AppLogic>().invoke_start_processing();
+                ui.global::<AppLogic>().invoke_run_task();
             }
         });
     }
@@ -1654,13 +2555,13 @@ fn main() -> Result<()> {
         });
     }
 
-    // Handle Start Processing
+    // Handle Run Task (formerly Start Processing)
     {
         let ui_handle = ui.as_weak();
         let binaries = binaries.clone();
         let cancel_flag = cancel_flag.clone();
 
-        ui.global::<AppLogic>().on_start_processing(move || {
+        ui.global::<AppLogic>().on_run_task(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 if ui.global::<AppData>().get_is_processing() {
                     return;
@@ -1703,6 +2604,20 @@ fn main() -> Result<()> {
                 let out_point_str = ui.global::<AppData>().get_out_point().to_string();
                 let container_idx = ui.global::<AppData>().get_container_index();
                 let out_dir_str = ui.global::<AppData>().get_output_directory().to_string();
+
+                let rot_idx = ui.global::<AppData>().get_video_rotation_index();
+                let flip_h = ui.global::<AppData>().get_video_flip_horizontal();
+                let flip_v = ui.global::<AppData>().get_video_flip_vertical();
+                let crop_enabled = ui.global::<AppData>().get_crop_enabled();
+                let crop_x = ui.global::<AppData>().get_crop_x();
+                let crop_y = ui.global::<AppData>().get_crop_y();
+                let crop_w = ui.global::<AppData>().get_crop_width();
+                let crop_h = ui.global::<AppData>().get_crop_height();
+
+                let edit_gain_val = ui.global::<AppData>().get_audio_gain_db();
+                let edit_gain_opt = if edit_gain_val.abs() > 0.05 { Some(edit_gain_val) } else { None };
+                let edit_norm_enabled = ui.global::<AppData>().get_audio_normalize_enabled();
+                let edit_norm_lufs = ui.global::<AppData>().get_audio_normalize_lufs();
 
                 let ui_weak = ui_handle.clone();
                 let bins = binaries.clone();
@@ -1758,9 +2673,25 @@ fn main() -> Result<()> {
                             counter += 1;
                         }
 
-                        // Determine function
+                        let rotation = rotation_from_index(rot_idx);
+                        let crop = if crop_enabled && crop_w >= 2 && crop_h >= 2 {
+                            Some(CropRect {
+                                x: crop_x.max(0) as u32,
+                                y: crop_y.max(0) as u32,
+                                width: crop_w.max(2) as u32,
+                                height: crop_h.max(2) as u32,
+                            })
+                        } else {
+                            None
+                        };
+                        let has_audio_edits = edit_gain_opt.is_some() || edit_norm_enabled;
+                        let has_video_edits =
+                            rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
+
+                        // Determine function (upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active)
                         let function = match func_idx {
                             0..=5 => EncoderFunction::Transcode,
+                            6 | 7 if has_video_edits || has_audio_edits => EncoderFunction::Transcode,
                             6 => EncoderFunction::Rewrap,
                             7 => EncoderFunction::LosslessCut,
                             8 => EncoderFunction::ExtractVideo,
@@ -1966,6 +2897,12 @@ fn main() -> Result<()> {
                             total_duration
                         };
 
+                        let final_norm_opt = if edit_norm_enabled {
+                            Some(edit_norm_lufs)
+                        } else {
+                            normalize_lufs
+                        };
+
                         let config = EncodeJobConfig {
                             function,
                             input_path: input_path.clone(),
@@ -1990,11 +2927,16 @@ fn main() -> Result<()> {
                             audio_bitrate_kbps,
                             audio_sample_rate,
                             audio_channels: None,
-                            audio_gain_db: None,
-                            normalize_lufs,
+                            audio_gain_db: edit_gain_opt,
+                            normalize_lufs: final_norm_opt,
 
                             in_point,
                             out_point,
+
+                            rotation,
+                            flip_horizontal: flip_h,
+                            flip_vertical: flip_v,
+                            crop,
                         };
 
                         // Build FFmpeg command
@@ -2163,6 +3105,14 @@ fn main() -> Result<()> {
                 });
             }
         });
+
+        // Backward compatibility callback forwarding
+        let ui_handle_fwd = ui.as_weak();
+        ui.global::<AppLogic>().on_start_processing(move || {
+            if let Some(ui) = ui_handle_fwd.upgrade() {
+                ui.global::<AppLogic>().invoke_run_task();
+            }
+        });
     }
 
     // =========================================================================
@@ -2228,23 +3178,39 @@ fn main() -> Result<()> {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_open_output_dir(move || {
             if let Some(ui) = ui_handle.upgrade() {
-                let dir = ui.global::<AppData>().get_ytdlp_output_dir().to_string();
-                let last_file = ui.global::<AppData>().get_ytdlp_last_downloaded_file().to_string();
-                if !last_file.is_empty() && Path::new(&last_file).exists() {
-                    #[cfg(windows)]
-                    {
-                        let _ = std::process::Command::new("explorer")
-                            .arg(format!("/select,{}", last_file))
-                            .spawn();
-                    }
-                } else if !dir.is_empty() {
-                    let path = PathBuf::from(&dir);
-                    let _ = std::fs::create_dir_all(&path);
-                    #[cfg(windows)]
-                    {
-                        let _ = std::process::Command::new("explorer").arg(&path).spawn();
+                let app_data = ui.global::<AppData>();
+                let dir = app_data.get_ytdlp_output_dir().trim().to_string();
+                let last_file = app_data.get_ytdlp_last_downloaded_file().trim().to_string();
+
+                let mut target_folder: Option<PathBuf> = None;
+
+                if !last_file.is_empty() {
+                    let file_path = Path::new(&last_file);
+                    let resolved_file = if file_path.is_absolute() {
+                        file_path.to_path_buf()
+                    } else if !dir.is_empty() {
+                        PathBuf::from(&dir).join(file_path)
+                    } else {
+                        std::env::current_dir()
+                            .unwrap_or_else(|_| PathBuf::from("."))
+                            .join(file_path)
+                    };
+                    if let Some(parent) = resolved_file.parent() {
+                        if !parent.as_os_str().is_empty() {
+                            target_folder = Some(parent.to_path_buf());
+                        }
                     }
                 }
+
+                let folder = target_folder.unwrap_or_else(|| {
+                    if !dir.is_empty() {
+                        PathBuf::from(&dir)
+                    } else {
+                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    }
+                });
+
+                open_folder_in_explorer(&folder);
             }
         });
     }
@@ -2393,12 +3359,14 @@ fn main() -> Result<()> {
                 }
             };
 
-            let dest_dir_str = data.get_ytdlp_output_dir().to_string();
-            let dest_dir = if dest_dir_str.is_empty() {
-                PathBuf::from(".")
+            let dest_dir_str = data.get_ytdlp_output_dir().trim().to_string();
+            let raw_dest_dir = if dest_dir_str.is_empty() {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
             } else {
                 PathBuf::from(dest_dir_str)
             };
+            let _ = std::fs::create_dir_all(&raw_dest_dir);
+            let dest_dir = normalize_path_for_explorer(&raw_dest_dir);
 
             cancel_store.store(false, Ordering::SeqCst);
             data.set_ytdlp_is_downloading(true);
@@ -2481,6 +3449,7 @@ fn main() -> Result<()> {
                             data.set_ytdlp_is_downloading(false);
                             match res {
                                 Ok(file_path) => {
+                                    let clean_file_path = normalize_path_for_explorer(&file_path);
                                     data.set_ytdlp_has_error(false);
                                     data.set_ytdlp_error_message(SharedString::from(""));
                                     data.set_ytdlp_download_finished(true);
@@ -2490,7 +3459,7 @@ fn main() -> Result<()> {
                                         "Download completed successfully!",
                                     ));
                                     data.set_ytdlp_last_downloaded_file(SharedString::from(
-                                        file_path.to_string_lossy().as_ref(),
+                                        clean_file_path.to_string_lossy().as_ref(),
                                     ));
                                 }
                                 Err(e) => {
@@ -2579,12 +3548,16 @@ fn main() -> Result<()> {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
-                let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio) =
+                let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio, vw, vh) =
                     match probe_file(&path, &bins_c.ffprobe) {
                         Ok(meta) => {
                             let codecs = meta.codecs_summary();
                             let is_video = meta.primary_video().is_some();
                             let is_audio = meta.primary_audio().is_some();
+                            let (vw, vh) = meta
+                                .primary_video()
+                                .map(|v| (v.width as i32, v.height as i32))
+                                .unwrap_or((0, 0));
                             (
                                 meta.file_size_formatted(),
                                 meta.resolution_str(),
@@ -2593,6 +3566,8 @@ fn main() -> Result<()> {
                                 meta.duration_seconds as f32,
                                 is_video,
                                 is_audio,
+                                vw,
+                                vh,
                             )
                         }
                         Err(_) => (
@@ -2603,6 +3578,8 @@ fn main() -> Result<()> {
                             0.0,
                             false,
                             false,
+                            0,
+                            0,
                         ),
                     };
 
@@ -2623,6 +3600,8 @@ fn main() -> Result<()> {
                             duration_seconds,
                             is_video,
                             is_audio,
+                            video_width: vw,
+                            video_height: vh,
                         };
                         list.push(item.clone());
                         let idx = (list.len() - 1) as i32;
@@ -2715,7 +3694,7 @@ fn main() -> Result<()> {
             );
         });
 
-        // Poll during early window lifecycle until attached to the real application HWND
+        // Poll during early window lifecycle to attach to the real application HWND as soon as it appears
         let check_timer = Rc::new(RefCell::new(slint::Timer::default()));
         let check_timer_clone = check_timer.clone();
         let mut attempts = 0;
@@ -2725,7 +3704,7 @@ fn main() -> Result<()> {
             move || {
                 attempts += 1;
                 win_drag_drop::reapply_drop_target();
-                if win_drag_drop::is_attached() || attempts >= 20 {
+                if win_drag_drop::is_attached() && attempts >= 15 {
                     check_timer_clone.borrow().stop();
                 }
             },

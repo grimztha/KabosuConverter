@@ -356,7 +356,8 @@ component NumInput inherits Rectangle {
     ti := TextInput {
         x: 6px;
         width: parent.width - 12px;
-        y: (parent.height - self.height) / 2;
+        height: 100%;
+        vertical-alignment: center;
         text <=> root.text;
         font-size: 11px;
         color: #f8fafc;
@@ -367,7 +368,9 @@ component NumInput inherits Rectangle {
 
     if root.text == "" && !ti.has-focus : Text {
         x: 6px;
-        y: (parent.height - self.height) / 2;
+        width: parent.width - 12px;
+        height: 100%;
+        vertical-alignment: center;
         text: root.placeholder;
         font-size: 11px;
         color: #64748b;
@@ -2238,16 +2241,18 @@ export component MainWindow inherits Window {
                 background: #0b1120;
                 clip: true;
 
-                // TAB 0: MEDIA PLAYER & TRIMMING STUDIO
-                if AppData.active_tab == 0 : ScrollView {
-                    VerticalLayout {
-                        padding: 12px;
-                        spacing: 12px;
+                // TAB 0: MEDIA PLAYER & TRIMMING STUDIO (Dynamic Height, No Vertical Scroll)
+                if AppData.active_tab == 0 : VerticalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 0px;
 
-                        // MEDIA PLAYER & TRIMMING STUDIO EMPTY STATE
-                        if !AppData.player_has_media : Rectangle {
-                            vertical-stretch: 1;
-                            min-height: 480px;
+                    // MEDIA PLAYER & TRIMMING STUDIO EMPTY STATE
+                    if !AppData.player_has_media : Rectangle {
+                        vertical-stretch: 1;
+                        min-height: 240px;
                             border-radius: 12px;
                             background: #131d31;
                             border-width: 1px;
@@ -2326,14 +2331,18 @@ export component MainWindow inherits Window {
                         }
 
                         if AppData.player_has_media : Rectangle {
+                            vertical-stretch: 1;
                             border-radius: 10px;
                             background: #131d31;
                             border-width: 1px;
                             border-color: AppData.has_active_trim ? #f59e0b : #1e293b;
 
                             VerticalLayout {
-                                padding: 14px;
-                                spacing: 12px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                spacing: 8px;
 
                                 // Header row
                                 HorizontalLayout {
@@ -2415,9 +2424,10 @@ export component MainWindow inherits Window {
                                     }
                                 }
 
-                                // Media Screen Area (Responsive height for comfortable viewing at any window size)
+                                // Media Screen Area (Dynamic height: stretches to fill all available vertical space, no vertical scroll)
                                 Rectangle {
-                                    height: clamp(180px, root.height - 410px, 390px);
+                                    vertical-stretch: 1;
+                                    min-height: 120px;
                                     border-radius: 8px;
                                     background: #080d1a;
                                     border-width: 1px;
@@ -2900,7 +2910,6 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
-                }
 
                 // TAB 1: WEB DOWNLOADER (YT-DLP)
                 if AppData.active_tab == 1 : ScrollView {
@@ -5043,20 +5052,23 @@ export component MainWindow inherits Window {
                                                     HorizontalLayout {
                                                         spacing: 7px;
                                                         alignment: start;
-                                                        Rectangle {
-                                                            width: 16px;
-                                                            height: 16px;
-                                                            border-radius: 4px;
-                                                            background: AppData.crop_arrow_keys_enabled ? #0284c7 : #1e293b;
-                                                            border-width: 1px;
-                                                            border-color: AppData.crop_arrow_keys_enabled ? #38bdf8 : #475569;
-                                                            if AppData.crop_arrow_keys_enabled : Text {
-                                                                text: "✓";
-                                                                font-size: 11px;
-                                                                font-weight: 700;
-                                                                color: #ffffff;
-                                                                horizontal-alignment: center;
-                                                                vertical-alignment: center;
+                                                        VerticalLayout {
+                                                            alignment: center;
+                                                            Rectangle {
+                                                                width: 16px;
+                                                                height: 16px;
+                                                                border-radius: 4px;
+                                                                background: AppData.crop_arrow_keys_enabled ? #0284c7 : #1e293b;
+                                                                border-width: 1px;
+                                                                border-color: AppData.crop_arrow_keys_enabled ? #38bdf8 : #475569;
+                                                                if AppData.crop_arrow_keys_enabled : Text {
+                                                                    text: "✓";
+                                                                    font-size: 11px;
+                                                                    font-weight: 700;
+                                                                    color: #ffffff;
+                                                                    horizontal-alignment: center;
+                                                                    vertical-alignment: center;
+                                                                }
                                                             }
                                                         }
                                                         VerticalLayout {
@@ -5066,6 +5078,7 @@ export component MainWindow inherits Window {
                                                                 font-size: 10.5px;
                                                                 font-weight: 500;
                                                                 color: #e2e8f0;
+                                                                vertical-alignment: center;
                                                             }
                                                         }
                                                     }
@@ -5357,24 +5370,26 @@ export component MainWindow inherits Window {
                                                     padding-left: 8px;
                                                     padding-right: 8px;
                                                     spacing: 8px;
-                                                    alignment: center;
 
                                                     // Custom Checkbox
-                                                    Rectangle {
-                                                        width: 16px;
-                                                        height: 16px;
-                                                        border-radius: 4px;
-                                                        background: AppData.audio_normalize_enabled ? #0284c7 : #1e293b;
-                                                        border-width: 1px;
-                                                        border-color: AppData.audio_normalize_enabled ? #38bdf8 : #475569;
+                                                    VerticalLayout {
+                                                        alignment: center;
+                                                        Rectangle {
+                                                            width: 16px;
+                                                            height: 16px;
+                                                            border-radius: 4px;
+                                                            background: AppData.audio_normalize_enabled ? #0284c7 : #1e293b;
+                                                            border-width: 1px;
+                                                            border-color: AppData.audio_normalize_enabled ? #38bdf8 : #475569;
 
-                                                        if AppData.audio_normalize_enabled : Text {
-                                                            text: "✓";
-                                                            font-size: 11px;
-                                                            font-weight: 800;
-                                                            color: #ffffff;
-                                                            horizontal-alignment: center;
-                                                            vertical-alignment: center;
+                                                            if AppData.audio_normalize_enabled : Text {
+                                                                text: "✓";
+                                                                font-size: 11px;
+                                                                font-weight: 800;
+                                                                color: #ffffff;
+                                                                horizontal-alignment: center;
+                                                                vertical-alignment: center;
+                                                            }
                                                         }
                                                     }
 
@@ -5385,17 +5400,21 @@ export component MainWindow inherits Window {
                                                             font-size: 10.5px;
                                                             font-weight: 700;
                                                             color: AppData.audio_normalize_enabled ? #f1f5f9 : #cbd5e1;
+                                                            vertical-alignment: center;
                                                         }
                                                     }
 
                                                     Rectangle { horizontal-stretch: 1; }
 
-                                                    if AppData.audio_normalize_enabled : Text {
-                                                        text: "\{AppData.audio_normalize_lufs} LUFS";
-                                                        font-size: 10px;
-                                                        font-weight: 800;
-                                                        color: #38bdf8;
-                                                        vertical-alignment: center;
+                                                    if AppData.audio_normalize_enabled : VerticalLayout {
+                                                        alignment: center;
+                                                        Text {
+                                                            text: "\{AppData.audio_normalize_lufs} LUFS";
+                                                            font-size: 10px;
+                                                            font-weight: 800;
+                                                            color: #38bdf8;
+                                                            vertical-alignment: center;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -5476,17 +5495,23 @@ export component MainWindow inherits Window {
                                                 spacing: 5px;
                                                 alignment: center;
 
-                                                Image {
-                                                    source: @image-url("icons/play.svg");
-                                                    width: 10px;
-                                                    height: 10px;
-                                                    colorize: #38bdf8;
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Image {
+                                                        source: @image-url("icons/play.svg");
+                                                        width: 10px;
+                                                        height: 10px;
+                                                        colorize: #38bdf8;
+                                                    }
                                                 }
-                                                Text {
-                                                    text: "Real-time preview in player • Applied on RUN TASK";
-                                                    font-size: 9px;
-                                                    color: #94a3b8;
-                                                    vertical-alignment: center;
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Text {
+                                                        text: "Real-time preview in player • Applied on RUN TASK";
+                                                        font-size: 9px;
+                                                        color: #94a3b8;
+                                                        vertical-alignment: center;
+                                                    }
                                                 }
                                             }
                                         }

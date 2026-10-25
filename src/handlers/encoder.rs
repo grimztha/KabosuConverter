@@ -25,9 +25,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 .pick_folder()
             {
                 if let Some(ui) = ui_handle.upgrade() {
+                    let folder_str = folder.to_string_lossy().to_string();
                     ui.global::<AppData>().set_output_directory(SharedString::from(
-                        folder.to_string_lossy().to_string(),
+                        &folder_str,
                     ));
+                    let mut s = another_encoder::settings::load_settings();
+                    s.default_output_dir = Some(folder_str);
+                    let _ = another_encoder::settings::save_settings(&s);
                 }
             }
         });
@@ -179,6 +183,53 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let edit_norm_lufs = ui.global::<AppData>().get_audio_normalize_lufs();
                 let selected_idx = ui.global::<AppData>().get_selected_file_index();
 
+                // Persist user encoder choices to settings.json
+                let chosen_video_codec = match func_idx {
+                    0 => VideoCodec::H264,
+                    1 => VideoCodec::H265,
+                    2 => VideoCodec::AV1,
+                    3 => VideoCodec::AppleProRes,
+                    4 => VideoCodec::AvidDNxHD,
+                    5 => VideoCodec::VP9,
+                    6 => VideoCodec::Copy,
+                    _ => VideoCodec::H264,
+                };
+                let chosen_hw_accel = match hw_accel_idx {
+                    1 => HwAccel::Nvenc,
+                    2 => HwAccel::Qsv,
+                    3 => HwAccel::Amf,
+                    4 => HwAccel::Cpu,
+                    _ => HwAccel::Auto,
+                };
+                let chosen_audio_codec = match audio_codec_idx {
+                    1 => AudioCodecChoice::MP3,
+                    2 => AudioCodecChoice::Opus,
+                    3 => AudioCodecChoice::FLAC,
+                    4 => AudioCodecChoice::WavPCM24,
+                    5 => AudioCodecChoice::WavPCM16,
+                    6 => AudioCodecChoice::AC3,
+                    7 => AudioCodecChoice::Copy,
+                    _ => AudioCodecChoice::AAC,
+                };
+                let chosen_audio_bitrate = match audio_br_idx {
+                    0 => 320,
+                    1 => 256,
+                    2 => 192,
+                    3 => 128,
+                    4 => 96,
+                    _ => 64,
+                };
+                let mut current_settings = another_encoder::settings::load_settings();
+                current_settings.default_video_codec = chosen_video_codec;
+                current_settings.default_hw_accel = chosen_hw_accel;
+                current_settings.default_crf = crf;
+                current_settings.default_audio_codec = chosen_audio_codec;
+                current_settings.default_audio_bitrate_kbps = chosen_audio_bitrate;
+                if out_dir_str != "Same as source" && !out_dir_str.is_empty() {
+                    current_settings.default_output_dir = Some(out_dir_str.clone());
+                }
+                let _ = another_encoder::settings::save_settings(&current_settings);
+
                 let ui_weak = ui_handle.clone();
                 let bins = binaries.clone();
                 let cancel = cancel_flag.clone();
@@ -186,6 +237,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 // Spawn worker thread for batch queue processing
                 thread::spawn(move || {
                     let total_items = items.len();
+                    let mut any_errors = false;
 
                     for (item_idx, item) in items.iter().enumerate() {
                         if cancel.load(Ordering::SeqCst) {
@@ -268,7 +320,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             (VideoRotation::None, false, false, None)
                         };
 
-                        let has_audio_edits = edit_gain_opt.is_some() || edit_norm_enabled;
+                        let has_audio_edits =
+                            (edit_gain_opt.is_some() || edit_norm_enabled) && item.is_audio;
                         let has_video_edits =
                             rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
 
@@ -436,10 +489,18 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let out_secs = out_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
 
                         if in_secs.is_some() && out_secs.is_some() && in_secs.unwrap() >= out_secs.unwrap() {
+                            any_errors = true;
                             let ui_w = ui_weak.clone();
+                            let idx = item_idx;
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_w.upgrade() {
-                                    ui.global::<AppData>().set_status_summary(SharedString::from("In point must be before out point"));
+                                    let app_data = ui.global::<AppData>();
+                                    app_data.set_status_summary(SharedString::from("In point must be before out point"));
+                                    let model = app_data.get_queue();
+                                    if let Some(mut row) = model.row_data(idx) {
+                                        row.status = SharedString::from("Skipped: In >= Out");
+                                        model.set_row_data(idx, row);
+                                    }
                                 }
                             });
                             continue;
@@ -447,12 +508,20 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         if let Some(in_s) = in_secs {
                             if total_duration > 0.0 && in_s >= total_duration {
+                                any_errors = true;
                                 let ui_w = ui_weak.clone();
                                 let in_s_c = in_s;
                                 let dur_c = total_duration;
+                                let idx = item_idx;
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(ui) = ui_w.upgrade() {
-                                        ui.global::<AppData>().set_status_summary(SharedString::from(format!("In point ({:.1}s) is beyond video duration ({:.1}s)", in_s_c, dur_c)));
+                                        let app_data = ui.global::<AppData>();
+                                        app_data.set_status_summary(SharedString::from(format!("In point ({:.1}s) is beyond video duration ({:.1}s)", in_s_c, dur_c)));
+                                        let model = app_data.get_queue();
+                                        if let Some(mut row) = model.row_data(idx) {
+                                            row.status = SharedString::from("Skipped: In > Dur");
+                                            model.set_row_data(idx, row);
+                                        }
                                     }
                                 });
                                 continue;
@@ -461,12 +530,20 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         if let Some(out_s) = out_secs {
                             if total_duration > 0.0 && out_s > total_duration {
+                                any_errors = true;
                                 let ui_w = ui_weak.clone();
                                 let out_s_c = out_s;
                                 let dur_c = total_duration;
+                                let idx = item_idx;
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(ui) = ui_w.upgrade() {
-                                        ui.global::<AppData>().set_status_summary(SharedString::from(format!("Out point ({:.1}s) is beyond video duration ({:.1}s)", out_s_c, dur_c)));
+                                        let app_data = ui.global::<AppData>();
+                                        app_data.set_status_summary(SharedString::from(format!("Out point ({:.1}s) is beyond video duration ({:.1}s)", out_s_c, dur_c)));
+                                        let model = app_data.get_queue();
+                                        if let Some(mut row) = model.row_data(idx) {
+                                            row.status = SharedString::from("Skipped: Out > Dur");
+                                            model.set_row_data(idx, row);
+                                        }
                                     }
                                 });
                                 continue;
@@ -481,10 +558,15 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             total_duration
                         };
 
-                        let final_norm_opt = if edit_norm_enabled {
-                            Some(edit_norm_lufs)
+                        let (final_gain_opt, final_norm_opt) = if item.is_audio {
+                            let norm = if edit_norm_enabled {
+                                Some(edit_norm_lufs)
+                            } else {
+                                normalize_lufs
+                            };
+                            (edit_gain_opt, norm)
                         } else {
-                            normalize_lufs
+                            (None, None)
                         };
 
                         let config = EncodeJobConfig {
@@ -511,7 +593,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             audio_bitrate_kbps,
                             audio_sample_rate,
                             audio_channels: None,
-                            audio_gain_db: edit_gain_opt,
+                            audio_gain_db: final_gain_opt,
                             normalize_lufs: final_norm_opt,
 
                             in_point,
@@ -653,6 +735,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             }
                         };
                         let is_ok = result.is_ok();
+                        if !is_ok {
+                            any_errors = true;
+                        }
 
                         // Clean up output file only if this specific processing job failed or was cancelled in-flight
                         if !is_ok && output_path.exists() {
@@ -683,6 +768,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             if was_cancelled {
                                 ui.global::<AppData>()
                                     .set_progress_text(SharedString::from("Cancelled"));
+                            } else if any_errors {
+                                ui.global::<AppData>().set_progress_text(SharedString::from(
+                                    "Finished with errors / skipped files",
+                                ));
                             } else {
                                 ui.global::<AppData>().set_progress_percent(1.0);
                                 ui.global::<AppData>().set_progress_text(SharedString::from(

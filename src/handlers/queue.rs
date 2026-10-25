@@ -349,7 +349,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             app_data.set_out_point_seconds(-1.0);
                             update_trim_indicators(&app_data);
                         } else {
-                            let new_sel = 0.min(list.len() as i32 - 1);
+                            let new_sel = (index as usize).min(list.len() - 1) as i32;
                             app_data.set_selected_file_index(new_sel);
                             load_selected_file(&app_data, &list[new_sel as usize], &task_ctx);
                         }

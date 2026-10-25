@@ -262,6 +262,7 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
         ]);
     }
 
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
@@ -347,6 +348,7 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
 
     crate::set_no_window(&mut cmd);
 
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
@@ -370,9 +372,11 @@ impl AudioPlaybackSession {
         }
     }
 
-    /// Kills the child process immediately.
+    /// Kills the child process immediately and reaps its handle.
     pub fn kill(&mut self) -> std::io::Result<()> {
-        self.child.kill()
+        let res = self.child.kill();
+        let _ = self.child.wait();
+        res
     }
 
     /// Returns the current audio presentation timestamp (PTS) in seconds,
@@ -389,6 +393,13 @@ impl AudioPlaybackSession {
     /// Checks if the underlying process has exited.
     pub fn is_finished(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(Some(_status)))
+    }
+}
+
+impl Drop for AudioPlaybackSession {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -473,6 +484,7 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
 
     crate::set_no_window(&mut cmd);
 
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -533,6 +545,7 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
         "pipe:1",
     ]);
 
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 

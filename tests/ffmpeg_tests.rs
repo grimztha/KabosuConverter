@@ -903,6 +903,41 @@ fn test_scale_filter_aspect_ratio_bounding_box() {
     assert!(filter.contains("force_original_aspect_ratio=decrease"), "Scale filter must decrease aspect ratio to avoid distortion: {}", filter);
 }
 
+#[test]
+fn test_audioless_video_skips_audio_filter_flag() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "silent_video.mp4".to_string(),
+        output_path: "out.mp4".to_string(),
+        audio_gain_db: None,
+        normalize_lufs: None,
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(!cmd.contains(&"-af".to_string()), "Commands without audio adjustments must not include -af");
+}
+
+#[test]
+fn test_audio_playback_session_drop_safety() {
+    use another_encoder::ffmpeg::AudioPlaybackSession;
+
+    // Spawning a harmless dummy process to verify Drop cleans up without panic or hang
+    let mut cmd = std::process::Command::new(if cfg!(windows) { "cmd.exe" } else { "sh" });
+    if cfg!(windows) {
+        cmd.args(["/c", "ping -n 5 127.0.0.1 >nul"]);
+    } else {
+        cmd.args(["-c", "sleep 5"]);
+    }
+    if let Ok(child) = cmd.spawn() {
+        let session = AudioPlaybackSession::from_child(child);
+        // Explicitly drop session - this must kill and wait on the child process cleanly
+        drop(session);
+    }
+}
+
 
 
 

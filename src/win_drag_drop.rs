@@ -564,8 +564,10 @@ pub fn reapply_drop_target() {
         unsafe {
             let raw_com_ptr = ptr as *mut DropTargetCom;
             if let Some(real_hwnd) = find_app_window() {
-                log_dd(&format!("reapply_drop_target: Found real app HWND {:p}", real_hwnd));
-                attach_to_hwnd(real_hwnd, raw_com_ptr);
+                if ATTACHED_REAL_HWND.load(Ordering::SeqCst) != real_hwnd as usize {
+                    log_dd(&format!("reapply_drop_target: Found new real app HWND {:p}, attaching", real_hwnd));
+                    attach_to_hwnd(real_hwnd, raw_com_ptr);
+                }
             }
         }
     }

@@ -9,8 +9,10 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
-use another_encoder::ffmpeg::{AudioPlaybackSession, FFmpegBinaries};
-use another_encoder::settings;
+use another_encoder::ffmpeg::{
+    AudioCodecChoice, AudioPlaybackSession, FFmpegBinaries, HwAccel, VideoCodec,
+};
+use another_encoder::settings::{self, AppSettings};
 use another_encoder::ytdlp;
 
 mod context;
@@ -46,7 +48,8 @@ fn main() -> Result<()> {
     };
 
     let ui = MainWindow::new().map_err(|e| anyhow::anyhow!("Failed to create window: {:?}", e))?;
-    let _app_settings = settings::load_settings();
+    let app_settings = settings::load_settings();
+    apply_settings_to_ui(&ui, &app_settings);
 
     // Initialize empty queue model in Slint
     ui.global::<AppData>()
@@ -77,14 +80,12 @@ fn main() -> Result<()> {
         eprintln!("Warning: yt-dlp binary not found in project root path");
     }
 
-    let default_dl_dir = _app_settings
-        .default_output_dir
-        .as_ref()
-        .map(PathBuf::from)
-        .or_else(dirs::download_dir)
-        .or_else(dirs::video_dir)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    ui.global::<AppData>().set_ytdlp_output_dir(SharedString::from(default_dl_dir.to_string_lossy().as_ref()));
+    if app_settings.default_output_dir.is_none() {
+        let default_dl_dir = dirs::download_dir()
+            .or_else(dirs::video_dir)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        ui.global::<AppData>().set_ytdlp_output_dir(SharedString::from(default_dl_dir.to_string_lossy().as_ref()));
+    }
 
     let ytdlp_discovered_options = Arc::new(Mutex::new(Vec::new()));
     let active_ytdlp_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
@@ -181,4 +182,60 @@ fn main() -> Result<()> {
 
     ui.run()
         .map_err(|e| anyhow::anyhow!("Platform error: {:?}", e))
+}
+
+fn apply_settings_to_ui(ui: &MainWindow, settings: &AppSettings) {
+    let data = ui.global::<AppData>();
+
+    if let Some(ref dir) = settings.default_output_dir {
+        if !dir.is_empty() && dir != "Same as source" {
+            data.set_output_directory(SharedString::from(dir));
+            data.set_ytdlp_output_dir(SharedString::from(dir));
+        }
+    }
+
+    let func_idx = match settings.default_video_codec {
+        VideoCodec::H264 => 0,
+        VideoCodec::H265 => 1,
+        VideoCodec::AV1 => 2,
+        VideoCodec::AppleProRes => 3,
+        VideoCodec::AvidDNxHD => 4,
+        VideoCodec::VP9 => 5,
+        VideoCodec::Copy => 6,
+        _ => 0,
+    };
+    data.set_function_index(func_idx);
+
+    let hw_idx = match settings.default_hw_accel {
+        HwAccel::Auto => 0,
+        HwAccel::Nvenc => 1,
+        HwAccel::Qsv => 2,
+        HwAccel::Amf => 3,
+        HwAccel::Cpu => 4,
+    };
+    data.set_hw_accel_index(hw_idx);
+
+    data.set_crf_value(settings.default_crf as f32);
+
+    let audio_codec_idx = match settings.default_audio_codec {
+        AudioCodecChoice::AAC => 0,
+        AudioCodecChoice::MP3 => 1,
+        AudioCodecChoice::Opus => 2,
+        AudioCodecChoice::FLAC => 3,
+        AudioCodecChoice::WavPCM24 => 4,
+        AudioCodecChoice::WavPCM16 => 5,
+        AudioCodecChoice::AC3 => 6,
+        AudioCodecChoice::Copy => 7,
+    };
+    data.set_audio_codec_index(audio_codec_idx);
+
+    let audio_br_idx = match settings.default_audio_bitrate_kbps {
+        320 => 0,
+        256 => 1,
+        192 => 2,
+        128 => 3,
+        96 => 4,
+        _ => 5,
+    };
+    data.set_audio_bitrate_index(audio_br_idx);
 }

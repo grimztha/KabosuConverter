@@ -59,8 +59,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         ui.global::<AppLogic>().on_ytdlp_select_output_dir(move || {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 if let Some(ui) = ui_handle.upgrade() {
+                    let folder_str = folder.to_string_lossy().to_string();
                     ui.global::<AppData>()
-                        .set_ytdlp_output_dir(SharedString::from(folder.to_string_lossy().as_ref()));
+                        .set_ytdlp_output_dir(SharedString::from(&folder_str));
+                    let mut s = another_encoder::settings::load_settings();
+                    s.default_output_dir = Some(folder_str);
+                    let _ = another_encoder::settings::save_settings(&s);
                 }
             }
         });
@@ -388,10 +392,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
         ui.global::<AppLogic>().on_ytdlp_cancel_download(move || {
             cancel_store.store(true, Ordering::SeqCst);
-            if let Ok(mut lock) = child_store.lock() {
-                if let Some(mut child) = lock.take() {
-                    let _ = child.kill();
-                }
+            let mut lock = child_store.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(mut child) = lock.take() {
+                let _ = child.kill();
+                let _ = child.wait();
             }
             if let Some(ui) = ui_handle.upgrade() {
                 let data = ui.global::<AppData>();
@@ -404,6 +408,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
     // Handle yt-dlp Load in Player
     {
         let ui_handle = ui.as_weak();
+        let ctx = ctx.clone();
         let bins = ctx.binaries.clone();
         let task_ctx = ctx.task_context();
 
@@ -424,6 +429,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
+            ctx.stop_active_playback(&app_data);
             app_data.set_active_tab(0);
             let ui_w = ui_handle.clone();
             let bins_c = bins.clone();

@@ -257,6 +257,32 @@ pub fn build_output_template(custom_filename: Option<&str>) -> String {
     }
 }
 
+/// Parses a line of yt-dlp stdout (from `--print after_move:filepath`) into a resolved file path.
+/// Distinguishes between internal yt-dlp progress tags and actual target paths, even when video titles start with `[`.
+pub fn parse_downloaded_filepath(line: &str, dest_dir: &Path) -> Option<PathBuf> {
+    let trimmed = line.trim();
+    let is_ytdlp_tag = trimmed.starts_with("[download]")
+        || trimmed.starts_with("[info]")
+        || trimmed.starts_with("[youtube]")
+        || trimmed.starts_with("[Merger]")
+        || trimmed.starts_with("[ExtractAudio]")
+        || trimmed.starts_with("[Fixup")
+        || trimmed.starts_with("[ffmpeg]");
+
+    if !trimmed.is_empty() && !trimmed.starts_with("download:") && !is_ytdlp_tag {
+        let p = PathBuf::from(trimmed);
+        let resolved = if p.is_absolute() {
+            p.clone()
+        } else {
+            dest_dir.join(&p)
+        };
+        if resolved.exists() || p.is_absolute() || p.extension().is_some() {
+            return Some(resolved);
+        }
+    }
+    None
+}
+
 /// Start an asynchronous download with real-time progress parsing and log streaming.
 #[allow(clippy::too_many_arguments)]
 pub fn start_download(
@@ -358,11 +384,8 @@ pub fn start_download(
 
             let trimmed = line.trim();
             // Capture after_move:filepath output
-            if !trimmed.is_empty() && !trimmed.starts_with("download:") && !trimmed.starts_with("[") {
-                let p = PathBuf::from(trimmed);
-                if p.is_absolute() || p.extension().is_some() {
-                    printed_path = Some(p);
-                }
+            if let Some(resolved) = parse_downloaded_filepath(trimmed, &dest_dir_clone) {
+                printed_path = Some(resolved);
             }
 
             if line.starts_with("download:") {

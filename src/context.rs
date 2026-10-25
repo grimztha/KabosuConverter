@@ -71,15 +71,14 @@ impl AppContext {
     pub fn stop_active_playback(&self, app_data: &crate::AppData) {
         self.playback_session_id.fetch_add(1, Ordering::SeqCst);
         self.playback_timer.borrow().stop();
-        if let Ok(mut lock) = self.active_playback_child.lock() {
-            if let Some(mut child) = lock.take() {
-                let _ = child.kill();
-            }
+        let mut stream_lock = self.active_playback_child.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(mut child) = stream_lock.take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
-        if let Ok(mut lock) = self.active_player_child.lock() {
-            if let Some(mut session) = lock.take() {
-                let _ = session.kill();
-            }
+        let mut player_lock = self.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(mut session) = player_lock.take() {
+            let _ = session.kill();
         }
         app_data.set_player_is_playing(false);
     }
@@ -127,21 +126,20 @@ impl AppContext {
                 None
             };
 
-            if let Ok(mut lock) = self.active_player_child.lock() {
-                if let Some(mut old) = lock.take() {
-                    let _ = old.kill();
-                }
-                if let Ok(session) = spawn_audio_playback(
-                    ffplay_bin,
-                    &path,
-                    cur_time,
-                    dur_opt,
-                    vol_int,
-                    edit_gain_opt,
-                    edit_norm_opt,
-                ) {
-                    *lock = Some(session);
-                }
+            let mut lock = self.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(mut old) = lock.take() {
+                let _ = old.kill();
+            }
+            if let Ok(session) = spawn_audio_playback(
+                ffplay_bin,
+                &path,
+                cur_time,
+                dur_opt,
+                vol_int,
+                edit_gain_opt,
+                edit_norm_opt,
+            ) {
+                *lock = Some(session);
             }
         }
     }

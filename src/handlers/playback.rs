@@ -138,9 +138,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     edit_norm_opt,
                                 ) {
                                     initial_audio_clock = Some(session.master_clock.clone());
-                                    if let Ok(mut lock) = ctx.active_player_child.lock() {
-                                        *lock = Some(session);
-                                    }
+                                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                                    *lock = Some(session);
                                 }
                             }
                         }
@@ -158,9 +157,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 let ui_w = ui_handle.clone();
                                 let mut stdout = child.stdout.take();
 
-                                if let Ok(mut lock) = ctx.active_playback_child.lock() {
-                                    *lock = Some(child);
-                                }
+                                let mut lock = ctx.active_playback_child.lock().unwrap_or_else(|e| e.into_inner());
+                                *lock = Some(child);
 
                                 thread::spawn(move || {
                                     use std::io::Read;
@@ -299,16 +297,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     // Only clean up process handles if they still belong to this playback session!
                                     // This prevents an exiting thread from killing the newly spawned child of a subsequent session.
                                     if session_check.load(Ordering::SeqCst) == my_session {
-                                        if let Ok(mut lock) = stream_child_ref.lock() {
-                                            if let Some(mut c) = lock.take() {
-                                                let _ = c.kill();
-                                                let _ = c.wait();
-                                            }
+                                        let mut s_lock = stream_child_ref.lock().unwrap_or_else(|e| e.into_inner());
+                                        if let Some(mut c) = s_lock.take() {
+                                            let _ = c.kill();
+                                            let _ = c.wait();
                                         }
-                                        if let Ok(mut lock) = ffplay_child_ref.lock() {
-                                            if let Some(mut s) = lock.take() {
-                                                let _ = s.kill();
-                                            }
+                                        let mut p_lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
+                                        if let Some(mut s) = p_lock.take() {
+                                            let _ = s.kill();
                                         }
                                     }
                                 });
@@ -358,9 +354,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     edit_gain_opt,
                                     edit_norm_opt,
                                 ) {
-                                    if let Ok(mut lock) = ctx.active_player_child.lock() {
-                                        *lock = Some(session);
-                                    }
+                                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                                    *lock = Some(session);
                                 }
                             }
                         }
@@ -406,9 +401,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         app_data.set_player_current_time(final_time);
                                         app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time as f64)));
                                         timer_ref.borrow().stop();
-                                        if let Ok(mut lock) = ffplay_child_ref.lock() {
-                                            let _ = lock.take();
-                                        }
+                                        let mut lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
+                                        let _ = lock.take();
                                         return;
                                     }
 
@@ -431,10 +425,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         app_data.set_player_current_time(final_time);
                                         app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time as f64)));
                                         timer_ref.borrow().stop();
-                                        if let Ok(mut lock) = ffplay_child_ref.lock() {
-                                            if let Some(mut s) = lock.take() {
-                                                let _ = s.kill();
-                                            }
+                                        let mut lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
+                                        if let Some(mut s) = lock.take() {
+                                            let _ = s.kill();
                                         }
                                     } else {
                                         app_data.set_player_current_time(cur);
@@ -531,13 +524,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 };
                 let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
 
-                if let Ok(mut lock) = ctx.active_player_child.lock() {
-                    if let Some(mut old) = lock.take() {
-                        let _ = old.kill();
-                    }
-                    if let Ok(child) = spawn_ffplay(&ffplay_bin, &media_path, cur, duration, !is_video, Some(vol_int)) {
-                        *lock = Some(AudioPlaybackSession::from_child(child));
-                    }
+                let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(mut old) = lock.take() {
+                    let _ = old.kill();
+                }
+                if let Ok(child) = spawn_ffplay(&ffplay_bin, &media_path, cur, duration, !is_video, Some(vol_int)) {
+                    *lock = Some(AudioPlaybackSession::from_child(child));
                 }
             }
         });
@@ -572,11 +564,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             (clamped * 100.0).round().clamp(0.0, 100.0) as i32
                         };
 
-                        if let Ok(mut lock) = ctx.active_player_child.lock() {
-                            if let Some(mut old) = lock.take() {
-                                let _ = old.kill();
-                            }
-                            if vol_int > 0 {
+                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(mut old) = lock.take() {
+                            let _ = old.kill();
+                        }
+                        if vol_int > 0 {
                                 if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
                                     let cur_time = app_data.get_player_current_time() as f64;
                                     let out_sec = app_data.get_out_point_seconds() as f64;
@@ -597,7 +589,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         }
                     }
                 }
-            }
         });
     }
 
@@ -629,11 +620,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let path = app_data.get_selected_file_path().to_string();
                         let vol_int = (restore_vol * 100.0).round().clamp(0.0, 100.0) as i32;
 
-                        if let Ok(mut lock) = ctx.active_player_child.lock() {
-                            if let Some(mut old) = lock.take() {
-                                let _ = old.kill();
-                            }
-                            if vol_int > 0 {
+                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(mut old) = lock.take() {
+                            let _ = old.kill();
+                        }
+                        if vol_int > 0 {
                                 if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
                                     let edit_gain_db = app_data.get_audio_gain_db();
                                     let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
@@ -642,7 +633,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         *lock = Some(session);
                                     }
                                 }
-                            }
                         }
                     }
                 } else {
@@ -654,10 +644,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     app_data.set_player_is_muted(true);
 
                     // Silence audio immediately
-                    if let Ok(mut lock) = ctx.active_player_child.lock() {
-                        if let Some(mut old) = lock.take() {
-                            let _ = old.kill();
-                        }
+                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(mut old) = lock.take() {
+                        let _ = old.kill();
                     }
                 }
             }

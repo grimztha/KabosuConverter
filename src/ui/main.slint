@@ -913,7 +913,9 @@ component TimelineScrollBar inherits Rectangle {
     border-color: #1c1c24;
     clip: true;
 
-    property <length> max_scroll: max(0px, root.track_width - root.viewport_width);
+    property <length> max_scroll: root.track_width > root.viewport_width
+        ? (root.track_width - root.viewport_width)
+        : max(0px, root.viewport_width * (max(1.0, root.zoom_level) - 1.0));
     property <length> current_scroll: (-root.content_x).clamp(0px, self.max_scroll);
     property <float> scroll_ratio: self.max_scroll > 0px ? (self.current_scroll / self.max_scroll) : 0.0;
     property <length> thumb_w: root.width > 0px ? min(root.width, max(28px, root.width / max(1.0, root.zoom_level))) : 0px;
@@ -971,7 +973,7 @@ component TimelineScrollBar inherits Rectangle {
         property <length> drag_offset: 0px;
 
         pointer-event(event) => {
-            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+            if event.kind == PointerEventKind.down {
                 if self.mouse-x >= root.thumb_x && self.mouse-x <= root.thumb_x + root.thumb_w {
                     self.drag_offset = self.mouse-x - root.thumb_x;
                 } else {
@@ -981,6 +983,16 @@ component TimelineScrollBar inherits Rectangle {
                         let r = target_x / root.max_travel;
                         root.scroll_to(- (r * root.max_scroll));
                     }
+                }
+            }
+        }
+
+        clicked => {
+            if root.max_travel > 0px && root.max_scroll > 0px {
+                if self.mouse-x < root.thumb_x || self.mouse-x > root.thumb_x + root.thumb_w {
+                    let target_x = (self.mouse-x - root.thumb_w / 2).clamp(0px, root.max_travel);
+                    let r = target_x / root.max_travel;
+                    root.scroll_to(- (r * root.max_scroll));
                 }
             }
         }
@@ -1070,6 +1082,7 @@ component VisualTimeline inherits Rectangle {
             horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
             vertical-scrollbar-policy: ScrollBarPolicy.always-off;
             vertical-stretch: 1;
+            content-width: max(self.width, self.width * root.zoom_level);
 
             track := Rectangle {
                 width: max(parent.width, parent.width * root.zoom_level);
@@ -1275,7 +1288,8 @@ component VisualTimeline inherits Rectangle {
                 in_point_norm: root.in_point_norm;
                 out_point_norm: root.out_point_norm;
                 scroll_to(val) => {
-                    sv.content-x = val;
+                    let max_s = max(0px, max(sv.width, sv.width * root.zoom_level) - sv.width);
+                    sv.content-x = val.clamp(-max_s, 0px);
                 }
             }
         }
@@ -1398,6 +1412,7 @@ component AudioWaveformStudio inherits Rectangle {
                         horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
                         vertical-scrollbar-policy: ScrollBarPolicy.always-off;
                         vertical-stretch: 1;
+                        content-width: max(self.width, self.width * root.zoom_level);
 
                         track := Rectangle {
                             width: max(parent.width, parent.width * root.zoom_level);
@@ -1640,7 +1655,8 @@ component AudioWaveformStudio inherits Rectangle {
                         in_point_norm: root.in_point_norm;
                         out_point_norm: root.out_point_norm;
                         scroll_to(val) => {
-                            sv.content-x = val;
+                            let max_s = max(0px, max(sv.width, sv.width * root.zoom_level) - sv.width);
+                            sv.content-x = val.clamp(-max_s, 0px);
                         }
                     }
                 }

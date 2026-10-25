@@ -180,6 +180,7 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
     }
 
     cmd.arg("--").arg(media_path);
+    cmd.stdin(std::process::Stdio::null());
 
     let child = cmd.spawn().context("Failed to spawn ffplay preview player")?;
     Ok(child)

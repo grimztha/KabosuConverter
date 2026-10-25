@@ -189,7 +189,7 @@ impl FFmpegRunner {
         watcher_stop.store(true, Ordering::SeqCst);
         let _ = watcher_handle.join();
 
-        let mut child_guard = child_shared.lock().map_err(|_| anyhow::anyhow!("Mutex poisoned"))?;
+        let mut child_guard = child_shared.lock().unwrap_or_else(|e| e.into_inner());
         let mut child = child_guard.take().context("Child process handle already taken")?;
         let status = child.wait().context("Failed to wait on ffmpeg process")?;
 

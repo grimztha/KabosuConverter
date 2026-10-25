@@ -53,6 +53,18 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 let cur = app_data.get_player_current_time();
+                let out_sec = app_data.get_out_point_seconds();
+                let dur = app_data.get_player_duration();
+                if out_sec >= 0.0 && cur >= out_sec {
+                    let new_out = (cur + 1.0).min(dur);
+                    if new_out > cur {
+                        app_data.set_out_point_seconds(new_out);
+                        app_data.set_out_point(SharedString::from(format_duration_hms(new_out as f64)));
+                    } else {
+                        app_data.set_out_point_seconds(-1.0);
+                        app_data.set_out_point(SharedString::from(""));
+                    }
+                }
                 app_data.set_in_point_seconds(cur);
                 app_data.set_in_point(SharedString::from(format_duration_hms(cur as f64)));
                 update_trim_indicators(&app_data);
@@ -67,6 +79,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 let cur = app_data.get_player_current_time();
+                let in_sec = app_data.get_in_point_seconds();
+                if in_sec >= 0.0 && cur <= in_sec {
+                    let new_in = (cur - 1.0).max(0.0);
+                    if new_in < cur {
+                        app_data.set_in_point_seconds(new_in);
+                        app_data.set_in_point(SharedString::from(format_duration_hms(new_in as f64)));
+                    } else {
+                        app_data.set_in_point_seconds(-1.0);
+                        app_data.set_in_point(SharedString::from(""));
+                    }
+                }
                 app_data.set_out_point_seconds(cur);
                 app_data.set_out_point(SharedString::from(format_duration_hms(cur as f64)));
                 update_trim_indicators(&app_data);
@@ -86,7 +109,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 }
 
                 let dur = app_data.get_player_duration();
-                let clamped = val.clamp(0.0, dur.max(0.0));
+                let out_sec = app_data.get_out_point_seconds();
+                let max_in = if out_sec >= 0.0 {
+                    (out_sec - 0.05).max(0.0)
+                } else {
+                    dur.max(0.0)
+                };
+                let clamped = val.clamp(0.0, max_in);
                 app_data.set_in_point_seconds(clamped);
                 app_data.set_in_point(SharedString::from(format_duration_hms(clamped as f64)));
                 update_trim_indicators(&app_data);
@@ -112,7 +141,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 }
 
                 let dur = app_data.get_player_duration();
-                let clamped = val.clamp(0.0, dur.max(0.0));
+                let in_sec = app_data.get_in_point_seconds();
+                let min_out = if in_sec >= 0.0 {
+                    (in_sec + 0.05).min(dur)
+                } else {
+                    0.0
+                };
+                let clamped = val.clamp(min_out, dur.max(0.0));
                 app_data.set_out_point_seconds(clamped);
                 app_data.set_out_point(SharedString::from(format_duration_hms(clamped as f64)));
                 update_trim_indicators(&app_data);

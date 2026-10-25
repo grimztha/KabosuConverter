@@ -1,6 +1,6 @@
 use std::path::Path;
 use another_encoder::ffmpeg::{
-    FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec,
+    FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
     RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries,
     VideoRotation, ResolutionPreset
 };
@@ -936,6 +936,77 @@ fn test_audio_playback_session_drop_safety() {
         // Explicitly drop session - this must kill and wait on the child process cleanly
         drop(session);
     }
+}
+
+#[test]
+fn test_qsv_and_amf_hardware_command_generation() {
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+
+    // 1. QSV H.264 with CRF
+    let config_qsv_crf = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_qsv.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Qsv,
+        rate_control: RateControlMode::CRF,
+        crf: 22,
+        ..Default::default()
+    };
+    let cmd = FFmpegCommandBuilder::build(&config_qsv_crf, ffmpeg_bin);
+    assert!(cmd.contains(&"h264_qsv".to_string()));
+    assert!(cmd.contains(&"-global_quality".to_string()));
+    let idx = cmd.iter().position(|r| r == "-global_quality").unwrap();
+    assert_eq!(cmd[idx + 1], "22");
+
+    // 2. QSV H.264 with CBR
+    let config_qsv_cbr = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_qsv_cbr.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Qsv,
+        rate_control: RateControlMode::CBR,
+        video_bitrate_kbps: 8000,
+        ..Default::default()
+    };
+    let cmd_cbr = FFmpegCommandBuilder::build(&config_qsv_cbr, ffmpeg_bin);
+    assert!(cmd_cbr.contains(&"-b:v".to_string()));
+    let b_idx = cmd_cbr.iter().position(|r| r == "-b:v").unwrap();
+    assert_eq!(cmd_cbr[b_idx + 1], "8000k");
+
+    // 3. AMF H.264 with CRF
+    let config_amf_crf = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_amf.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Amf,
+        rate_control: RateControlMode::CRF,
+        crf: 20,
+        ..Default::default()
+    };
+    let cmd_amf = FFmpegCommandBuilder::build(&config_amf_crf, ffmpeg_bin);
+    assert!(cmd_amf.contains(&"h264_amf".to_string()));
+    assert!(cmd_amf.contains(&"-rc".to_string()));
+    assert!(cmd_amf.contains(&"cqp".to_string()));
+    assert!(cmd_amf.contains(&"-qp_i".to_string()));
+
+    // 4. AMF HEVC
+    let config_amf_hevc = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_amf_hevc.mp4".to_string(),
+        video_codec: VideoCodec::H265,
+        hw_accel: HwAccel::Amf,
+        rate_control: RateControlMode::CRF,
+        crf: 24,
+        ..Default::default()
+    };
+    let cmd_hevc = FFmpegCommandBuilder::build(&config_amf_hevc, ffmpeg_bin);
+    assert!(cmd_hevc.contains(&"hevc_amf".to_string()));
+    assert!(cmd_hevc.contains(&"-tag:v".to_string()));
+    assert!(cmd_hevc.contains(&"hvc1".to_string()));
 }
 
 

@@ -263,6 +263,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     _ => ".m4a",
                                 },
                             }
+                        } else if func_idx == 3 || func_idx == 4 {
+                            // Professional editing codecs (Apple ProRes & Avid DNxHD) require QuickTime (.mov) or Matroska (.mkv) container
+                            match container_idx {
+                                1 => ".mkv",
+                                _ => ".mov",
+                            }
                         } else {
                             match container_idx {
                                 1 => ".mkv",
@@ -285,14 +291,15 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     .map(|p| p.to_path_buf())
                                     .unwrap_or_else(|| PathBuf::from("."))
                             };
+                        let _ = std::fs::create_dir_all(&parent_dir);
 
                         let stem = in_p.file_stem().unwrap_or_default().to_string_lossy();
                         let mut output_path =
                             parent_dir.join(format!("{}_encoded{}", stem, out_container));
 
-                        // Avoid overwriting existing output by appending counter if needed
+                        // Avoid overwriting existing output or input file by appending counter if needed
                         let mut counter = 1;
-                        while output_path.exists() && output_path != in_p {
+                        while output_path.exists() {
                             output_path = parent_dir
                                 .join(format!("{}_encoded_{}{}", stem, counter, out_container));
                             counter += 1;

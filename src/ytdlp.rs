@@ -340,6 +340,7 @@ pub fn start_download(
     cmd.arg("--");
     cmd.arg(trimmed_url);
 
+    cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 

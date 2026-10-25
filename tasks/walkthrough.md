@@ -209,3 +209,54 @@ All 6 identified bugs (`BUG-01` through `BUG-06`), 4 process lifecycle/security 
 - `tests/ytdlp_tests.rs`: Added `test_parse_downloaded_filepath_bracket_filenames_and_tags` verifying tag rejection and bracket filename handling.
 - `tests/ffmpeg_tests.rs`: Added `test_audioless_video_skips_audio_filter_flag` and `test_audio_playback_session_drop_safety`.
 - All 41 tests passing cleanly.
+
+
+---
+
+# Walkthrough: Implementation of Hardware Acceleration & Stability Fixes (v0.8.2)
+
+**Project:** Another Encoder (`another-encoder v0.8.2`)  
+**Date:** October 2026  
+**Scope:** Secondary audit fixes addressing professional codec container compatibility, hardware encoder parameters (QSV/AMF), batch directory creation, input overwrite protection, and timeline trim UX.
+
+## 1. Summary of Changes
+
+A secondary deep audit of FFmpeg command generation, hardware acceleration codepaths, container muxing compatibility, directory handling, and subprocess I/O identified 4 functional bugs, 1 subprocess security/DoS risk, and 1 timeline UX flaw.
+
+All issues were resolved, verified, and backed by automated unit tests.
+
+### Verification Results
+- **Unit & Integration Tests:** 42 passed, 0 failed (`cargo test`).
+- **Clippy:** 0 warnings (`cargo clippy --all-targets --all-features`).
+- **Release Build:** Clean compilation with 0 errors/warnings (`cargo build --release`).
+
+## 2. Details of Implemented Fixes
+
+### 1. Apple ProRes & Avid DNxHD Container Compatibility (`BUG-NEW-01`)
+- **File:** `src/handlers/encoder.rs`
+- **Fix:** If workflow preset is Apple ProRes (`func_idx == 3`) or Avid DNxHD (`func_idx == 4`), automatically output to QuickTime container (`.mov`) unless the user explicitly selected Matroska (`.mkv`), preventing fatal FFmpeg MP4 muxing failures.
+
+### 2. Intel QSV & AMD AMF Rate Control and Bitrate Flags (`BUG-NEW-02`)
+- **File:** `src/ffmpeg/builder.rs`
+- **Fix:** Added rate control parameter generation for Intel QSV (`h264_qsv`, `hevc_qsv`, `av1_qsv` with `-global_quality <crf>` or `-b:v <kbps>k`) and AMD AMF (`h264_amf`, `hevc_amf`, `av1_amf` with `-rc cqp -qp_i <crf> -qp_p <crf>` or `-b:v <kbps>k`).
+- **Test Added:** `test_qsv_and_amf_hardware_command_generation` in `tests/ffmpeg_tests.rs`.
+
+### 3. Automatic Output Directory Creation (`BUG-NEW-03`)
+- **File:** `src/handlers/encoder.rs`
+- **Fix:** Added `std::fs::create_dir_all(&parent_dir)` before resolving output file paths in the batch transcode loop to prevent `No such file or directory` errors when targeting new or non-existent directories.
+
+### 4. Input File Overwrite Prevention (`BUG-NEW-04`)
+- **File:** `src/handlers/encoder.rs`
+- **Fix:** Changed collision loop to `while output_path.exists()`, eliminating the condition where an output path matching the input file bypassed counter appending and truncated the source file.
+
+### 5. Subprocess Stdin Redirection (`SEC-NEW-01`)
+- **Files:** `src/ffmpeg/mod.rs`, `src/ytdlp.rs`, `src/ffmpeg/preview.rs`
+- **Fix:** Added explicit `cmd.stdin(Stdio::null())` in `spawn_with_output()`, `start_download()`, and `spawn_ffplay()`, preventing worker thread hangs or console handle inheritance problems on interactive prompts.
+
+### 6. Timeline In/Out Trim Handle Bounds Enforcement (`UI-NEW-01`)
+- **File:** `src/handlers/timeline.rs`
+- **Fix:** Enforced `in_point < out_point` clamping when dragging timeline handles and setting current playhead points, preventing handle stacking or inverted trim boundaries.
+
+## 3. Automated Test Suite
+- `tests/ffmpeg_tests.rs`: Added `test_qsv_and_amf_hardware_command_generation` verifying Intel QSV and AMD AMF command lines.
+- All 42 tests passing cleanly.

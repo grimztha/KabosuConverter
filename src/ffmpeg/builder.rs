@@ -579,6 +579,34 @@ impl FFmpegCommandBuilder {
                     }
                     args.push("-pix_fmt".to_string());
                     args.push("yuv420p".to_string());
+                } else if encoder == "h264_qsv" {
+                    args.push("-preset".to_string());
+                    args.push("medium".to_string());
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-global_quality".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("nv12".to_string());
+                } else if encoder == "h264_amf" {
+                    args.push("-quality".to_string());
+                    args.push("balanced".to_string());
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-rc".to_string());
+                        args.push("cqp".to_string());
+                        args.push("-qp_i".to_string());
+                        args.push(config.crf.to_string());
+                        args.push("-qp_p".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
                 }
             }
             VideoCodec::H265 => {
@@ -617,21 +645,93 @@ impl FFmpegCommandBuilder {
                     }
                     args.push("-tag:v".to_string());
                     args.push("hvc1".to_string());
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
+                } else if encoder == "hevc_qsv" {
+                    args.push("-preset".to_string());
+                    args.push("medium".to_string());
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-global_quality".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-tag:v".to_string());
+                    args.push("hvc1".to_string());
+                    args.push("-pix_fmt".to_string());
+                    args.push("nv12".to_string());
+                } else if encoder == "hevc_amf" {
+                    args.push("-quality".to_string());
+                    args.push("balanced".to_string());
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-rc".to_string());
+                        args.push("cqp".to_string());
+                        args.push("-qp_i".to_string());
+                        args.push(config.crf.to_string());
+                        args.push("-qp_p".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-tag:v".to_string());
+                    args.push("hvc1".to_string());
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
                 }
             }
             VideoCodec::AV1 => {
-                let encoder = if config.hw_accel == HwAccel::Nvenc {
-                    "av1_nvenc"
-                } else {
-                    "libsvtav1"
+                let encoder = match config.hw_accel {
+                    HwAccel::Nvenc => "av1_nvenc",
+                    HwAccel::Qsv => "av1_qsv",
+                    HwAccel::Amf => "av1_amf",
+                    _ => "libsvtav1",
                 };
                 args.push("-c:v".to_string());
                 args.push(encoder.to_string());
+
                 if encoder == "libsvtav1" {
                     args.push("-crf".to_string());
                     args.push(config.crf.to_string());
                     args.push("-pix_fmt".to_string());
                     args.push("yuv420p10le".to_string());
+                } else if encoder == "av1_qsv" {
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-global_quality".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("nv12".to_string());
+                } else if encoder == "av1_amf" {
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-rc".to_string());
+                        args.push("cqp".to_string());
+                        args.push("-qp_i".to_string());
+                        args.push(config.crf.to_string());
+                        args.push("-qp_p".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
+                } else if encoder == "av1_nvenc" {
+                    args.push("-preset".to_string());
+                    args.push("p5".to_string());
+                    if config.rate_control == RateControlMode::CRF {
+                        args.push("-cq".to_string());
+                        args.push(config.crf.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
                 } else {
                     args.push("-cq".to_string());
                     args.push(config.crf.to_string());

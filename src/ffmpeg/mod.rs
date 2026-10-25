@@ -25,6 +25,7 @@ pub use preview::{
 /// Returns the output on success, or an anyhow error with context on failure.
 pub fn spawn_with_output(mut cmd: std::process::Command, operation: &str) -> anyhow::Result<std::process::Output> {
     crate::set_no_window(&mut cmd);
+    cmd.stdin(std::process::Stdio::null());
     cmd.output()
         .with_context(|| format!("Failed to run {} process", operation))
 }

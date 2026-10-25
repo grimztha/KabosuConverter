@@ -1,7 +1,8 @@
 use std::path::Path;
 use another_encoder::ffmpeg::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec,
-    RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries
+    RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries,
+    VideoRotation, ResolutionPreset
 };
 
 #[test]
@@ -476,7 +477,7 @@ fn test_av_sync_master_clock_playback() {
                     let mut got_audio_clock = false;
                     while start.elapsed().as_millis() < 800 {
                         if let Some(pts) = audio_session.get_pts() {
-                            assert!(pts >= 0.5 && pts <= 2.5, "Audio PTS should be near start_sec (1.0), got: {}", pts);
+                            assert!((0.5..=2.5).contains(&pts), "Audio PTS should be near start_sec (1.0), got: {}", pts);
                             got_audio_clock = true;
                             break;
                         }
@@ -486,6 +487,7 @@ fn test_av_sync_master_clock_playback() {
 
                     let _ = audio_session.kill();
                     let _ = video_child.kill();
+                    let _ = video_child.wait();
                     let _ = std::fs::remove_file(test_media);
                 }
             }
@@ -711,7 +713,7 @@ fn test_combined_transform_crop_scale_filter_order() {
     let vf_chain = &cmd[vf_idx + 1];
     assert_eq!(
         vf_chain,
-        "yadif=0:-1:0,transpose=1,hflip,crop=720:1280:40:80,scale=1280:-2:flags=lanczos,fps=fps=30"
+        "yadif=0:-1:0,transpose=1,hflip,crop=720:1280:40:80,scale=w=1280:h=720:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,fps=fps=30"
     );
 }
 
@@ -859,6 +861,46 @@ fn test_audio_filter_forces_reencode_when_copy_selected() {
     assert!(cmd.contains(&"-c:a".to_string()));
     let ca_idx = cmd.iter().position(|r| r == "-c:a").unwrap();
     assert_eq!(cmd[ca_idx + 1], "aac", "Copy should be automatically replaced with AAC when audio filters are active");
+}
+
+#[test]
+fn test_video_filter_forces_reencode_when_copy_selected() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "test.mp4".to_string(),
+        output_path: "test_auto_h264.mp4".to_string(),
+        rotation: VideoRotation::Rotate90,
+        video_codec: VideoCodec::Copy, // User selected Copy, but rotation filter requires re-encoding
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(cmd.contains(&"-vf".to_string()));
+    assert!(cmd.contains(&"-c:v".to_string()));
+    let cv_idx = cmd.iter().position(|r| r == "-c:v").unwrap();
+    assert_eq!(cmd[cv_idx + 1], "libx264", "Copy should be automatically replaced with libx264 when video filters are active to prevent streamcopy clash");
+}
+
+#[test]
+fn test_scale_filter_aspect_ratio_bounding_box() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "portrait.mp4".to_string(),
+        output_path: "scaled.mp4".to_string(),
+        resolution: ResolutionPreset::FHD1080p,
+        ..Default::default()
+    };
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+
+    assert!(cmd.contains(&"-vf".to_string()));
+    let vf_idx = cmd.iter().position(|r| r == "-vf").unwrap();
+    let filter = &cmd[vf_idx + 1];
+    assert!(filter.contains("w=1920:h=1080"), "Scale filter must specify both width and height bounding dimensions: {}", filter);
+    assert!(filter.contains("force_original_aspect_ratio=decrease"), "Scale filter must decrease aspect ratio to avoid distortion: {}", filter);
 }
 
 

@@ -27,6 +27,7 @@ pub fn find_ytdlp_binary() -> Option<PathBuf> {
         exe_dir.join(".."),
         exe_dir.join("../.."),
         exe_dir.join("bin"),
+        #[cfg(debug_assertions)]
         PathBuf::from(env!("CARGO_MANIFEST_DIR")),
     ];
 
@@ -109,7 +110,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
 
     // 1. High-level curated smart presets
     options.push(DownloadFormatOption {
-        display_label: "Best Quality (Auto Best Video + Best Audio, Recommended)".to_string(),
+        display_label: "[Video] Best Quality (Auto Best Video + Best Audio, Recommended)".to_string(),
         format_spec: "bv*+ba/b".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -117,7 +118,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "4K UHD 2160p (Best Video <= 2160p + Best Audio)".to_string(),
+        display_label: "[Video] 4K UHD 2160p (Best Video <= 2160p + Best Audio)".to_string(),
         format_spec: "bv*[height<=2160]+ba/b[height<=2160]".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -125,7 +126,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "1440p QHD (Best Video <= 1440p + Best Audio)".to_string(),
+        display_label: "[Video] 1440p QHD (Best Video <= 1440p + Best Audio)".to_string(),
         format_spec: "bv*[height<=1440]+ba/b[height<=1440]".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -133,7 +134,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "1080p Full HD (Best Video <= 1080p + Best Audio)".to_string(),
+        display_label: "[Video] 1080p Full HD (Best Video <= 1080p + Best Audio)".to_string(),
         format_spec: "bv*[height<=1080]+ba/b[height<=1080]".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -141,7 +142,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "720p HD (Best Video <= 720p + Best Audio)".to_string(),
+        display_label: "[Video] 720p HD (Best Video <= 720p + Best Audio)".to_string(),
         format_spec: "bv*[height<=720]+ba/b[height<=720]".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -149,7 +150,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "480p SD (Fast / Mobile Compact)".to_string(),
+        display_label: "[Video] 480p SD (Fast / Mobile Compact)".to_string(),
         format_spec: "bv*[height<=480]+ba/b[height<=480]".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -157,7 +158,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "Audio Only — MP3 (High Quality 320 kbps)".to_string(),
+        display_label: "[Audio] MP3 (High Quality 320 kbps)".to_string(),
         format_spec: "ba/b".to_string(),
         is_audio_only: true,
         audio_ext: Some("mp3".to_string()),
@@ -165,7 +166,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "Audio Only — M4A / AAC (Best Source Audio)".to_string(),
+        display_label: "[Audio] M4A / AAC (Best Source Audio)".to_string(),
         format_spec: "ba/b".to_string(),
         is_audio_only: true,
         audio_ext: Some("m4a".to_string()),
@@ -173,7 +174,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "Audio Only — FLAC (Lossless Audio)".to_string(),
+        display_label: "[Audio] FLAC (Lossless Audio)".to_string(),
         format_spec: "ba/b".to_string(),
         is_audio_only: true,
         audio_ext: Some("flac".to_string()),
@@ -181,7 +182,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     });
 
     options.push(DownloadFormatOption {
-        display_label: "Audio Only — WAV (Lossless PCM)".to_string(),
+        display_label: "[Audio] WAV (Lossless PCM)".to_string(),
         format_spec: "ba/b".to_string(),
         is_audio_only: true,
         audio_ext: Some("wav".to_string()),
@@ -197,7 +198,7 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
                     let vcodec = f.vcodec.as_deref().unwrap_or("video");
                     let ext = f.ext.as_deref().unwrap_or("mp4");
                     let fps_str = f.fps.map(|fps| format!("{}fps", fps.round())).unwrap_or_default();
-                    let label = format!("[Stream] {}p {} ({}) — Format ID {}", h, fps_str, vcodec, f.format_id);
+                    let label = format!("[Video] Stream {}p {} ({}) — Format ID {}", h, fps_str, vcodec, f.format_id);
                     options.push(DownloadFormatOption {
                         display_label: label,
                         format_spec: format!("{}+ba/b", f.format_id),

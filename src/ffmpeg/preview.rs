@@ -388,10 +388,7 @@ impl AudioPlaybackSession {
 
     /// Checks if the underlying process has exited.
     pub fn is_finished(&mut self) -> bool {
-        match self.child.try_wait() {
-            Ok(Some(_status)) => true,
-            _ => false,
-        }
+        matches!(self.child.try_wait(), Ok(Some(_status)))
     }
 }
 

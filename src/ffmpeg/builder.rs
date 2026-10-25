@@ -497,14 +497,30 @@ impl FFmpegCommandBuilder {
         // Scaling
         let target_dims = config.custom_resolution.or_else(|| config.resolution.dimensions());
         if let Some((w, h)) = target_dims {
-            // High quality scale keeping aspect ratio and making dimensions even for encoders
-            vf_filters.push(format!("scale={}:-2:flags=lanczos", w));
-            let _ = h;
+            // High quality bounding-box scale preserving original aspect ratio and ensuring even dimensions
+            vf_filters.push(format!(
+                "scale=w={}:h={}:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos",
+                w, h
+            ));
         }
 
         // Framerate
         if let Some(fps) = config.fps {
             vf_filters.push(format!("fps=fps={}", fps));
+        }
+
+        // Video Encoder determination
+        // If filters are active (crop, rotation, scale, deinterlace, fps) and Copy was selected,
+        // promote to H264 re-encoding so filters take effect without triggering an FFmpeg streamcopy crash.
+        let effective_video_codec = if !vf_filters.is_empty() && config.video_codec == VideoCodec::Copy {
+            VideoCodec::H264
+        } else {
+            config.video_codec
+        };
+
+        // If streamcopy is preserved, omit -vf filters entirely to guarantee streamcopy validity
+        if effective_video_codec == VideoCodec::Copy {
+            vf_filters.clear();
         }
 
         if !vf_filters.is_empty() {
@@ -513,7 +529,7 @@ impl FFmpegCommandBuilder {
         }
 
         // Video Encoder
-        match config.video_codec {
+        match effective_video_codec {
             VideoCodec::H264 => {
                 let encoder = match config.hw_accel {
                     HwAccel::Nvenc => "h264_nvenc",
@@ -696,7 +712,7 @@ impl FFmpegCommandBuilder {
     }
 
     fn apply_audio_encoder(config: &EncodeJobConfig, args: &mut Vec<String>) {
-        let has_af = config.audio_gain_db.map_or(false, |g| g.abs() > 0.05) || config.normalize_lufs.is_some();
+        let has_af = config.audio_gain_db.is_some_and(|g| g.abs() > 0.05) || config.normalize_lufs.is_some();
         let effective_codec = if has_af && config.audio_codec == AudioCodecChoice::Copy {
             AudioCodecChoice::AAC
         } else {

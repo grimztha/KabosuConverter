@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppSettings {
     pub default_output_dir: Option<String>,
     pub default_video_codec: VideoCodec,
@@ -59,4 +60,22 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let content = serde_json::to_string_pretty(settings)?;
     fs::write(&path, content)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partial_json_deserialization_uses_defaults() {
+        // Test that old/partial JSON without new fields deserializes properly instead of failing
+        let partial_json = r#"{"default_crf": 18, "open_folder_on_finish": false}"#;
+        let parsed: AppSettings = serde_json::from_str(partial_json).expect("Partial JSON must deserialize cleanly");
+        assert_eq!(parsed.default_crf, 18);
+        assert!(!parsed.open_folder_on_finish);
+        // Default fields should be populated automatically
+        assert_eq!(parsed.default_audio_bitrate_kbps, 192);
+        assert_eq!(parsed.default_video_codec, VideoCodec::H264);
+        assert!(parsed.theme_dark);
+    }
 }

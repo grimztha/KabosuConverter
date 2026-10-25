@@ -1,7 +1,8 @@
 use std::io::{BufReader, Read};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
 use anyhow::{Context, Result};
 use regex::Regex;
 
@@ -58,6 +59,7 @@ impl FFmpegRunner {
 
         let mut cmd = Command::new(exe);
         cmd.args(args)
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
 
@@ -69,6 +71,27 @@ impl FFmpegRunner {
 
         let stderr = child.stderr.take().context("Failed to capture stderr")?;
         let mut reader = BufReader::new(stderr);
+
+        let child_shared = Arc::new(Mutex::new(Some(child)));
+        let watcher_child = child_shared.clone();
+        let watcher_cancel = cancel_flag.clone();
+        let watcher_stop = Arc::new(AtomicBool::new(false));
+        let watcher_stop_clone = watcher_stop.clone();
+
+        let watcher_handle = thread::spawn(move || {
+            while !watcher_stop_clone.load(Ordering::SeqCst) {
+                if watcher_cancel.load(Ordering::SeqCst) {
+                    if let Ok(mut lock) = watcher_child.lock() {
+                        if let Some(ref mut c) = *lock {
+                            let _ = c.kill();
+                        }
+                    }
+                    break;
+                }
+                thread::sleep(std::time::Duration::from_millis(40));
+            }
+        });
+
         let (time_regex, fps_regex, speed_regex, bitrate_regex) = progress_regexes();
 
         let mut buf = [0u8; 4096];
@@ -132,8 +155,12 @@ impl FFmpegRunner {
         loop {
             // Check cancellation request
             if cancel_flag.load(Ordering::SeqCst) {
-                let _ = child.kill();
-                anyhow::bail!("Process cancelled by user");
+                if let Ok(mut lock) = child_shared.lock() {
+                    if let Some(ref mut c) = *lock {
+                        let _ = c.kill();
+                    }
+                }
+                break;
             }
 
             let n = match reader.read(&mut buf) {
@@ -159,6 +186,11 @@ impl FFmpegRunner {
             handle_line(&line_bytes);
         }
 
+        watcher_stop.store(true, Ordering::SeqCst);
+        let _ = watcher_handle.join();
+
+        let mut child_guard = child_shared.lock().map_err(|_| anyhow::anyhow!("Mutex poisoned"))?;
+        let mut child = child_guard.take().context("Child process handle already taken")?;
         let status = child.wait().context("Failed to wait on ffmpeg process")?;
 
         if cancel_flag.load(Ordering::SeqCst) {

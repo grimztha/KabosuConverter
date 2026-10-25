@@ -3,6 +3,7 @@
 //! from Windows Explorer are reliably detected and added to the queue.
 
 #![cfg(windows)]
+#![allow(clippy::upper_case_acronyms)]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -10,6 +11,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 #[repr(C)]
+#[allow(non_camel_case_types)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct GUID {
     pub data1: u32,
@@ -47,6 +49,7 @@ const GWL_EXSTYLE: i32 = -20;
 const WS_EX_ACCEPTFILES: isize = 0x00000010;
 
 #[repr(C)]
+#[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
 pub struct POINT {
     pub x: i32,
@@ -54,6 +57,7 @@ pub struct POINT {
 }
 
 #[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct FORMATETC {
     pub cf_format: u16,
     pub ptd: *mut std::ffi::c_void,
@@ -63,6 +67,7 @@ pub struct FORMATETC {
 }
 
 #[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct STGMEDIUM {
     pub tymed: u32,
     pub h_global: *mut std::ffi::c_void,
@@ -179,15 +184,15 @@ unsafe extern "system" fn add_ref(this: *mut DropTargetCom) -> u32 {
 
 /// COM IUnknown::Release implementation.
 /// Thread-safe reference count decrement using atomic operations.
-/// When the reference count reaches 0, the object is freed via Box::from_raw.
+/// Retains the singleton DropTargetCom instance in memory so that window subclass hooks
+/// (SetWindowSubclass) and global message filters do not encounter a use-after-free.
 unsafe extern "system" fn release(this: *mut DropTargetCom) -> u32 {
     debug_assert!(!this.is_null());
-    let prev = (*this).ref_count.fetch_sub(1, Ordering::SeqCst);
-    if prev == 1 {
-        let _ = Box::from_raw(this);
-        0
+    let prev = (*this).ref_count.load(Ordering::SeqCst);
+    if prev > 1 {
+        (*this).ref_count.fetch_sub(1, Ordering::SeqCst) - 1
     } else {
-        prev - 1
+        1
     }
 }
 

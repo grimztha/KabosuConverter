@@ -37,6 +37,7 @@ fn get_clipboard_string() -> Option<String> {
         extern "system" {
             fn GlobalLock(hMem: *mut std::ffi::c_void) -> *const u16;
             fn GlobalUnlock(hMem: *mut std::ffi::c_void) -> i32;
+            fn GlobalSize(hMem: *mut std::ffi::c_void) -> usize;
         }
         const CF_UNICODETEXT: u32 = 13;
 
@@ -45,17 +46,21 @@ fn get_clipboard_string() -> Option<String> {
                 let h_mem = GetClipboardData(CF_UNICODETEXT);
                 let mut result = None;
                 if !h_mem.is_null() {
-                    let ptr = GlobalLock(h_mem);
-                    if !ptr.is_null() {
-                        let mut len = 0usize;
-                        while *ptr.add(len) != 0 && len < 32_768 {
-                            len += 1;
-                        }
-                        let slice = std::slice::from_raw_parts(ptr, len);
-                        let text = String::from_utf16_lossy(slice).trim().to_string();
-                        GlobalUnlock(h_mem);
-                        if !text.is_empty() {
-                            result = Some(text);
+                    let total_bytes = GlobalSize(h_mem);
+                    let max_chars = (total_bytes / 2).min(32_768);
+                    if max_chars > 0 {
+                        let ptr = GlobalLock(h_mem);
+                        if !ptr.is_null() {
+                            let mut len = 0usize;
+                            while len < max_chars && *ptr.add(len) != 0 {
+                                len += 1;
+                            }
+                            let slice = std::slice::from_raw_parts(ptr, len);
+                            let text = String::from_utf16_lossy(slice).trim().to_string();
+                            GlobalUnlock(h_mem);
+                            if !text.is_empty() {
+                                result = Some(text);
+                            }
                         }
                     }
                 }
@@ -867,6 +872,9 @@ fn main() -> Result<()> {
                 let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
                 if index >= 0 && (index as usize) < list.len() {
                     list.remove(index as usize);
+                    for (i, item) in list.iter_mut().enumerate() {
+                        item.id = i as i32;
+                    }
                     let count = list.len();
                     app_data.set_queue(ModelRc::new(VecModel::from(list.clone())));
                     app_data.set_status_summary(SharedString::from(format!(
@@ -1409,14 +1417,19 @@ fn main() -> Result<()> {
                                         });
                                     }
 
-                                    if let Ok(mut lock) = stream_child_ref.lock() {
-                                        if let Some(mut c) = lock.take() {
-                                            let _ = c.kill();
+                                    // Only clean up process handles if they still belong to this playback session!
+                                    // This prevents an exiting thread from killing the newly spawned child of a subsequent session.
+                                    if session_check.load(Ordering::SeqCst) == my_session {
+                                        if let Ok(mut lock) = stream_child_ref.lock() {
+                                            if let Some(mut c) = lock.take() {
+                                                let _ = c.kill();
+                                                let _ = c.wait();
+                                            }
                                         }
-                                    }
-                                    if let Ok(mut lock) = ffplay_child_ref.lock() {
-                                        if let Some(mut s) = lock.take() {
-                                            let _ = s.kill();
+                                        if let Ok(mut lock) = ffplay_child_ref.lock() {
+                                            if let Some(mut s) = lock.take() {
+                                                let _ = s.kill();
+                                            }
                                         }
                                     }
                                 });
@@ -1671,7 +1684,7 @@ fn main() -> Result<()> {
                 }
 
                 if app_data.get_player_is_playing() {
-                    let mut lr = last_restart.lock().unwrap();
+                    let mut lr = last_restart.lock().unwrap_or_else(|e| e.into_inner());
                     let now = std::time::Instant::now();
                     if now.duration_since(*lr) >= std::time::Duration::from_millis(120) {
                         *lr = now;
@@ -2689,6 +2702,7 @@ fn main() -> Result<()> {
                 let edit_gain_opt = if edit_gain_val.abs() > 0.05 { Some(edit_gain_val) } else { None };
                 let edit_norm_enabled = ui.global::<AppData>().get_audio_normalize_enabled();
                 let edit_norm_lufs = ui.global::<AppData>().get_audio_normalize_lufs();
+                let selected_idx = ui.global::<AppData>().get_selected_file_index();
 
                 let ui_weak = ui_handle.clone();
                 let bins = binaries.clone();
@@ -2697,9 +2711,6 @@ fn main() -> Result<()> {
                 // Spawn worker thread for batch queue processing
                 thread::spawn(move || {
                     let total_items = items.len();
-
-                    // Track output files created during batch processing for cleanup
-                    let mut created_outputs: Vec<PathBuf> = Vec::new();
 
                     for (item_idx, item) in items.iter().enumerate() {
                         if cancel.load(Ordering::SeqCst) {
@@ -2712,6 +2723,19 @@ fn main() -> Result<()> {
                         // Determine destination directory and filename
                         let out_container = if func_idx == 12 {
                             ".srt"
+                        } else if func_idx == 9 || func_idx == 11 {
+                            match container_idx {
+                                6 => ".mp3",
+                                7 => ".wav",
+                                8 => ".flac",
+                                _ => match audio_codec_idx {
+                                    1 => ".mp3",
+                                    2 => ".opus",
+                                    3 => ".flac",
+                                    4 | 5 => ".wav",
+                                    _ => ".m4a",
+                                },
+                            }
                         } else {
                             match container_idx {
                                 1 => ".mkv",
@@ -2747,17 +2771,28 @@ fn main() -> Result<()> {
                             counter += 1;
                         }
 
-                        let rotation = rotation_from_index(rot_idx);
-                        let crop = if crop_enabled && crop_w >= 2 && crop_h >= 2 {
-                            Some(CropRect {
-                                x: crop_x.max(0) as u32,
-                                y: crop_y.max(0) as u32,
-                                width: crop_w.max(2) as u32,
-                                height: crop_h.max(2) as u32,
-                            })
+                        // Clip-specific edits (crop, rotation, mirror flip) are only applied to the
+                        // currently selected/edited item, or when there is only a single item in the queue.
+                        // Non-selected items in a batch queue transcode their full frames with the batch codec settings.
+                        let is_selected_or_single = total_items == 1 || item_idx as i32 == selected_idx;
+
+                        let (rotation, flip_h, flip_v, crop) = if is_selected_or_single {
+                            let rot = rotation_from_index(rot_idx);
+                            let c = if crop_enabled && crop_w >= 2 && crop_h >= 2 {
+                                Some(CropRect {
+                                    x: crop_x.max(0) as u32,
+                                    y: crop_y.max(0) as u32,
+                                    width: crop_w.max(2) as u32,
+                                    height: crop_h.max(2) as u32,
+                                })
+                            } else {
+                                None
+                            };
+                            (rot, flip_h, flip_v, c)
                         } else {
-                            None
+                            (VideoRotation::None, false, false, None)
                         };
+
                         let has_audio_edits = edit_gain_opt.is_some() || edit_norm_enabled;
                         let has_video_edits =
                             rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
@@ -2771,7 +2806,7 @@ fn main() -> Result<()> {
                             8 => EncoderFunction::ExtractVideo,
                             9 => EncoderFunction::ExtractAudio,
                             10 => EncoderFunction::AudioNormalize,
-                            11 => EncoderFunction::Transcode, // Audio conversion
+                            11 => EncoderFunction::ExtractAudio, // Audio conversion: drop video cleanly without streamcopy conflict
                             12 => EncoderFunction::ExtractSubtitles,
                             _ => EncoderFunction::Transcode,
                         };
@@ -2899,16 +2934,16 @@ fn main() -> Result<()> {
                             }
                         };
 
-                        let in_point = if in_point_str.trim().is_empty() {
-                            None
-                        } else {
+                        let in_point = if is_selected_or_single && !in_point_str.trim().is_empty() {
                             Some(in_point_str.clone())
+                        } else {
+                            None
                         };
 
-                        let out_point = if out_point_str.trim().is_empty() {
-                            None
-                        } else {
+                        let out_point = if is_selected_or_single && !out_point_str.trim().is_empty() {
                             Some(out_point_str.clone())
+                        } else {
+                            None
                         };
 
                         // Reuse already-probed duration if available, otherwise probe on demand
@@ -3144,16 +3179,9 @@ fn main() -> Result<()> {
                         };
                         let is_ok = result.is_ok();
 
-                        // Clean up output file if processing failed
-                        if !is_ok {
-                            if output_path.exists() {
-                                let _ = std::fs::remove_file(&output_path);
-                            }
-                        }
-
-                        // Track successful output for potential cleanup if later cancelled
-                        if is_ok && output_path.exists() {
-                            created_outputs.push(output_path.clone());
+                        // Clean up output file only if this specific processing job failed or was cancelled in-flight
+                        if !is_ok && output_path.exists() {
+                            let _ = std::fs::remove_file(&output_path);
                         }
 
                         let _ = slint::invoke_from_event_loop(move || {
@@ -3188,14 +3216,6 @@ fn main() -> Result<()> {
                             }
                         }
                     });
-                    // Clean up any tracked output files if batch was cancelled
-                    if cancel.load(Ordering::SeqCst) {
-                        for path in &created_outputs {
-                            if path.exists() {
-                                let _ = std::fs::remove_file(path);
-                            }
-                        }
-                    }
                 });
             }
         });
@@ -3437,14 +3457,14 @@ fn main() -> Result<()> {
 
             let selected_idx = data.get_ytdlp_selected_format_index() as usize;
             let format_opt = {
-                let store = options_store.lock().unwrap();
+                let store = options_store.lock().unwrap_or_else(|e| e.into_inner());
                 if selected_idx < store.len() {
                     store[selected_idx].clone()
                 } else if !store.is_empty() {
                     store[0].clone()
                 } else {
                     ytdlp::DownloadFormatOption {
-                        display_label: "Best Quality".to_string(),
+                        display_label: "[Video] Best Quality".to_string(),
                         format_spec: "bv*+ba/b".to_string(),
                         is_audio_only: false,
                         audio_ext: None,

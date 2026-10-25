@@ -29,6 +29,7 @@ impl FFmpegBinaries {
             exe_dir.clone(),
             exe_dir.join(".."),
             exe_dir.join("../.."),
+            #[cfg(debug_assertions)]
             PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         ];
 

@@ -176,7 +176,7 @@ impl FFmpegRunner {
                         handle_line(&line_bytes);
                         line_bytes.clear();
                     }
-                } else {
+                } else if line_bytes.len() < 65536 {
                     line_bytes.push(b);
                 }
             }

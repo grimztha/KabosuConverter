@@ -36,6 +36,7 @@ pub enum HwAccel {
     Nvenc,
     Qsv,
     Amf,
+    VideoToolbox,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -463,13 +464,27 @@ impl FFmpegCommandBuilder {
         // In & Out points (fast seek before input)
         Self::apply_trim(config, args);
 
+        // Determine effective hardware acceleration (auto-routing to VideoToolbox on macOS)
+        let effective_hw_accel = if config.hw_accel == HwAccel::Auto {
+            if cfg!(target_os = "macos") {
+                HwAccel::VideoToolbox
+            } else {
+                HwAccel::Auto
+            }
+        } else {
+            config.hw_accel
+        };
+
         // Hardware accel decoding if requested
-        if config.hw_accel == HwAccel::Nvenc {
+        if effective_hw_accel == HwAccel::Nvenc {
             args.push("-hwaccel".to_string());
             args.push("cuda".to_string());
-        } else if config.hw_accel == HwAccel::Qsv {
+        } else if effective_hw_accel == HwAccel::Qsv {
             args.push("-hwaccel".to_string());
             args.push("qsv".to_string());
+        } else if effective_hw_accel == HwAccel::VideoToolbox {
+            args.push("-hwaccel".to_string());
+            args.push("videotoolbox".to_string());
         }
 
         // Input
@@ -497,7 +512,7 @@ impl FFmpegCommandBuilder {
         // Scaling
         let target_dims = config.custom_resolution.or_else(|| config.resolution.dimensions());
         if let Some((w, h)) = target_dims {
-            // High quality bounding-box scale preserving original aspect ratio and ensuring even dimensions
+            // Keep aspect ratio within bounds and ensure even dimensions for encoder
             vf_filters.push(format!(
                 "scale=w={}:h={}:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos",
                 w, h
@@ -509,16 +524,13 @@ impl FFmpegCommandBuilder {
             vf_filters.push(format!("fps=fps={}", fps));
         }
 
-        // Video Encoder determination
-        // If filters are active (crop, rotation, scale, deinterlace, fps) and Copy was selected,
-        // promote to H264 re-encoding so filters take effect without triggering an FFmpeg streamcopy crash.
+        // Filters require re-encoding; promote Copy to H264 if any filters are active
         let effective_video_codec = if !vf_filters.is_empty() && config.video_codec == VideoCodec::Copy {
             VideoCodec::H264
         } else {
             config.video_codec
         };
 
-        // If streamcopy is preserved, omit -vf filters entirely to guarantee streamcopy validity
         if effective_video_codec == VideoCodec::Copy {
             vf_filters.clear();
         }
@@ -531,10 +543,11 @@ impl FFmpegCommandBuilder {
         // Video Encoder
         match effective_video_codec {
             VideoCodec::H264 => {
-                let encoder = match config.hw_accel {
+                let encoder = match effective_hw_accel {
                     HwAccel::Nvenc => "h264_nvenc",
                     HwAccel::Qsv => "h264_qsv",
                     HwAccel::Amf => "h264_amf",
+                    HwAccel::VideoToolbox => "h264_videotoolbox",
                     _ => "libx264",
                 };
                 args.push("-c:v".to_string());
@@ -607,13 +620,25 @@ impl FFmpegCommandBuilder {
                     }
                     args.push("-pix_fmt".to_string());
                     args.push("yuv420p".to_string());
+                } else if encoder == "h264_videotoolbox" {
+                    if config.rate_control == RateControlMode::CRF {
+                        let q = (100 - (config.crf * 2)).clamp(10, 100);
+                        args.push("-q:v".to_string());
+                        args.push(q.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
                 }
             }
             VideoCodec::H265 => {
-                let encoder = match config.hw_accel {
+                let encoder = match effective_hw_accel {
                     HwAccel::Nvenc => "hevc_nvenc",
                     HwAccel::Qsv => "hevc_qsv",
                     HwAccel::Amf => "hevc_amf",
+                    HwAccel::VideoToolbox => "hevc_videotoolbox",
                     _ => "libx265",
                 };
                 args.push("-c:v".to_string());
@@ -679,10 +704,23 @@ impl FFmpegCommandBuilder {
                     args.push("hvc1".to_string());
                     args.push("-pix_fmt".to_string());
                     args.push("yuv420p".to_string());
+                } else if encoder == "hevc_videotoolbox" {
+                    if config.rate_control == RateControlMode::CRF {
+                        let q = (100 - (config.crf * 2)).clamp(10, 100);
+                        args.push("-q:v".to_string());
+                        args.push(q.to_string());
+                    } else {
+                        args.push("-b:v".to_string());
+                        args.push(format!("{}k", config.video_bitrate_kbps));
+                    }
+                    args.push("-tag:v".to_string());
+                    args.push("hvc1".to_string());
+                    args.push("-pix_fmt".to_string());
+                    args.push("yuv420p".to_string());
                 }
             }
             VideoCodec::AV1 => {
-                let encoder = match config.hw_accel {
+                let encoder = match effective_hw_accel {
                     HwAccel::Nvenc => "av1_nvenc",
                     HwAccel::Qsv => "av1_qsv",
                     HwAccel::Amf => "av1_amf",
@@ -750,8 +788,12 @@ impl FFmpegCommandBuilder {
                 args.push("yuv420p".to_string());
             }
             VideoCodec::AppleProRes => {
+                let encoder = match effective_hw_accel {
+                    HwAccel::VideoToolbox => "prores_videotoolbox",
+                    _ => "prores_ks",
+                };
                 args.push("-c:v".to_string());
-                args.push("prores_ks".to_string());
+                args.push(encoder.to_string());
                 args.push("-profile:v".to_string());
                 args.push((config.prores_profile as u8).to_string());
                 if config.prores_profile == ProResProfile::FourFourFourFour || config.prores_profile == ProResProfile::FourFourFourFourXQ {

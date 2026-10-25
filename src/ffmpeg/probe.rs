@@ -76,14 +76,16 @@ impl MediaMetadata {
 }
 
 pub fn format_duration_hms(seconds: f64) -> String {
-    if seconds.is_nan() || seconds.is_infinite() || seconds < 0.0 {
-        return "00:00:00".to_string();
+    if !seconds.is_finite() || seconds < 0.0 {
+        return "00:00.000".to_string();
     }
-    let total_secs = seconds.floor() as u64;
-    let hours = total_secs / 3600;
-    let minutes = (total_secs % 3600) / 60;
-    let secs = total_secs % 60;
-    let millis = ((seconds - seconds.floor()) * 1000.0).round() as u64;
+    let total_millis = (seconds * 1000.0).round() as u64;
+    let hours = total_millis / 3_600_000;
+    let rem = total_millis % 3_600_000;
+    let minutes = rem / 60_000;
+    let rem = rem % 60_000;
+    let secs = rem / 1000;
+    let millis = rem % 1000;
 
     if hours > 0 {
         format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, secs, millis)
@@ -97,16 +99,19 @@ fn parse_fraction(s: &str) -> Option<f64> {
     if parts.len() == 2 {
         let num: f64 = parts[0].trim().parse().ok()?;
         let den: f64 = parts[1].trim().parse().ok()?;
-        if den != 0.0 {
+        if den != 0.0 && num.is_finite() && den.is_finite() {
             return Some(num / den);
         }
     } else if parts.len() == 1 {
-        return parts[0].trim().parse().ok();
+        let val: f64 = parts[0].trim().parse().ok()?;
+        if val.is_finite() {
+            return Some(val);
+        }
     }
     None
 }
 
-/// Probes media file metadata using the supplied ffprobe executable path
+/// Probes media file metadata using ffprobe.
 pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) -> Result<MediaMetadata> {
     let path_ref = file_path.as_ref();
     let file_path_str = path_ref.to_string_lossy().to_string();

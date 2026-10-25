@@ -2,7 +2,7 @@ use std::path::Path;
 use another_encoder::ffmpeg::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
     RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries,
-    VideoRotation, ResolutionPreset
+    VideoRotation, ResolutionPreset, parse_ffmpeg_version
 };
 
 #[test]
@@ -1008,6 +1008,114 @@ fn test_qsv_and_amf_hardware_command_generation() {
     assert!(cmd_hevc.contains(&"-tag:v".to_string()));
     assert!(cmd_hevc.contains(&"hvc1".to_string()));
 }
+
+#[test]
+fn test_ffmpeg_version_parser() {
+    // 1. FFmpeg 8.1.3 Git build (standard Windows build)
+    let output_8_1 = "ffmpeg version n8.1.3-24-g92611900bb-20261024 Copyright (c) 2000-2026 the FFmpeg developers\nbuilt with gcc 16.2.0";
+    let (clean, badge) = parse_ffmpeg_version(output_8_1);
+    assert_eq!(clean, "8.1.3-24-g92611900bb-20261024");
+    assert_eq!(badge, "FFmpeg 8.x Engine");
+
+    // 2. Official release version
+    let output_release = "ffmpeg version 8.1.0 Copyright (c) 2000-2026 the FFmpeg developers";
+    let (clean, badge) = parse_ffmpeg_version(output_release);
+    assert_eq!(clean, "8.1.0");
+    assert_eq!(badge, "FFmpeg 8.x Engine");
+
+    // 3. Prior version 7.x
+    let output_7_1 = "ffmpeg version 7.1.1-1ubuntu1 (Ubuntu 7.1.1)";
+    let (clean, badge) = parse_ffmpeg_version(output_7_1);
+    assert_eq!(clean, "7.1.1-1ubuntu1");
+    assert_eq!(badge, "FFmpeg 7.x Engine");
+
+    // 4. Fallback on invalid / empty string
+    let (fallback_clean, fallback_badge) = parse_ffmpeg_version("");
+    assert_eq!(fallback_clean, "8.1");
+    assert_eq!(fallback_badge, "FFmpeg 8.x Engine");
+}
+
+#[test]
+fn test_live_ffmpeg_version_detection() {
+    let binaries = FFmpegBinaries::locate().expect("Local binaries must be present");
+    let (full_ver, badge) = binaries.detect_version();
+    assert!(full_ver.starts_with("8.1"), "Expected version starting with 8.1, got: {}", full_ver);
+    assert_eq!(badge, "FFmpeg 8.x Engine");
+}
+
+#[test]
+fn test_videotoolbox_hardware_command_generation() {
+    let ffmpeg_bin = Path::new("ffmpeg");
+
+    // 1. VideoToolbox H.264 CRF
+    let config_h264_crf = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mov".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::VideoToolbox,
+        rate_control: RateControlMode::CRF,
+        crf: 20,
+        ..Default::default()
+    };
+    let cmd_h264 = FFmpegCommandBuilder::build(&config_h264_crf, ffmpeg_bin);
+    assert!(cmd_h264.contains(&"-hwaccel".to_string()));
+    assert!(cmd_h264.contains(&"videotoolbox".to_string()));
+    assert!(cmd_h264.contains(&"-c:v".to_string()));
+    assert!(cmd_h264.contains(&"h264_videotoolbox".to_string()));
+    assert!(cmd_h264.contains(&"-q:v".to_string()));
+    // CRF 20 -> (100 - 40) = 60
+    assert!(cmd_h264.contains(&"60".to_string()));
+
+    // 2. VideoToolbox H.264 CBR
+    let config_h264_cbr = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mov".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::VideoToolbox,
+        rate_control: RateControlMode::CBR,
+        video_bitrate_kbps: 8000,
+        ..Default::default()
+    };
+    let cmd_h264_cbr = FFmpegCommandBuilder::build(&config_h264_cbr, ffmpeg_bin);
+    assert!(cmd_h264_cbr.contains(&"-b:v".to_string()));
+    assert!(cmd_h264_cbr.contains(&"8000k".to_string()));
+
+    // 3. VideoToolbox HEVC (H.265) with Apple compatibility tag
+    let config_hevc = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mov".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H265,
+        hw_accel: HwAccel::VideoToolbox,
+        rate_control: RateControlMode::CRF,
+        crf: 22,
+        ..Default::default()
+    };
+    let cmd_hevc = FFmpegCommandBuilder::build(&config_hevc, ffmpeg_bin);
+    assert!(cmd_hevc.contains(&"-c:v".to_string()));
+    assert!(cmd_hevc.contains(&"hevc_videotoolbox".to_string()));
+    assert!(cmd_hevc.contains(&"-tag:v".to_string()));
+    assert!(cmd_hevc.contains(&"hvc1".to_string()));
+
+    // 4. VideoToolbox Apple ProRes
+    let config_prores = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mov".to_string(),
+        output_path: "output.mov".to_string(),
+        video_codec: VideoCodec::AppleProRes,
+        hw_accel: HwAccel::VideoToolbox,
+        prores_profile: ProResProfile::HQ,
+        ..Default::default()
+    };
+    let cmd_prores = FFmpegCommandBuilder::build(&config_prores, ffmpeg_bin);
+    assert!(cmd_prores.contains(&"-c:v".to_string()));
+    assert!(cmd_prores.contains(&"prores_videotoolbox".to_string()));
+    assert!(cmd_prores.contains(&"-profile:v".to_string()));
+    assert!(cmd_prores.contains(&"3".to_string())); // HQ = 3
+}
+
 
 
 

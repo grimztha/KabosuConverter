@@ -138,7 +138,7 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
         .context("Failed to parse ffprobe json output")?;
 
     let format_obj = &parsed["format"];
-    let duration_seconds: f64 = format_obj["duration"]
+    let mut duration_seconds: f64 = format_obj["duration"]
         .as_str()
         .and_then(|s| s.parse().ok())
         .or_else(|| format_obj["duration"].as_f64())
@@ -235,6 +235,21 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
                     subtitle_count += 1;
                 }
                 _ => {}
+            }
+        }
+    }
+
+    if duration_seconds <= 0.0 {
+        if let Some(streams) = parsed["streams"].as_array() {
+            for stream in streams {
+                let stream_dur = stream["duration"]
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .or_else(|| stream["duration"].as_f64())
+                    .unwrap_or(0.0);
+                if stream_dur > duration_seconds {
+                    duration_seconds = stream_dur;
+                }
             }
         }
     }

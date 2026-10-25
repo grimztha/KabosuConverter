@@ -1,5 +1,7 @@
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use anyhow::{Context, Result};
 use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
 
@@ -352,8 +354,86 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
     Ok(child)
 }
 
+/// A live audio playback session running via `ffplay` with an atomic master clock
+/// synchronized directly from ffplay's real-time audio PTS output stream.
+pub struct AudioPlaybackSession {
+    pub child: std::process::Child,
+    pub master_clock: Arc<AtomicU64>,
+}
+
+impl AudioPlaybackSession {
+    /// Wraps a generic child process without audio clock tracking (e.g. for native popup ffplay).
+    pub fn from_child(child: std::process::Child) -> Self {
+        Self {
+            child,
+            master_clock: Arc::new(AtomicU64::new(u64::MAX)),
+        }
+    }
+
+    /// Kills the child process immediately.
+    pub fn kill(&mut self) -> std::io::Result<()> {
+        self.child.kill()
+    }
+
+    /// Returns the current audio presentation timestamp (PTS) in seconds,
+    /// or None if ffplay has not yet emitted audio samples to the hardware DAC.
+    pub fn get_pts(&self) -> Option<f64> {
+        let val = self.master_clock.load(Ordering::Acquire);
+        if val == u64::MAX {
+            None
+        } else {
+            Some((val as f64) / 1_000_000.0)
+        }
+    }
+
+    /// Checks if the underlying process has exited.
+    pub fn is_finished(&mut self) -> bool {
+        match self.child.try_wait() {
+            Ok(Some(_status)) => true,
+            _ => false,
+        }
+    }
+}
+
+/// Parses the real-time audio master clock PTS from an `ffplay` status line.
+///
+/// Status lines output by `ffplay -nodisp` follow the pattern:
+/// `   X.XX M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B`
+/// where the first float value is the audio master clock in seconds.
+pub fn parse_ffplay_pts(line: &str) -> Option<f64> {
+    let pos = line.find("M-A:")?;
+    let prefix = line[..pos].trim();
+    let token = prefix.split_whitespace().last()?;
+    if let Ok(val) = token.parse::<f64>() {
+        if val.is_finite() {
+            return Some(val.max(0.0));
+        }
+    }
+    None
+}
+
+/// Reads status lines from `ffplay`'s stderr stream delimited by `\r` (or `\n`)
+/// and continuously updates the shared atomic master clock.
+pub fn read_ffplay_clock<R: std::io::Read>(reader: R, clock: Arc<AtomicU64>) {
+    use std::io::BufRead;
+    let mut buf_reader = std::io::BufReader::with_capacity(4096, reader);
+    let mut line_buf = Vec::with_capacity(256);
+
+    while let Ok(n) = buf_reader.read_until(b'\r', &mut line_buf) {
+        if n == 0 {
+            break;
+        }
+        let text = String::from_utf8_lossy(&line_buf);
+        if let Some(pts) = parse_ffplay_pts(&text) {
+            clock.store((pts * 1_000_000.0) as u64, Ordering::Release);
+        }
+        line_buf.clear();
+    }
+}
+
 /// Spawns audio playback via ffplay in headless mode (-nodisp) directly to the system default audio device.
 /// Optionally applies real-time audio filters such as volume gain in dB and loudness normalization.
+/// Returns an `AudioPlaybackSession` with atomic master clock tracking driven by ffplay's real-time audio PTS.
 pub fn spawn_audio_playback<B: AsRef<Path>>(
     ffplay_bin: B,
     media_path: &str,
@@ -362,10 +442,11 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     volume: i32,
     gain_db: Option<f32>,
     normalize: Option<f32>,
-) -> Result<std::process::Child> {
+) -> Result<AudioPlaybackSession> {
     let mut cmd = Command::new(ffplay_bin.as_ref());
     cmd.arg("-nodisp");
     cmd.arg("-autoexit");
+    cmd.arg("-seek2any").arg("1");
     let vol_clamped = volume.clamp(0, 100);
     cmd.arg("-volume").arg(vol_clamped.to_string());
 
@@ -382,8 +463,9 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
         cmd.arg("-af").arg(af_filters.join(","));
     }
 
-    if start_seconds > 0.05 {
-        cmd.arg("-ss").arg(format!("{:.3}", start_seconds));
+    let target = start_seconds.max(0.0);
+    if target > 0.001 {
+        cmd.arg("-ss").arg(format!("{:.3}", target));
     }
     if let Some(dur) = duration {
         if dur > 0.0 {
@@ -395,10 +477,25 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     crate::set_no_window(&mut cmd);
 
     cmd.stdout(std::process::Stdio::null());
-    cmd.stderr(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::piped());
 
-    let child = cmd.spawn().context("Failed to spawn audio playback via ffplay")?;
-    Ok(child)
+    let mut child = cmd.spawn().context("Failed to spawn audio playback via ffplay")?;
+    let master_clock = Arc::new(AtomicU64::new(u64::MAX));
+
+    if let Some(stderr) = child.stderr.take() {
+        let clock = master_clock.clone();
+        std::thread::Builder::new()
+            .name("ffplay-clock-reader".to_string())
+            .spawn(move || {
+                read_ffplay_clock(stderr, clock);
+            })
+            .ok();
+    }
+
+    Ok(AudioPlaybackSession {
+        child,
+        master_clock,
+    })
 }
 
 /// Extracts an audio waveform image into an RGBA byte buffer (width x height x 4).
@@ -426,8 +523,6 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
         "-vn",
         "-sn",
         "-dn",
-        "-t",
-        "600",
         "-i",
         media_path,
         "-filter_complex",

@@ -328,6 +328,172 @@ fn test_audio_playback_spawning() {
 }
 
 #[test]
+fn test_parse_ffplay_pts() {
+    use another_encoder::ffmpeg::parse_ffplay_pts;
+
+    // Standard playback line
+    let line1 = "   3.45 M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B";
+    assert_eq!(parse_ffplay_pts(line1), Some(3.45));
+
+    // Fast-forward / high-timestamp line
+    let line2 = " 1234.56 M-A: -0.001 fd=   0 aq=    8KB vq=    0KB sq=    0B";
+    assert_eq!(parse_ffplay_pts(line2), Some(1234.56));
+
+    // Zero timestamp
+    let line3 = "   0.00 M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B";
+    assert_eq!(parse_ffplay_pts(line3), Some(0.0));
+
+    // Negative initial AAC priming timestamp (clamped to 0.0)
+    let line4 = "  -0.04 M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B";
+    assert_eq!(parse_ffplay_pts(line4), Some(0.0));
+
+    // Uninitialized nan output
+    let line5 = " nan M-A:    nan fd=   0 aq=    7KB vq=    0KB sq=    0B";
+    assert_eq!(parse_ffplay_pts(line5), None);
+
+    // Stderr banner lines without M-A:
+    assert_eq!(parse_ffplay_pts("ffplay version N-127696..."), None);
+    assert_eq!(parse_ffplay_pts("Input #0, mov,mp4,m4a,3gp..."), None);
+
+    // Line with leading carriage return and noise
+    let line6 = "\r[mov,mp4 @ 0x123] demuxer skip\r   5.12 M-A:  0.000";
+    assert_eq!(parse_ffplay_pts(line6), Some(5.12));
+}
+
+#[test]
+fn test_ffplay_clock_reader_and_session() {
+    use another_encoder::ffmpeg::preview::read_ffplay_clock;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
+    use std::io::Cursor;
+
+    let simulated_stderr = b"ffplay version ...\r\n\
+                             nan M-A:    nan fd=   0\r\
+                             -0.03 M-A:  0.000 fd=   0\r\
+                              0.05 M-A:  0.000 fd=   0\r\
+                              0.10 M-A:  0.000 fd=   0\r\
+                              0.25 M-A:  0.000 fd=   0\r";
+
+    let clock = Arc::new(AtomicU64::new(u64::MAX));
+    read_ffplay_clock(Cursor::new(simulated_stderr), clock.clone());
+
+    let final_val = clock.load(Ordering::Acquire);
+    assert_ne!(final_val, u64::MAX);
+    let pts = (final_val as f64) / 1_000_000.0;
+    assert!((pts - 0.25).abs() < 1e-4, "Clock should have updated to 0.25s, got: {}", pts);
+}
+
+#[test]
+fn test_live_audio_clock_tracking() {
+    use another_encoder::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+
+    if let Ok(binaries) = FFmpegBinaries::locate() {
+        if let Some(ref ffplay) = binaries.ffplay {
+            let test_wav = Path::new("target/test_live_audio_clock.wav");
+            let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+            cmd.args(["-f", "lavfi", "-i", "sine=frequency=880:duration=2", "-y"])
+                .arg(test_wav);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            if let Ok(status) = cmd.status() {
+                if status.success() {
+                    let mut session = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.6), 80, None, None)
+                        .expect("spawn_audio_playback should succeed");
+
+                    // Wait up to 600ms for ffplay to initialize and produce master clock PTS
+                    let start = std::time::Instant::now();
+                    let mut saw_pts = false;
+                    while start.elapsed().as_millis() < 600 {
+                        if let Some(pts) = session.get_pts() {
+                            assert!(pts >= 0.0, "PTS must be non-negative");
+                            saw_pts = true;
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                    }
+                    assert!(saw_pts, "Live ffplay audio session should update master clock with real-time PTS");
+
+                    let _ = session.kill();
+                    let _ = std::fs::remove_file(test_wav);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_av_sync_master_clock_playback() {
+    use another_encoder::ffmpeg::{spawn_audio_playback, spawn_playback_stream_transformed, VideoRotation, FFmpegBinaries};
+    use std::io::Read;
+
+    if let Ok(binaries) = FFmpegBinaries::locate() {
+        if let Some(ref ffplay) = binaries.ffplay {
+            let test_media = Path::new("target/test_av_sync_media.mp4");
+            let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+            cmd.args([
+                "-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=24",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-y",
+            ]).arg(test_media);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            if let Ok(status) = cmd.status() {
+                if status.success() {
+                    let media_str = test_media.to_string_lossy().to_string();
+                    let start_sec = 1.0;
+
+                    // 1. Spawn audio playback with master clock
+                    let mut audio_session = spawn_audio_playback(ffplay, &media_str, start_sec, Some(1.0), 100, None, None)
+                        .expect("Audio playback should spawn");
+
+                    // 2. Spawn video decode stream
+                    let mut video_child = spawn_playback_stream_transformed(
+                        &binaries.ffmpeg,
+                        &media_str,
+                        start_sec,
+                        VideoRotation::None,
+                        false,
+                        false,
+                    ).expect("Video stream should spawn");
+
+                    let mut stdout = video_child.stdout.take().expect("Should have stdout pipe");
+                    let mut frame_buf = vec![0u8; 640 * 360 * 4];
+
+                    // Read first video frame from pipe
+                    let read_res = stdout.read_exact(&mut frame_buf);
+                    assert!(read_res.is_ok(), "First decoded video frame should be read successfully");
+
+                    // Verify audio clock advances around start_sec (1.0)
+                    let start = std::time::Instant::now();
+                    let mut got_audio_clock = false;
+                    while start.elapsed().as_millis() < 800 {
+                        if let Some(pts) = audio_session.get_pts() {
+                            assert!(pts >= 0.5 && pts <= 2.5, "Audio PTS should be near start_sec (1.0), got: {}", pts);
+                            got_audio_clock = true;
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                    }
+                    assert!(got_audio_clock, "Audio master clock should report PTS near seek target");
+
+                    let _ = audio_session.kill();
+                    let _ = video_child.kill();
+                    let _ = std::fs::remove_file(test_media);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_extract_frame_rgba_accurate_seeking() {
     use another_encoder::ffmpeg::{extract_frame_rgba, FFmpegBinaries};
 

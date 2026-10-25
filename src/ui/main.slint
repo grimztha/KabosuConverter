@@ -2366,42 +2366,14 @@ export component MainWindow inherits Window {
                                     VerticalLayout {
                                         min-width: 0px;
                                         horizontal-stretch: 1;
-                                        spacing: 2px;
+                                        alignment: center;
                                         Text {
                                             text: AppData.selected_file_name;
                                             font-size: 13.5px;
                                             font-weight: 700;
                                             color: #f8fafc;
                                             overflow: elide;
-                                        }
-                                        HorizontalLayout {
-                                            spacing: 5px;
-                                            alignment: start;
-                                            Badge {
-                                                label: AppData.selected_is_video ? "VIDEO" : "AUDIO";
-                                                bg_color: AppData.selected_is_video ? #0369a1 : #6d28d9;
-                                                fg_color: #ffffff;
-                                            }
-                                            if AppData.selected_is_video : Badge {
-                                                label: AppData.selected_resolution;
-                                                bg_color: #0f172a;
-                                                fg_color: #38bdf8;
-                                            }
-                                            Badge {
-                                                label: AppData.selected_audio_desc;
-                                                bg_color: #0f172a;
-                                                fg_color: #a78bfa;
-                                            }
-                                            Badge {
-                                                label: AppData.player_duration_text;
-                                                bg_color: #0f172a;
-                                                fg_color: #cbd5e1;
-                                            }
-                                            if AppData.has_active_video_edits || AppData.has_active_audio_edits : Badge {
-                                                label: "EDITED";
-                                                bg_color: #0284c733;
-                                                fg_color: #38bdf8;
-                                            }
+                                            vertical-alignment: center;
                                         }
                                     }
 

@@ -21,24 +21,17 @@ export component VisualTimeline inherits Rectangle {
     }
 
     changed zoom_level => {
-        if sv.width > 0px {
-            let tw = max(sv.width, sv.width * root.zoom_level);
-            let max_s = max(0px, tw - sv.width);
-            sv.content-x = sv.content-x.clamp(-max_s, 0px);
-        }
+        root.center_playhead();
     }
 
     public function zoom_in() {
-        root.zoom_level = min(8.0, root.zoom_level + 0.5);
-        AppData.timeline_zoom = root.zoom_level;
+        AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5);
     }
     public function zoom_out() {
-        root.zoom_level = max(1.0, root.zoom_level - 0.5);
-        AppData.timeline_zoom = root.zoom_level;
+        AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5);
     }
     public function set_zoom(val: float) {
-        root.zoom_level = val.clamp(1.0, 8.0);
-        AppData.timeline_zoom = root.zoom_level;
+        AppData.timeline_zoom = val.clamp(1.0, 8.0);
     }
     public function center_playhead() {
         if root.duration > 0.0 && sv.width > 0px {
@@ -88,6 +81,7 @@ export component VisualTimeline inherits Rectangle {
                     height: 100%;
                     source: AppData.timeline_waveform;
                     image-fit: fill;
+                    image-rendering: smooth;
                     opacity: 0.9;
                 }
 

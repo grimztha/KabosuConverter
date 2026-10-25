@@ -24,7 +24,7 @@ export component MainWindow inherits Window {
 
     forward-focus: fs;
 
-    property <length> queue_panel_width: (AppData.active_tab == 0 && AppData.player_has_media && AppData.selected_is_video && AppData.edit_panel_expanded) ? 260px : 300px;
+    property <length> queue_panel_width: 300px;
 
     fs := FocusScope {
         key-pressed(event) => {
@@ -273,7 +273,9 @@ export component MainWindow inherits Window {
 
             // LEFT PANEL: FILE QUEUE
             QueuePanel {
-                width: root.queue_panel_width;
+                min-width: root.queue_panel_width;
+                max-width: root.queue_panel_width;
+                horizontal-stretch: 0;
             }
 
             // Vertical Split Divider
@@ -341,62 +343,72 @@ export component MainWindow inherits Window {
             height: 42px;
             background: #121215;
 
-            // Left: Live Queue / Encoding Status Telemetry
-            HorizontalLayout {
-                x: 16px;
-                y: 0px;
-                height: parent.height;
-                spacing: 8px;
-                alignment: start;
-
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 8px;
-                        height: 8px;
-                        border-radius: 4px;
-                        background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : #71717a);
-                    }
-                }
-
-                Text {
-                    text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: AppData.is_processing ? #fbbf24 : #d4d4d8;
-                    vertical-alignment: center;
-                }
-
-                if AppData.is_processing : VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 90px;
-                        height: 6px;
-                        border-radius: 3px;
-                        background: #141418;
-                        clip: true;
-
-                        Rectangle {
-                            x: 0px;
-                            y: 0px;
-                            width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
-                            height: 100%;
-                            border-radius: 3px;
-                            background: @linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #10b981 100%);
-                        }
-                    }
-                }
-            }
-
             HorizontalLayout {
                 padding-left: 16px;
                 padding-right: 16px;
                 padding-top: 7px;
                 padding-bottom: 7px;
-                alignment: center;
+                spacing: 12px;
+
+                // Left: Live Queue / Encoding Status Telemetry
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : #71717a);
+                        }
+                    }
+
+                    Text {
+                        text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: AppData.is_processing ? #fbbf24 : #d4d4d8;
+                        vertical-alignment: center;
+                    }
+
+                    if AppData.is_processing : VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 90px;
+                            height: 6px;
+                            border-radius: 3px;
+                            background: #141418;
+                            clip: true;
+
+                            Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
+                                height: 100%;
+                                border-radius: 3px;
+                                background: @linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #10b981 100%);
+                            }
+                        }
+                    }
+                }
 
                 // Spacer pushing right-hand controls to the far right
                 Rectangle { horizontal-stretch: 1; }
+
+                // Bottom-Right Engine Subtitle
+                VerticalLayout {
+                    alignment: center;
+                    padding-right: 6px;
+                    Text {
+                        text: "High Performance Rust Transcoder & Video Downloader by SThao";
+                        font-size: 10.5px;
+                        font-weight: 500;
+                        color: #71717a;
+                        overflow: elide;
+                    }
+                }
 
                 // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle
                 HorizontalLayout {
@@ -420,7 +432,7 @@ export component MainWindow inherits Window {
                             VerticalLayout {
                                 alignment: center;
                                 Text {
-                                    text: "FFmpeg 7.x Engine";
+                                    text: AppData.ffmpeg_version_badge;
                                     font-size: 11px;
                                     color: #38bdf8;
                                     font-weight: 600;

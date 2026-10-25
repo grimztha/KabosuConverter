@@ -6,6 +6,9 @@ import { ActionButton } from "../components/action_button.slint";
 
 export component QueuePanel inherits Rectangle {
     background: #0f0f12;
+    min-width: 300px;
+    max-width: 300px;
+    horizontal-stretch: 0;
 
                 VerticalLayout {
                     padding: 10px;
@@ -237,6 +240,7 @@ export component QueuePanel inherits Rectangle {
                                     font-weight: 700;
                                     color: AppData.queue[AppData.selected_file_index].status == "Completed" ? #34d399 : (AppData.queue[AppData.selected_file_index].status == "Probing..." ? #818cf8 : (AppData.queue[AppData.selected_file_index].status == "Ready" ? #38bdf8 : (AppData.queue[AppData.selected_file_index].progress > 0.0 && AppData.queue[AppData.selected_file_index].progress < 1.0 ? #fbbf24 : #f87171)));
                                     vertical-alignment: center;
+                                    overflow: elide;
                                 }
                             }
 

@@ -235,6 +235,7 @@ export component PlayerTab inherits VerticalLayout {
 
                 // Audio Waveform Studio (for audio files)
                 if !AppData.selected_is_video : audio_studio := AudioWaveformStudio {
+                    zoom_level <=> AppData.timeline_zoom;
                     duration: AppData.player_duration;
                     current_time: AppData.player_current_time;
                     in_point_norm: AppData.in_point_normalized;
@@ -347,6 +348,17 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
+                                width: 24px;
+                                height: 18px;
+                                border-radius: 3px;
+                                background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? #38bdf822 : (vz8_ta.has-hover ? #2a2a30 : transparent);
+                                border-width: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? 1px : 0px;
+                                border-color: #38bdf866;
+                                Text { text: "8x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vz8_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 8.0; } }
+                            }
+
+                            Rectangle {
                                 width: 20px;
                                 height: 20px;
                                 border-radius: 3px;
@@ -408,6 +420,7 @@ export component PlayerTab inherits VerticalLayout {
 
                 // Full Visual Timeline Track with In/Out Markers & Needle (for Video)
                 if AppData.selected_is_video : vid_timeline := VisualTimeline {
+                    zoom_level <=> AppData.timeline_zoom;
                     duration: AppData.player_duration;
                     current_time: AppData.player_current_time;
                     in_point_norm: AppData.in_point_normalized;

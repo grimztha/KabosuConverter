@@ -407,7 +407,7 @@ export component TranscoderTab inherits ScrollView {
                                         Text { text: "Hardware Acceleration"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
                                         ComboBox {
                                             height: 26px;
-                                            model: ["Auto Detect", "NVIDIA NVENC (CUDA)", "Intel QuickSync (QSV)", "AMD AMF", "CPU Software Only"];
+                                            model: ["Auto Detect", "NVIDIA NVENC (CUDA)", "Intel QuickSync (QSV)", "AMD AMF", "Apple VideoToolbox", "CPU Software Only"];
                                             current-index <=> AppData.hw_accel_index;
                                         }
                                     }

@@ -264,13 +264,15 @@ unsafe extern "system" fn drop(
 
         let hr = get_data_fn(p_data_obj, &fmt, &mut medium);
         log_dd(&format!("COM GetData hr={:#x}, medium.h_global={:p}", hr, medium.h_global));
-        if hr == S_OK && !medium.h_global.is_null() {
-            let paths = parse_hdrop(medium.h_global);
-            log_dd(&format!("COM GetData parsed {} paths", paths.len()));
-            ReleaseStgMedium(&mut medium);
-            if !paths.is_empty() {
-                (*this).dispatch_paths(paths);
+        if hr == S_OK {
+            if !medium.h_global.is_null() {
+                let paths = parse_hdrop(medium.h_global);
+                log_dd(&format!("COM GetData parsed {} paths", paths.len()));
+                if !paths.is_empty() {
+                    (*this).dispatch_paths(paths);
+                }
             }
+            ReleaseStgMedium(&mut medium);
         }
     }
 
@@ -401,7 +403,7 @@ unsafe extern "system" fn drop_subclass_proc(
         let hdrop = wparam as *mut std::ffi::c_void;
         let paths = parse_hdrop(hdrop);
         DragFinish(hdrop);
-        if !paths.is_empty() {
+        if !paths.is_empty() && ref_data != 0 {
             log_dd(&format!("WM_DROPFILES dispatched {} file(s)", paths.len()));
             let target = &*(ref_data as *const DropTargetCom);
             target.dispatch_paths(paths);

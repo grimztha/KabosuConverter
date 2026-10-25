@@ -64,6 +64,9 @@ pub fn parse_timecode_to_seconds(s: &str) -> Option<f64> {
             let h: f64 = parts[0].trim().parse().ok()?;
             let m: f64 = parts[1].trim().parse().ok()?;
             let sec: f64 = parts[2].trim().parse().ok()?;
+            if !h.is_finite() || !m.is_finite() || !sec.is_finite() {
+                return None;
+            }
             if h < 0.0 || m < 0.0 || m >= 60.0 || sec < 0.0 || sec >= 60.0 {
                 return None;
             }
@@ -72,6 +75,9 @@ pub fn parse_timecode_to_seconds(s: &str) -> Option<f64> {
         2 => {
             let m: f64 = parts[0].trim().parse().ok()?;
             let sec: f64 = parts[1].trim().parse().ok()?;
+            if !m.is_finite() || !sec.is_finite() {
+                return None;
+            }
             if m < 0.0 || sec < 0.0 || sec >= 60.0 {
                 return None;
             }
@@ -79,7 +85,7 @@ pub fn parse_timecode_to_seconds(s: &str) -> Option<f64> {
         }
         1 => {
             let sec: f64 = parts[0].trim().parse().ok()?;
-            if sec < 0.0 {
+            if !sec.is_finite() || sec < 0.0 {
                 return None;
             }
             Some(sec)
@@ -182,12 +188,13 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
     cmd.arg("--").arg(media_path);
     cmd.stdin(std::process::Stdio::null());
 
+    crate::set_no_window(&mut cmd);
+
     let child = cmd.spawn().context("Failed to spawn ffplay preview player")?;
     Ok(child)
 }
 
-/// Extracts a single preview video frame directly into an in-memory RGBA byte buffer (640x360x4).
-/// Uses two-stage seeking with `-copyts` to provide fast, sub-frame accurate positioning on timeline scrubs.
+/// Extracts a preview video frame into an RGBA byte buffer (640x360x4).
 pub fn extract_frame_rgba<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -203,7 +210,7 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
     )
 }
 
-/// Extracts a single preview video frame with rotation and horizontal/vertical mirror flip applied.
+/// Extracts a preview video frame with rotation and flip applied.
 pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -276,8 +283,7 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     Ok(output.stdout[..expected].to_vec())
 }
 
-/// Spawns a persistent continuous ffmpeg decode stream that pipes raw RGBA frames (640x360x4) at 24fps.
-/// Uses fast-seek with -copyts to begin streaming exactly at `start_seconds` without frame drift.
+/// Starts an ffmpeg stream piping raw RGBA frames (640x360x4) at 24fps.
 pub fn spawn_playback_stream<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -293,7 +299,7 @@ pub fn spawn_playback_stream<B: AsRef<Path>>(
     )
 }
 
-/// Spawns a persistent continuous ffmpeg decode stream with rotation and mirror flip applied.
+/// Starts an ffmpeg stream with rotation and flip applied.
 pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -357,15 +363,14 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
     Ok(child)
 }
 
-/// A live audio playback session running via `ffplay` with an atomic master clock
-/// synchronized directly from ffplay's real-time audio PTS output stream.
+/// An active `ffplay` audio session with PTS tracked from ffplay's output.
 pub struct AudioPlaybackSession {
     pub child: std::process::Child,
     pub master_clock: Arc<AtomicU64>,
 }
 
 impl AudioPlaybackSession {
-    /// Wraps a generic child process without audio clock tracking (e.g. for native popup ffplay).
+    /// Wraps a child process without audio clock tracking (e.g. native popup ffplay).
     pub fn from_child(child: std::process::Child) -> Self {
         Self {
             child,
@@ -373,15 +378,14 @@ impl AudioPlaybackSession {
         }
     }
 
-    /// Kills the child process immediately and reaps its handle.
+    /// Kills the child process immediately.
     pub fn kill(&mut self) -> std::io::Result<()> {
         let res = self.child.kill();
         let _ = self.child.wait();
         res
     }
 
-    /// Returns the current audio presentation timestamp (PTS) in seconds,
-    /// or None if ffplay has not yet emitted audio samples to the hardware DAC.
+    /// Current audio timestamp in seconds, or None if not started yet.
     pub fn get_pts(&self) -> Option<f64> {
         let val = self.master_clock.load(Ordering::Acquire);
         if val == u64::MAX {
@@ -391,7 +395,7 @@ impl AudioPlaybackSession {
         }
     }
 
-    /// Checks if the underlying process has exited.
+    /// Checks if the process has exited.
     pub fn is_finished(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(Some(_status)))
     }
@@ -404,11 +408,7 @@ impl Drop for AudioPlaybackSession {
     }
 }
 
-/// Parses the real-time audio master clock PTS from an `ffplay` status line.
-///
-/// Status lines output by `ffplay -nodisp` follow the pattern:
-/// `   X.XX M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B`
-/// where the first float value is the audio master clock in seconds.
+/// Parses the audio PTS from an `ffplay -nodisp` status line.
 pub fn parse_ffplay_pts(line: &str) -> Option<f64> {
     let pos = line.find("M-A:")?;
     let prefix = line[..pos].trim();
@@ -518,12 +518,12 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let filter = if height >= 100 {
         format!(
-            "aresample=24000,aformat=channel_layouts=stereo,showwavespic=s={}x{}:split_channels=1:colors=0x38bdf8|0xa855f7:filter=peak:scale=sqrt",
+            "aformat=channel_layouts=stereo,showwavespic=s={}x{}:split_channels=1:colors=0x38bdf8|0xa855f7:filter=peak:scale=sqrt",
             width, height
         )
     } else {
         format!(
-            "aresample=24000,aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8:filter=peak:scale=sqrt",
+            "aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8:filter=peak:scale=sqrt",
             width, height
         )
     };

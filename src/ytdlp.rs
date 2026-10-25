@@ -10,7 +10,6 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 /// Locate yt-dlp binary strictly inside the project root path.
-/// Does NOT search system PATH or use system-installed versions.
 pub fn find_ytdlp_binary() -> Option<PathBuf> {
     let exe_name = if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" };
 
@@ -244,7 +243,8 @@ pub fn sanitize_filename_stem(name: &str) -> String {
 pub fn build_output_template(custom_filename: Option<&str>) -> String {
     if let Some(custom) = custom_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
         if custom.contains("%(ext)s") {
-            return custom.to_string();
+            let sanitized = custom.replace(['\\', '/', ':'], "_");
+            return sanitized;
         }
         let clean = sanitize_filename_stem(custom);
         let stem = Path::new(&clean)

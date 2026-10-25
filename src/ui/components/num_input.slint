@@ -1,0 +1,36 @@
+// Compact numeric/text input with zero min-width constraint
+export component NumInput inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder: "";
+    callback edited(string);
+    callback accepted();
+
+    height: 26px;
+    border-radius: 5px;
+    background: #141418;
+    border-width: 1px;
+    border-color: ti.has-focus ? #38bdf8 : #2a2a30;
+
+    ti := TextInput {
+        x: 6px;
+        width: parent.width - 12px;
+        height: 100%;
+        vertical-alignment: center;
+        text <=> root.text;
+        font-size: 11px;
+        color: #f4f4f5;
+        selection-background-color: #0284c7;
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(); }
+    }
+
+    if root.text == "" && !ti.has-focus : Text {
+        x: 6px;
+        width: parent.width - 12px;
+        height: 100%;
+        vertical-alignment: center;
+        text: root.placeholder;
+        font-size: 11px;
+        color: #71717a;
+    }
+}

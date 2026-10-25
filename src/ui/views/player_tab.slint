@@ -1,0 +1,652 @@
+import { LineEdit } from "std-widgets.slint";
+import { AppData, AppLogic } from "../globals.slint";
+import { IconButton } from "../components/icon_button.slint";
+import { ActionButton } from "../components/action_button.slint";
+import { Badge } from "../components/badge.slint";
+import { VolumeBar } from "../components/volume_bar.slint";
+import { VisualTimeline } from "../timeline/visual_timeline.slint";
+import { AudioWaveformStudio } from "../timeline/audio_waveform.slint";
+import { CropOverlayView } from "./crop_overlay.slint";
+
+export component PlayerTab inherits VerticalLayout {
+    callback request_focus();
+
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    spacing: 0px;
+
+    // MEDIA PLAYER & TRIMMING STUDIO EMPTY STATE
+    if !AppData.player_has_media : Rectangle {
+        vertical-stretch: 1;
+        min-height: 240px;
+        border-radius: 12px;
+        background: #141417;
+        border-width: 1px;
+        border-color: #1c1c22;
+
+        VerticalLayout {
+            padding: 36px;
+            spacing: 18px;
+            alignment: center;
+
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 32px;
+                    background: @linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+                    Image {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        source: @image-url("../icons/film.svg");
+                        width: 28px;
+                        height: 28px;
+                        colorize: #ffffff;
+                    }
+                }
+            }
+
+            VerticalLayout {
+                spacing: 6px;
+                alignment: center;
+                Text {
+                    text: "View & Edit";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #f4f4f5;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "Load any audio or video file to preview frame-by-frame, scrub the interactive timeline, and trim.";
+                    font-size: 13px;
+                    color: #a1a1aa;
+                    horizontal-alignment: center;
+                }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                ActionButton {
+                    width: 240px;
+                    height: 42px;
+                    title: "Open Audio or Video File";
+                    icon_source: @image-url("../icons/folder-open.svg");
+                    has_icon: true;
+                    icon_size: 16px;
+                    fill_color: #0284c7;
+                    hover_color: #0369a1;
+                    font_size: 13px;
+                    clicked => { AppLogic.add_files(); }
+                }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: 8px;
+                Badge { label: "MP4"; bg_color: #141418; fg_color: #38bdf8; }
+                Badge { label: "MKV"; bg_color: #141418; fg_color: #38bdf8; }
+                Badge { label: "MOV"; bg_color: #141418; fg_color: #38bdf8; }
+                Badge { label: "WEBM"; bg_color: #141418; fg_color: #38bdf8; }
+                Badge { label: "MP3"; bg_color: #141418; fg_color: #a78bfa; }
+                Badge { label: "WAV"; bg_color: #141418; fg_color: #a78bfa; }
+                Badge { label: "FLAC"; bg_color: #141418; fg_color: #a78bfa; }
+                Badge { label: "AAC"; bg_color: #141418; fg_color: #a78bfa; }
+            }
+        }
+    }
+
+    if AppData.player_has_media : Rectangle {
+        vertical-stretch: 1;
+        border-radius: 10px;
+        background: #141417;
+        border-width: 1px;
+        border-color: AppData.has_active_trim ? #f59e0b : #1c1c22;
+
+        VerticalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            spacing: 8px;
+
+            // Header row
+            HorizontalLayout {
+                spacing: 10px;
+
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 6px;
+                    background: AppData.selected_is_video ? @linear-gradient(135deg, #0284c7 0%, #38bdf8 100%) : @linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+                    Image {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        source: AppData.selected_is_video ? @image-url("../icons/video.svg") : @image-url("../icons/audio.svg");
+                        width: 18px;
+                        height: 18px;
+                        colorize: #ffffff;
+                    }
+                }
+
+                VerticalLayout {
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    Text {
+                        text: AppData.selected_file_name;
+                        font-size: 13.5px;
+                        font-weight: 700;
+                        color: #f4f4f5;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Right-Side Editing Panel Expand / Collapse Quick Toggle Button
+                if AppData.player_has_media : VerticalLayout {
+                    alignment: center;
+                    ActionButton {
+                        width: AppData.edit_panel_expanded ? 32px : 84px;
+                        height: 28px;
+                        title: AppData.edit_panel_expanded ? "" : "Editing";
+                        icon_source: @image-url("../icons/sliders.svg");
+                        has_icon: true;
+                        icon_size: 13px;
+                        fill_color: AppData.edit_panel_expanded ? #0284c7 : #1c1c22;
+                        hover_color: AppData.edit_panel_expanded ? #0369a1 : #2a2a30;
+                        text_color: #ffffff;
+                        font_size: 10.5px;
+                        clicked => { AppLogic.toggle_edit_panel(); }
+                    }
+                }
+            }
+
+            // Media Screen Area (Dynamic height: stretches to fill all available vertical space, no vertical scroll)
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: 120px;
+                border-radius: 8px;
+                background: #000000;
+                border-width: 1px;
+                border-color: #1c1c22;
+                clip: true;
+
+                // Video Canvas
+                if AppData.selected_is_video : video_screen := Rectangle {
+                    property <length> img_box_w: min(self.width, self.height * 16 / 9);
+                    property <length> img_box_h: min(self.height, self.width * 9 / 16);
+                    property <length> img_box_x: (self.width - self.img_box_w) / 2;
+                    property <length> img_box_y: (self.height - self.img_box_h) / 2;
+
+                    property <length> active_vid_x: self.img_box_x + self.img_box_w * AppData.preview_video_norm_x;
+                    property <length> active_vid_y: self.img_box_y + self.img_box_h * AppData.preview_video_norm_y;
+                    property <length> active_vid_w: max(16px, self.img_box_w * AppData.preview_video_norm_w);
+                    property <length> active_vid_h: max(16px, self.img_box_h * AppData.preview_video_norm_h);
+
+                    Image {
+                        source: AppData.preview_frame;
+                        width: 100%;
+                        height: 100%;
+                        image-fit: contain;
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.request_focus();
+                            AppLogic.player_play_pause();
+                        }
+                    }
+
+                    // Interactive Drag & Drop Visual Crop Overlay Box
+                    if AppData.crop_enabled : CropOverlayView {
+                        x: video_screen.active_vid_x;
+                        y: video_screen.active_vid_y;
+                        width: video_screen.active_vid_w;
+                        height: video_screen.active_vid_h;
+                        norm_x: AppData.crop_norm_x;
+                        norm_y: AppData.crop_norm_y;
+                        norm_w: AppData.crop_norm_w;
+                        norm_h: AppData.crop_norm_h;
+                        crop_px_w: AppData.crop_width;
+                        crop_px_h: AppData.crop_height;
+                        crop_px_x: AppData.crop_x;
+                        crop_px_y: AppData.crop_y;
+                        focus_requested => {
+                            root.request_focus();
+                        }
+                    }
+
+                    // Loading indicator
+                    if AppData.preview_frame_loading : Rectangle {
+                        background: #00000099;
+                        Text {
+                            text: "Seeking frame...";
+                            font-size: 12px;
+                            color: #a1a1aa;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Audio Waveform Studio (for audio files)
+                if !AppData.selected_is_video : audio_studio := AudioWaveformStudio {
+                    duration: AppData.player_duration;
+                    current_time: AppData.player_current_time;
+                    in_point_norm: AppData.in_point_normalized;
+                    out_point_norm: AppData.out_point_normalized;
+                    in_point_sec: AppData.in_point_seconds;
+                    out_point_sec: AppData.out_point_seconds;
+                    has_trim: AppData.has_active_trim;
+                    seek(val) => {
+                        AppLogic.player_seek(val);
+                    }
+                    in_point_dragged(val) => {
+                        AppLogic.set_in_point_from_timeline(val);
+                    }
+                    out_point_dragged(val) => {
+                        AppLogic.set_out_point_from_timeline(val);
+                    }
+                }
+            }
+
+            // Visual Timeline Track
+            VerticalLayout {
+                spacing: 8px;
+
+                // Time Readouts Header Bar: PLAYHEAD / TOTAL on left, Volume in middle, TRIM on right
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: center;
+
+                    // Left: Combined Playhead & Duration Pill
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 6px;
+                        background: #1c1c22;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 5px;
+                            alignment: center;
+                            Text { text: AppData.player_time_text; font-size: 12px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
+                            Text { text: "/"; font-size: 11px; font-weight: 600; color: #71717a; vertical-alignment: center; }
+                            Text { text: AppData.player_duration_text; font-size: 11.5px; font-weight: 700; color: #d4d4d8; vertical-alignment: center; }
+                        }
+                    }
+
+                    // Volume Control Bar Pill
+                    VolumeBar {
+                        volume: AppData.player_volume;
+                        is_muted: AppData.player_is_muted;
+                        volume_changed(val) => {
+                            AppLogic.player_volume_changed(val);
+                        }
+                        toggle_mute() => {
+                            AppLogic.player_toggle_mute();
+                        }
+                    }
+
+                    // Zoom Controls (for both audio waveform and video timeline)
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 6px;
+                        background: #1c1c22;
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 3px;
+                            alignment: center;
+
+                            Text { text: "ZOOM:"; font-size: 10px; font-weight: 700; color: #71717a; vertical-alignment: center; }
+
+                            Rectangle {
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 3px;
+                                background: vzm_ta.has-hover ? #2a2a30 : transparent;
+                                Text { text: "−"; font-size: 13px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vzm_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5); } }
+                            }
+
+                            Rectangle {
+                                width: 24px;
+                                height: 18px;
+                                border-radius: 3px;
+                                background: AppData.timeline_zoom <= 1.05 ? #38bdf822 : (vz1_ta.has-hover ? #2a2a30 : transparent);
+                                border-width: AppData.timeline_zoom <= 1.05 ? 1px : 0px;
+                                border-color: #38bdf866;
+                                Text { text: "1x"; font-size: 9.5px; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vz1_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 1.0; } }
+                            }
+
+                            Rectangle {
+                                width: 24px;
+                                height: 18px;
+                                border-radius: 3px;
+                                background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? #38bdf822 : (vz2_ta.has-hover ? #2a2a30 : transparent);
+                                border-width: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? 1px : 0px;
+                                border-color: #38bdf866;
+                                Text { text: "2x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vz2_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 2.0; } }
+                            }
+
+                            Rectangle {
+                                width: 24px;
+                                height: 18px;
+                                border-radius: 3px;
+                                background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? #38bdf822 : (vz4_ta.has-hover ? #2a2a30 : transparent);
+                                border-width: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? 1px : 0px;
+                                border-color: #38bdf866;
+                                Text { text: "4x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vz4_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 4.0; } }
+                            }
+
+                            Rectangle {
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 3px;
+                                background: vzp_ta.has-hover ? #2a2a30 : transparent;
+                                Text { text: "+"; font-size: 13px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                vzp_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5); } }
+                            }
+
+                            Rectangle {
+                                width: 22px;
+                                height: 20px;
+                                border-radius: 3px;
+                                background: vzc_ta.has-hover ? #2a2a30 : transparent;
+                                Text { text: "⊙"; font-size: 12px; font-weight: 800; color: #38bdf8; horizontal-alignment: center; vertical-alignment: center; }
+                                vzc_ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        AppData.center_timeline_trigger += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    // Right: Yellow Trim Pill (when active)
+                    if AppData.has_active_trim : Rectangle {
+                        height: 28px;
+                        border-radius: 6px;
+                        background: #d9770633;
+                        border-width: 1px;
+                        border-color: #f59e0b;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/scissors.svg");
+                                    width: 12px;
+                                    height: 12px;
+                                    colorize: #f59e0b;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: "TRIM:"; font-size: 10px; font-weight: 700; color: #f59e0b; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: AppData.trim_duration_text; font-size: 11.5px; font-weight: 800; color: #fbbf24; }
+                            }
+                        }
+                    }
+                }
+
+                // Full Visual Timeline Track with In/Out Markers & Needle (for Video)
+                if AppData.selected_is_video : vid_timeline := VisualTimeline {
+                    duration: AppData.player_duration;
+                    current_time: AppData.player_current_time;
+                    in_point_norm: AppData.in_point_normalized;
+                    out_point_norm: AppData.out_point_normalized;
+                    in_point_sec: AppData.in_point_seconds;
+                    out_point_sec: AppData.out_point_seconds;
+                    has_trim: AppData.has_active_trim;
+                    seek(val) => {
+                        AppLogic.player_seek(val);
+                    }
+                    in_point_dragged(val) => {
+                        AppLogic.set_in_point_from_timeline(val);
+                    }
+                    out_point_dragged(val) => {
+                        AppLogic.set_out_point_from_timeline(val);
+                    }
+                }
+            }
+
+            // Row 1: Playback Transport Deck
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: center;
+
+                IconButton {
+                    btn_width: 52px;
+                    btn_height: 30px;
+                    icon_source: @image-url("../icons/chevrons-left.svg");
+                    has_icon: true;
+                    icon_size: 13px;
+                    text: "-1s";
+                    font_size: 11px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.player_step(-1.0); }
+                }
+                IconButton {
+                    btn_width: 56px;
+                    btn_height: 30px;
+                    icon_source: @image-url("../icons/chevron-left.svg");
+                    has_icon: true;
+                    icon_size: 12px;
+                    text: "-0.1s";
+                    font_size: 10px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.player_step(-0.1); }
+                }
+
+                // Play / Pause Button
+                ActionButton {
+                    width: 90px;
+                    height: 30px;
+                    title: AppData.player_is_playing ? "Pause" : "Play";
+                    icon_source: AppData.player_is_playing ? @image-url("../icons/pause.svg") : @image-url("../icons/play.svg");
+                    has_icon: true;
+                    icon_size: 12px;
+                    fill_color: AppData.player_is_playing ? #e11d48 : #0284c7;
+                    hover_color: AppData.player_is_playing ? #be123c : #0369a1;
+                    font_size: 12px;
+                    clicked => { AppLogic.player_play_pause(); }
+                }
+
+                IconButton {
+                    btn_width: 34px;
+                    btn_height: 30px;
+                    icon_source: @image-url("../icons/stop.svg");
+                    has_icon: true;
+                    icon_size: 13px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.player_stop(); }
+                }
+
+                IconButton {
+                    btn_width: 56px;
+                    btn_height: 30px;
+                    icon_source: @image-url("../icons/chevron-right.svg");
+                    has_icon: true;
+                    icon_size: 12px;
+                    text: "+0.1s";
+                    font_size: 10px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.player_step(0.1); }
+                }
+                IconButton {
+                    btn_width: 52px;
+                    btn_height: 30px;
+                    icon_source: @image-url("../icons/chevrons-right.svg");
+                    has_icon: true;
+                    icon_size: 13px;
+                    text: "+1s";
+                    font_size: 11px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.player_step(1.0); }
+                }
+            }
+
+            // Row 2: In/Out Trim Markers & Range Deck
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: center;
+
+                ActionButton {
+                    width: 62px;
+                    height: 26px;
+                    title: "[ Set In";
+                    fill_color: #d97706;
+                    hover_color: #b45309;
+                    font_size: 10px;
+                    clicked => { AppLogic.set_in_point_current(); }
+                }
+
+                ActionButton {
+                    width: 62px;
+                    height: 26px;
+                    title: "Set Out ]";
+                    fill_color: #d97706;
+                    hover_color: #b45309;
+                    font_size: 10px;
+                    clicked => { AppLogic.set_out_point_current(); }
+                }
+
+                IconButton {
+                    btn_width: 38px;
+                    btn_height: 26px;
+                    icon_source: @image-url("../icons/chevrons-left.svg");
+                    has_icon: true;
+                    icon_size: 11px;
+                    text: "In";
+                    font_size: 10px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.jump_to_in_point(); }
+                }
+
+                IconButton {
+                    btn_width: 40px;
+                    btn_height: 26px;
+                    icon_source: @image-url("../icons/chevrons-right.svg");
+                    has_icon: true;
+                    icon_size: 11px;
+                    text: "Out";
+                    font_size: 10px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.jump_to_out_point(); }
+                }
+
+                ActionButton {
+                    width: 74px;
+                    height: 26px;
+                    title: "Play Trim";
+                    icon_source: @image-url("../icons/play.svg");
+                    has_icon: true;
+                    icon_size: 10px;
+                    fill_color: #059669;
+                    hover_color: #047857;
+                    font_size: 10px;
+                    clicked => { AppLogic.play_trimmed_range(); }
+                }
+
+                IconButton {
+                    btn_width: 52px;
+                    btn_height: 26px;
+                    icon_source: @image-url("../icons/reset.svg");
+                    has_icon: true;
+                    icon_size: 11px;
+                    text: "Reset";
+                    font_size: 10px;
+                    hover_bg: #26262e;
+                    clicked => { AppLogic.clear_trim_points(); }
+                }
+            }
+
+            // Row 2: Precision In/Out Timecodes & Instant Actions Deck
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
+
+                Text {
+                    text: "In:";
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #fbbf24;
+                    vertical-alignment: center;
+                }
+
+                LineEdit {
+                    width: 105px;
+                    height: 28px;
+                    font-size: 11px;
+                    text <=> AppData.in_point;
+                    placeholder-text: "00:00:00.000";
+                    edited(txt) => { AppLogic.in_point_text_changed(txt); }
+                }
+
+                Text {
+                    text: "Out:";
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #fbbf24;
+                    vertical-alignment: center;
+                }
+
+                LineEdit {
+                    width: 105px;
+                    height: 28px;
+                    font-size: 11px;
+                    text <=> AppData.out_point;
+                    placeholder-text: "00:00:00.000";
+                    edited(txt) => { AppLogic.out_point_text_changed(txt); }
+                }
+
+                Rectangle { width: 1px; height: 18px; background: #2a2a30; }
+
+                ActionButton {
+                    width: 128px;
+                    height: 28px;
+                    title: "Lossless Cut Now";
+                    icon_source: @image-url("../icons/scissors.svg");
+                    has_icon: true;
+                    icon_size: 12px;
+                    fill_color: #059669;
+                    hover_color: #047857;
+                    font_size: 10.5px;
+                    is_disabled: !AppData.has_active_trim;
+                    clicked => { AppLogic.quick_lossless_cut(); }
+                }
+
+                ActionButton {
+                    width: 120px;
+                    height: 28px;
+                    title: "Codec Settings";
+                    icon_source: @image-url("../icons/settings.svg");
+                    has_icon: true;
+                    icon_size: 12px;
+                    fill_color: #1c1c22;
+                    hover_color: #2a2a32;
+                    text_color: #38bdf8;
+                    font_size: 10.5px;
+                    clicked => { AppLogic.switch_tab(2); }
+                }
+            }
+        }
+    }
+}

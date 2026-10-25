@@ -1,0 +1,181 @@
+import { ScrollView } from "std-widgets.slint";
+
+export struct WorkflowOption {
+    group: string,
+    label: string,
+}
+
+export component WorkflowDropdown inherits Rectangle {
+    in-out property <int> current-index: 0;
+    callback selected(int);
+
+    property <[WorkflowOption]> options: [
+        { group: "[Video]", label: "H.264 (AVC) — Universal Web & Playback" },
+        { group: "[Video]", label: "H.265 (HEVC) — High Efficiency Video" },
+        { group: "[Video]", label: "AV1 — Next-Gen Open Video Codec" },
+        { group: "[Video]", label: "Apple ProRes — Professional Editing Intermediate" },
+        { group: "[Video]", label: "Avid DNxHD / DNxHR — Broadcast & NLE Intermediate" },
+        { group: "[Video]", label: "VP9 — Open Web Video Codec" },
+        { group: "[Remux]", label: "Rewrap / Remux — Instant Container Change (No Re-encode)" },
+        { group: "[Remux]", label: "Lossless Cut — Fast Trim Without Re-encoding" },
+        { group: "[Remux]", label: "Extract Video Track (Drop Audio/Subs)" },
+        { group: "[Audio]", label: "Extract Audio Track (Lossless / AAC / MP3)" },
+        { group: "[Audio]", label: "Audio Normalization (EBU R128 / LUFS)" },
+        { group: "[Audio]", label: "Audio Conversion (AAC / MP3 / FLAC / WAV)" },
+        { group: "[Subtitle]", label: "Extract Subtitle Stream (SRT / VTT / ASS)" }
+    ];
+
+    pure function get_color(idx: int) -> color {
+        idx <= 5 ? #38bdf8 : (idx <= 8 ? #34d399 : (idx <= 11 ? #a78bfa : #fbbf24))
+    }
+
+    property <int> safe_index: Math.max(0, Math.min(root.current-index, root.options.length - 1));
+    property <string> current_group: root.options[root.safe_index].group;
+    property <string> current_label: root.options[root.safe_index].label;
+    property <color> current_color: root.get_color(root.safe_index);
+
+    height: 26px;
+    border-radius: 4px;
+    background: ta.has-hover ? #1c1c22 : #141418;
+    border-width: 1px;
+    border-color: ta.has-hover ? #38bdf8.with-alpha(0.6) : #2a2a30;
+
+    animate background { duration: 150ms; }
+    animate border-color { duration: 150ms; }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 6px;
+
+        // Group name text (Colorized!)
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.current_group;
+                font-size: 11px;
+                font-weight: 700;
+                color: root.current_color;
+            }
+        }
+
+        // Item label text
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.current_label;
+                font-size: 11px;
+                font-weight: 500;
+                color: #f4f4f5;
+                overflow: elide;
+            }
+        }
+
+        // Dropdown Chevron Icon
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("../icons/chevron-down.svg");
+                width: 10px;
+                height: 10px;
+                colorize: ta.has-hover ? #f4f4f5 : #a1a1aa;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            popup.show();
+        }
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 3px;
+        width: root.width;
+        height: 330px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            background: #141418;
+            border-width: 1px;
+            border-color: #2a2a32;
+            drop-shadow-blur: 16px;
+            drop-shadow-offset-y: 6px;
+            drop-shadow-color: #000000aa;
+            clip: true;
+
+            ScrollView {
+                width: 100%;
+                height: 100%;
+
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 2px;
+                    alignment: start;
+
+                    for opt[idx] in root.options : Rectangle {
+                        height: 25px;
+                        border-radius: 4px;
+                        background: idx == root.safe_index ? #27272a : (item_ta.has-hover ? #1f1f24 : #00000000);
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 6px;
+
+                            // Group name text in dropdown menu (Colorized!)
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: opt.group;
+                                    font-size: 10.5px;
+                                    font-weight: 700;
+                                    color: root.get_color(idx);
+                                }
+                            }
+
+                            // Item label text
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: opt.label;
+                                    font-size: 10.5px;
+                                    font-weight: idx == root.safe_index ? 600 : 400;
+                                    color: idx == root.safe_index ? #ffffff : (item_ta.has-hover ? #f4f4f5 : #d4d4d8);
+                                    overflow: elide;
+                                }
+                            }
+
+                            // Active checkmark
+                            if idx == root.safe_index : VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/check.svg");
+                                    width: 11px;
+                                    height: 11px;
+                                    colorize: root.get_color(idx);
+                                }
+                            }
+                        }
+
+                        item_ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.current-index = idx;
+                                root.selected(idx);
+                                popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,822 @@
+import { ComboBox, LineEdit, ScrollView, Slider } from "std-widgets.slint";
+import { AppData, AppLogic } from "../globals.slint";
+import { WorkflowDropdown } from "../components/workflow_dropdown.slint";
+import { NumInput } from "../components/num_input.slint";
+import { IconButton } from "../components/icon_button.slint";
+import { ActionButton } from "../components/action_button.slint";
+
+export component TranscoderTab inherits ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        padding-top: 8px;
+                        padding-bottom: 8px;
+                        spacing: 6px;
+
+                        // FUNCTION SELECTOR CARD (Visually grouped & color-coded, Compact)
+                        Rectangle {
+                            border-radius: 6px;
+                            background: #141417;
+                            border-width: 1px;
+                            border-color: AppData.function_index <= 5 ? #0284c788 : (AppData.function_index <= 8 ? #05966988 : (AppData.function_index <= 11 ? #7c3aed88 : #d9770688));
+
+                            VerticalLayout {
+                                alignment: start;
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                spacing: 5px;
+
+                                // Header row: Title + Color-coded Workflow Category Badge
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "Workflow & Codec Function";
+                                        font-size: 12.5px;
+                                        font-weight: 700;
+                                        color: #f4f4f5;
+                                        vertical-alignment: center;
+                                    }
+
+                                    Rectangle { horizontal-stretch: 1; }
+
+                                    // Video Badge
+                                    if AppData.function_index <= 5 : Rectangle {
+                                        height: 18px;
+                                        border-radius: 4px;
+                                        background: #0284c722;
+                                        border-width: 1px;
+                                        border-color: #38bdf8;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 4px;
+                                            alignment: center;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/video.svg");
+                                                    width: 10px;
+                                                    height: 10px;
+                                                    colorize: #38bdf8;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "VIDEO ENCODING";
+                                                    font-size: 9px;
+                                                    font-weight: 700;
+                                                    color: #38bdf8;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Remux Badge
+                                    if AppData.function_index >= 6 && AppData.function_index <= 8 : Rectangle {
+                                        height: 18px;
+                                        border-radius: 4px;
+                                        background: #05966922;
+                                        border-width: 1px;
+                                        border-color: #34d399;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 4px;
+                                            alignment: center;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/layers.svg");
+                                                    width: 10px;
+                                                    height: 10px;
+                                                    colorize: #34d399;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "LOSSLESS REMUX & CUT";
+                                                    font-size: 9px;
+                                                    font-weight: 700;
+                                                    color: #34d399;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Audio Badge
+                                    if AppData.function_index >= 9 && AppData.function_index <= 11 : Rectangle {
+                                        height: 18px;
+                                        border-radius: 4px;
+                                        background: #7c3aed22;
+                                        border-width: 1px;
+                                        border-color: #a78bfa;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 4px;
+                                            alignment: center;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/audio.svg");
+                                                    width: 10px;
+                                                    height: 10px;
+                                                    colorize: #a78bfa;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "AUDIO PROCESSING";
+                                                    font-size: 9px;
+                                                    font-weight: 700;
+                                                    color: #a78bfa;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Subtitle Badge
+                                    if AppData.function_index == 12 : Rectangle {
+                                        height: 18px;
+                                        border-radius: 4px;
+                                        background: #d9770622;
+                                        border-width: 1px;
+                                        border-color: #fbbf24;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 4px;
+                                            alignment: center;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/subtitles.svg");
+                                                    width: 10px;
+                                                    height: 10px;
+                                                    colorize: #fbbf24;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "SUBTITLES & STREAMS";
+                                                    font-size: 9px;
+                                                    font-weight: 700;
+                                                    color: #fbbf24;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Interactive Category Quick-Pills (Compact)
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    // Video Category Tab
+                                    Rectangle {
+                                        horizontal-stretch: 1;
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: AppData.function_index <= 5 ? #0284c733 : #1c1c22;
+                                        border-width: 1px;
+                                        border-color: AppData.function_index <= 5 ? #38bdf8 : #2a2a30;
+                                        HorizontalLayout {
+                                            alignment: center;
+                                            spacing: 5px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/video.svg");
+                                                    width: 11px;
+                                                    height: 11px;
+                                                    colorize: AppData.function_index <= 5 ? #38bdf8 : #a1a1aa;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Video Codecs";
+                                                    font-size: 10px;
+                                                    font-weight: AppData.function_index <= 5 ? 700 : 500;
+                                                    color: AppData.function_index <= 5 ? #38bdf8 : #d4d4d8;
+                                                }
+                                            }
+                                        }
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppData.function_index = 0; }
+                                        }
+                                    }
+
+                                    // Remux Category Tab
+                                    Rectangle {
+                                        horizontal-stretch: 1;
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: AppData.function_index >= 6 && AppData.function_index <= 8 ? #05966933 : #1c1c22;
+                                        border-width: 1px;
+                                        border-color: AppData.function_index >= 6 && AppData.function_index <= 8 ? #34d399 : #2a2a30;
+                                        HorizontalLayout {
+                                            alignment: center;
+                                            spacing: 5px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/layers.svg");
+                                                    width: 11px;
+                                                    height: 11px;
+                                                    colorize: AppData.function_index >= 6 && AppData.function_index <= 8 ? #34d399 : #a1a1aa;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Remux & Cut";
+                                                    font-size: 10px;
+                                                    font-weight: AppData.function_index >= 6 && AppData.function_index <= 8 ? 700 : 500;
+                                                    color: AppData.function_index >= 6 && AppData.function_index <= 8 ? #34d399 : #d4d4d8;
+                                                }
+                                            }
+                                        }
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppData.function_index = 6; }
+                                        }
+                                    }
+
+                                    // Audio Category Tab
+                                    Rectangle {
+                                        horizontal-stretch: 1;
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: AppData.function_index >= 9 && AppData.function_index <= 11 ? #7c3aed33 : #1c1c22;
+                                        border-width: 1px;
+                                        border-color: AppData.function_index >= 9 && AppData.function_index <= 11 ? #a78bfa : #2a2a30;
+                                        HorizontalLayout {
+                                            alignment: center;
+                                            spacing: 5px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/audio.svg");
+                                                    width: 11px;
+                                                    height: 11px;
+                                                    colorize: AppData.function_index >= 9 && AppData.function_index <= 11 ? #a78bfa : #a1a1aa;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Audio Suite";
+                                                    font-size: 10px;
+                                                    font-weight: AppData.function_index >= 9 && AppData.function_index <= 11 ? 700 : 500;
+                                                    color: AppData.function_index >= 9 && AppData.function_index <= 11 ? #a78bfa : #d4d4d8;
+                                                }
+                                            }
+                                        }
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppData.function_index = 9; }
+                                        }
+                                    }
+
+                                    // Subtitle Category Tab
+                                    Rectangle {
+                                        horizontal-stretch: 1;
+                                        height: 24px;
+                                        border-radius: 4px;
+                                        background: AppData.function_index == 12 ? #d9770633 : #1c1c22;
+                                        border-width: 1px;
+                                        border-color: AppData.function_index == 12 ? #fbbf24 : #2a2a30;
+                                        HorizontalLayout {
+                                            alignment: center;
+                                            spacing: 5px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("../icons/subtitles.svg");
+                                                    width: 11px;
+                                                    height: 11px;
+                                                    colorize: AppData.function_index == 12 ? #fbbf24 : #a1a1aa;
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Subtitles";
+                                                    font-size: 10px;
+                                                    font-weight: AppData.function_index == 12 ? 700 : 500;
+                                                    color: AppData.function_index == 12 ? #fbbf24 : #d4d4d8;
+                                                }
+                                            }
+                                        }
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppData.function_index = 12; }
+                                        }
+                                    }
+                                }
+
+                                // Dropdown with colorized group names (Compact)
+                                WorkflowDropdown {
+                                    height: 26px;
+                                    current-index <=> AppData.function_index;
+                                }
+
+                                // Category Pipeline Description Banner (Single-line Compact)
+                                Rectangle {
+                                    height: 22px;
+                                    border-radius: 4px;
+                                    background: AppData.function_index <= 5 ? #0284c715 : (AppData.function_index <= 8 ? #05966915 : (AppData.function_index <= 11 ? #7c3aed15 : #d9770615));
+                                    border-width: 1px;
+                                    border-color: AppData.function_index <= 5 ? #0284c744 : (AppData.function_index <= 8 ? #05966944 : (AppData.function_index <= 11 ? #7c3aed44 : #d9770644));
+
+                                    HorizontalLayout {
+                                        padding-left: 8px;
+                                        padding-right: 8px;
+                                        spacing: 6px;
+                                        alignment: start;
+
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Image {
+                                                source: AppData.function_index <= 5 ? @image-url("../icons/video.svg") : (AppData.function_index <= 8 ? @image-url("../icons/layers.svg") : (AppData.function_index <= 11 ? @image-url("../icons/audio.svg") : @image-url("../icons/subtitles.svg")));
+                                                width: 11px;
+                                                height: 11px;
+                                                colorize: AppData.function_index <= 5 ? #38bdf8 : (AppData.function_index <= 8 ? #34d399 : (AppData.function_index <= 11 ? #a78bfa : #fbbf24));
+                                            }
+                                        }
+
+                                        Text {
+                                            text: AppData.function_index <= 5 ?
+                                                "Video Transcoding Pipeline: Accelerated full video encode with CRF/bitrate control, resolution scaling, and filters." :
+                                                (AppData.function_index <= 8 ?
+                                                    "Lossless Stream Copy Pipeline: High-speed container repacking and lossless cut with zero generation loss." :
+                                                    (AppData.function_index <= 11 ?
+                                                        "Audio Processing Pipeline: High-fidelity audio demux, conversion, and EBU R128 / LUFS broadcast loudness normalization." :
+                                                        "Subtitle Extraction Pipeline: Extracts embedded text or bitmap subtitle streams into clean external subtitle files (.srt)."));
+                                            font-size: 9.5px;
+                                            font-weight: 500;
+                                            color: AppData.function_index <= 5 ? #93c5fd : (AppData.function_index <= 8 ? #a7f3d0 : (AppData.function_index <= 11 ? #ddd6fe : #fde68a));
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // VIDEO PARAMETERS CARD (Compact 4-column layout)
+                        if AppData.function_index <= 5 : Rectangle {
+                            border-radius: 6px;
+                            background: #141417;
+                            border-width: 1px;
+                            border-color: #1c1c22;
+
+                            VerticalLayout {
+                                alignment: start;
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                spacing: 5px;
+
+                                Text {
+                                    text: "Video Encoding Parameters";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: #38bdf8;
+                                }
+
+                                // Row 1: Hardware Acceleration, Preset, Resolution, Framerate (4 columns)
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Hardware Acceleration"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Auto Detect", "NVIDIA NVENC (CUDA)", "Intel QuickSync (QSV)", "AMD AMF", "CPU Software Only"];
+                                            current-index <=> AppData.hw_accel_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Encoder Preset / Speed"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
+                                            current-index <=> AppData.preset_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Resolution Scaling"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Original Source", "4K UHD (3840x2160)", "1440p QHD (2560x1440)", "1080p FHD (1920x1080)", "720p HD (1280x720)", "480p SD (854x480)"];
+                                            current-index <=> AppData.resolution_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Framerate Conform"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Original Source", "23.976 fps", "24.0 fps", "25.0 fps (PAL)", "29.97 fps (NTSC)", "30.0 fps", "50.0 fps", "59.94 fps", "60.0 fps"];
+                                            current-index <=> AppData.fps_index;
+                                        }
+                                    }
+                                }
+
+                                // Row 2: Rate Control Mode, Quality/Bitrate, Deinterlacing, Web Faststart (4 columns)
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Rate Control Mode"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Constant Quality (CRF)", "Constant Bitrate (CBR)", "Variable Bitrate (VBR)"];
+                                            current-index <=> AppData.rate_control_index;
+                                        }
+                                    }
+
+                                    if AppData.rate_control_index == 0 : VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        HorizontalLayout {
+                                            alignment: start;
+                                            spacing: 4px;
+                                            Text { text: "CRF Quality:"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                            Text { text: "\{Math.round(AppData.crf_value)}"; font-size: 10px; font-weight: 700; color: #38bdf8; }
+                                            Text { text: "(0-51)"; font-size: 9.5px; color: #71717a; }
+                                        }
+                                        Slider {
+                                            height: 26px;
+                                            minimum: 0;
+                                            maximum: 51;
+                                            value <=> AppData.crf_value;
+                                        }
+                                    }
+
+                                    if AppData.rate_control_index > 0 : VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Target Video Bitrate"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["15000 kbps (High 4K)", "10000 kbps (2K)", "6000 kbps (1080p)", "4000 kbps (Good 1080p)", "2500 kbps (720p)", "1200 kbps (Low)"];
+                                            current-index <=> AppData.video_bitrate_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Deinterlacing Filter"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["None (Keep Progressive)", "Yadif (Adaptive)", "Bwdif (Bob Weaver)"];
+                                            current-index <=> AppData.deinterlace_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Web Optimization"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        Rectangle {
+                                            height: 26px;
+                                            border-radius: 4px;
+                                            background: AppData.faststart ? #0284c722 : #1c1c22;
+                                            border-width: 1px;
+                                            border-color: AppData.faststart ? #38bdf8 : #2a2a30;
+                                            HorizontalLayout {
+                                                padding-left: 8px;
+                                                padding-right: 8px;
+                                                spacing: 6px;
+                                                alignment: start;
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Rectangle {
+                                                        width: 13px;
+                                                        height: 13px;
+                                                        border-radius: 3px;
+                                                        background: AppData.faststart ? #0284c7 : #141418;
+                                                        border-width: 1px;
+                                                        border-color: AppData.faststart ? #38bdf8 : #383840;
+                                                        if AppData.faststart : Image {
+                                                            x: 1.5px;
+                                                            y: 1.5px;
+                                                            width: 10px;
+                                                            height: 10px;
+                                                            source: @image-url("../icons/check.svg");
+                                                            colorize: #ffffff;
+                                                        }
+                                                    }
+                                                }
+                                                Text {
+                                                    text: "FastStart (moov atom)";
+                                                    font-size: 10px;
+                                                    font-weight: AppData.faststart ? 600 : 500;
+                                                    color: AppData.faststart ? #e0f2fe : #a1a1aa;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                            TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => { AppData.faststart = !AppData.faststart; }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ProRes Specific Profile Row (Compact)
+                                if AppData.function_index == 3 : HorizontalLayout {
+                                    spacing: 8px;
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Apple ProRes Profile"; font-size: 10px; font-weight: 600; color: #f59e0b; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["ProRes 422 Proxy", "ProRes 422 LT", "ProRes 422 (Standard)", "ProRes 422 HQ (High Quality)", "ProRes 4444 (RGBA 12-bit)", "ProRes 4444 XQ"];
+                                            current-index <=> AppData.prores_profile_index;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // AUDIO PARAMETERS CARD (Compact 4-column row)
+                        if AppData.function_index <= 5 || AppData.function_index == 9 || AppData.function_index == 10 || AppData.function_index == 11 : Rectangle {
+                            border-radius: 6px;
+                            background: #141417;
+                            border-width: 1px;
+                            border-color: #1c1c22;
+
+                            VerticalLayout {
+                                alignment: start;
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                spacing: 5px;
+
+                                Text {
+                                    text: "Audio Parameters & Normalization";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: #a78bfa;
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Audio Codec"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["AAC (Standard)", "MP3 (libmp3lame)", "Opus (High Quality Web)", "FLAC (Lossless)", "WAV PCM 24-bit", "WAV PCM 16-bit", "AC3 (Dolby Digital)", "Copy (Passthrough)"];
+                                            current-index <=> AppData.audio_codec_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Audio Bitrate"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["320 kbps (High Fidelity)", "256 kbps", "192 kbps (Standard)", "128 kbps", "96 kbps", "64 kbps (Speech)"];
+                                            current-index <=> AppData.audio_bitrate_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Sample Rate"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Keep Source", "48000 Hz (Video Standard)", "44100 Hz (CD Audio)", "96000 Hz (Studio Master)"];
+                                            current-index <=> AppData.audio_sample_rate_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text { text: "Loudness Normalization (EBU R128)"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            height: 26px;
+                                            model: ["Disabled", "EBU R128 (-23.0 LUFS Broadcast)", "YouTube / Spotify (-14.0 LUFS)", "Apple Music / Podcast (-16.0 LUFS)", "Loud Web (-12.0 LUFS)"];
+                                            current-index <=> AppData.normalize_index;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ACTIVE TRIM STATUS REMINDER BANNER (Compact)
+                        Rectangle {
+                            border-radius: 6px;
+                            background: AppData.has_active_trim ? #d9770622 : #141417;
+                            border-width: 1px;
+                            border-color: AppData.has_active_trim ? #f59e0b : #1c1c22;
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 5px;
+                                padding-bottom: 5px;
+                                spacing: 8px;
+
+                                if AppData.has_active_trim : VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("../icons/scissors.svg");
+                                        width: 12px;
+                                        height: 12px;
+                                        colorize: #fbbf24;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: AppData.has_active_trim ?
+                                            "Active Trim Applied: In " + AppData.in_point + " → Out " + AppData.out_point + " (" + AppData.trim_duration_text + ") will be exported." :
+                                            "Full Media Export — No trim points set. To trim this clip, use the View & Edit tab.";
+                                        font-size: 10.5px;
+                                        font-weight: 600;
+                                        color: AppData.has_active_trim ? #fbbf24 : #a1a1aa;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                ActionButton {
+                                    width: 140px;
+                                    height: 24px;
+                                    border-radius: 4px;
+                                    title: AppData.has_active_trim ? "Adjust on Timeline" : "Open Timeline Trimmer";
+                                    icon_source: @image-url("../icons/scissors.svg");
+                                    has_icon: true;
+                                    icon_size: 11px;
+                                    fill_color: #1c1c22;
+                                    hover_color: #2a2a32;
+                                    font_size: 10.5px;
+                                    clicked => { AppLogic.switch_tab(0); }
+                                }
+                            }
+                        }
+
+                        // OUTPUT DESTINATION CARD (Unified Single-Row Container + Destination Folder)
+                        Rectangle {
+                            border-radius: 6px;
+                            background: #141417;
+                            border-width: 1px;
+                            border-color: #1c1c22;
+
+                            VerticalLayout {
+                                alignment: start;
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                spacing: 5px;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "Output Container & Destination";
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        color: #10b981;
+                                        vertical-alignment: center;
+                                    }
+
+                                    Rectangle { horizontal-stretch: 1; }
+
+                                    Text {
+                                        text: AppData.container_index == 0 ? "Standard MPEG-4 (.mp4) — universal compatibility" :
+                                              AppData.container_index == 1 ? "Matroska (.mkv) — multi-track & subtitle container" :
+                                              AppData.container_index == 2 ? "Apple QuickTime (.mov) — ProRes & NLE workflow" :
+                                              AppData.container_index == 3 ? "WebM (.webm) — HTML5 & VP9/AV1 streaming" :
+                                              AppData.container_index == 4 ? "AVI (.avi) — legacy Windows container" :
+                                              AppData.container_index == 5 ? "MPEG-TS (.ts) — broadcast transport stream" :
+                                              AppData.container_index == 6 ? "MP3 (.mp3) — universal compressed audio" :
+                                              AppData.container_index == 7 ? "WAV (.wav) — uncompressed PCM lossless audio" :
+                                              "FLAC (.flac) — compressed lossless audio";
+                                        font-size: 9.5px;
+                                        color: #71717a;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                // Unified Row: Container Format + Destination Folder + Browse/Open Buttons
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        width: 140px;
+                                        spacing: 2px;
+                                        Text { text: "Container Format"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+                                        ComboBox {
+                                            width: 140px;
+                                            height: 26px;
+                                            model: [".mp4", ".mkv", ".mov", ".webm", ".avi", ".ts", ".mp3", ".wav", ".flac"];
+                                            current-index <=> AppData.container_index;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        alignment: start;
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+
+                                        Text { text: "Destination Folder"; font-size: 10px; font-weight: 600; color: #a1a1aa; }
+
+                                        HorizontalLayout {
+                                            spacing: 6px;
+
+                                            LineEdit {
+                                                height: 26px;
+                                                horizontal-stretch: 1;
+                                                font-size: 11px;
+                                                text: AppData.output_directory;
+                                                read-only: true;
+                                            }
+
+                                            ActionButton {
+                                                width: 85px;
+                                                height: 26px;
+                                                border-radius: 4px;
+                                                title: "Browse...";
+                                                icon_source: @image-url("../icons/folder.svg");
+                                                has_icon: true;
+                                                icon_size: 11px;
+                                                font_size: 10.5px;
+                                                fill_color: #1c1c22;
+                                                hover_color: #2a2a32;
+                                                clicked => { AppLogic.select_output_dir(); }
+                                            }
+
+                                            ActionButton {
+                                                width: 95px;
+                                                height: 26px;
+                                                border-radius: 4px;
+                                                title: "Open Folder";
+                                                icon_source: @image-url("../icons/folder-open.svg");
+                                                has_icon: true;
+                                                icon_size: 11px;
+                                                font_size: 10.5px;
+                                                fill_color: #1c1c22;
+                                                hover_color: #2a2a32;
+                                                clicked => { AppLogic.open_output_dir(); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }

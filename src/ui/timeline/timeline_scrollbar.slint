@@ -1,0 +1,124 @@
+export component TimelineScrollBar inherits Rectangle {
+    in property <length> track_width;
+    in property <length> viewport_width;
+    in property <float> zoom_level: 1.0;
+    in property <length> content_x: 0px;
+    in property <float> duration: 1.0;
+    in property <float> current_time: 0.0;
+    in property <bool> has_trim: false;
+    in property <float> in_point_norm: 0.0;
+    in property <float> out_point_norm: 1.0;
+    callback scroll_to(length);
+
+    height: 12px;
+    background: #09090d;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: #1c1c24;
+    clip: true;
+
+    property <length> max_scroll: root.track_width > root.viewport_width
+        ? (root.track_width - root.viewport_width)
+        : max(0px, root.viewport_width * (max(1.0, root.zoom_level) - 1.0));
+    property <length> current_scroll: (-root.content_x).clamp(0px, self.max_scroll);
+    property <float> scroll_ratio: self.max_scroll > 0px ? (self.current_scroll / self.max_scroll) : 0.0;
+    property <length> thumb_w: root.width > 0px ? min(root.width, max(28px, root.width / max(1.0, root.zoom_level))) : 0px;
+    property <length> max_travel: max(0px, root.width - self.thumb_w);
+    property <length> thumb_x: self.max_travel * self.scroll_ratio;
+
+    // Overview Minimap Elements on the Scrollbar Track:
+    // Active Trim Region Indicator (amber highlight)
+    if root.has_trim : Rectangle {
+        x: max(0px, root.width * root.in_point_norm);
+        width: max(2px, root.width * (root.out_point_norm - root.in_point_norm));
+        height: 100%;
+        background: #f59e0b33;
+    }
+
+    // Current Playhead Position Indicator (subtle vertical cyan needle)
+    Rectangle {
+        property <float> pnorm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
+        x: max(0px, min(root.width - 2px, (root.width - 2px) * self.pnorm));
+        y: 1px;
+        width: 2px;
+        height: root.height - 2px;
+        border-radius: 1px;
+        background: #38bdf888;
+    }
+
+    // Draggable Thumb Handle representing the current viewport
+    thumb := Rectangle {
+        x: root.thumb_x;
+        y: 1.5px;
+        width: root.thumb_w;
+        height: root.height - 3px;
+        border-radius: 3px;
+        background: sb_ta.pressed ? #38bdf8 : (sb_ta.has-hover ? #52525b : #383842);
+        border-width: 1px;
+        border-color: sb_ta.pressed ? #7dd3fc : (sb_ta.has-hover ? #71717a : #27272e);
+
+        animate background, border-color { duration: 120ms; }
+
+        // Center grip dots on the thumb when wide enough
+        if root.thumb_w > 36px : HorizontalLayout {
+            alignment: center;
+            spacing: 3px;
+            for i in 3 : Rectangle {
+                width: 1.5px;
+                height: 5px;
+                border-radius: 0.5px;
+                background: sb_ta.pressed ? #0369a1 : (sb_ta.has-hover ? #a1a1aa : #71717a);
+            }
+        }
+    }
+
+    sb_ta := TouchArea {
+        mouse-cursor: pointer;
+        property <length> drag_offset: 0px;
+
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                if self.mouse-x >= root.thumb_x && self.mouse-x <= root.thumb_x + root.thumb_w {
+                    self.drag_offset = self.mouse-x - root.thumb_x;
+                } else {
+                    self.drag_offset = root.thumb_w / 2;
+                    if root.max_travel > 0px && root.max_scroll > 0px {
+                        let target_x = (self.mouse-x - self.drag_offset).clamp(0px, root.max_travel);
+                        let r = target_x / root.max_travel;
+                        root.scroll_to(- (r * root.max_scroll));
+                    }
+                }
+            }
+        }
+
+        clicked => {
+            if root.max_travel > 0px && root.max_scroll > 0px {
+                if self.mouse-x < root.thumb_x || self.mouse-x > root.thumb_x + root.thumb_w {
+                    let target_x = (self.mouse-x - root.thumb_w / 2).clamp(0px, root.max_travel);
+                    let r = target_x / root.max_travel;
+                    root.scroll_to(- (r * root.max_scroll));
+                }
+            }
+        }
+
+        moved => {
+            if self.pressed && root.max_travel > 0px && root.max_scroll > 0px {
+                let target_x = (self.mouse-x - self.drag_offset).clamp(0px, root.max_travel);
+                let r = target_x / root.max_travel;
+                root.scroll_to(- (r * root.max_scroll));
+            }
+        }
+
+        scroll-event(event) => {
+            if root.max_travel > 0px && root.max_scroll > 0px {
+                let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                if delta != 0px {
+                    let new_val = (root.content_x + delta).clamp(-root.max_scroll, 0px);
+                    root.scroll_to(new_val);
+                    return accept;
+                }
+            }
+            return reject;
+        }
+    }
+}

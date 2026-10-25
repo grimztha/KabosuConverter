@@ -1,0 +1,362 @@
+import { AppLogic } from "../globals.slint";
+
+export component CropOverlayView inherits Rectangle {
+    in property <float> norm_x: 0.0;
+    in property <float> norm_y: 0.0;
+    in property <float> norm_w: 1.0;
+    in property <float> norm_h: 1.0;
+    in property <int> crop_px_w: 1920;
+    in property <int> crop_px_h: 1080;
+    in property <int> crop_px_x: 0;
+    in property <int> crop_px_y: 0;
+    callback focus_requested();
+
+    property <length> box_x: root.width * root.norm_x.clamp(0.0, 1.0);
+    property <length> box_y: root.height * root.norm_y.clamp(0.0, 1.0);
+    property <length> box_w: max(16px, root.width * root.norm_w.clamp(0.02, 1.0));
+    property <length> box_h: max(16px, root.height * root.norm_h.clamp(0.02, 1.0));
+
+    // Top dark mask outside crop area
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: max(0px, root.box_y);
+        background: #000000aa;
+    }
+
+    // Bottom dark mask outside crop area
+    Rectangle {
+        x: 0px;
+        y: root.box_y + root.box_h;
+        width: root.width;
+        height: max(0px, root.height - (root.box_y + root.box_h));
+        background: #000000aa;
+    }
+
+    // Left dark mask outside crop area
+    Rectangle {
+        x: 0px;
+        y: root.box_y;
+        width: max(0px, root.box_x);
+        height: root.box_h;
+        background: #000000aa;
+    }
+
+    // Right dark mask outside crop area
+    Rectangle {
+        x: root.box_x + root.box_w;
+        y: root.box_y;
+        width: max(0px, root.width - (root.box_x + root.box_w));
+        height: root.box_h;
+        background: #000000aa;
+    }
+
+    // Crop Box Frame
+    crop_box := Rectangle {
+        x: root.box_x;
+        y: root.box_y;
+        width: root.box_w;
+        height: root.box_h;
+        border-width: 2px;
+        border-color: #38bdf8;
+        background: #38bdf80a;
+
+        // Rule of thirds vertical lines
+        Rectangle {
+            x: parent.width / 3;
+            y: 0px;
+            width: 1px;
+            height: parent.height;
+            background: #ffffff44;
+        }
+        Rectangle {
+            x: (parent.width * 2) / 3;
+            y: 0px;
+            width: 1px;
+            height: parent.height;
+            background: #ffffff44;
+        }
+
+        // Rule of thirds horizontal lines
+        Rectangle {
+            x: 0px;
+            y: parent.height / 3;
+            width: parent.width;
+            height: 1px;
+            background: #ffffff44;
+        }
+        Rectangle {
+            x: 0px;
+            y: (parent.height * 2) / 3;
+            width: parent.width;
+            height: 1px;
+            background: #ffffff44;
+        }
+
+        // Center Crosshair
+        Rectangle {
+            x: (parent.width - 12px) / 2;
+            y: (parent.height - 1px) / 2;
+            width: 12px;
+            height: 1px;
+            background: #38bdf8aa;
+        }
+        Rectangle {
+            x: (parent.width - 1px) / 2;
+            y: (parent.height - 12px) / 2;
+            width: 1px;
+            height: 12px;
+            background: #38bdf8aa;
+        }
+
+        // Live Dimensions & Coordinates Readout Pill inside Crop Box
+        if parent.width > 95px && parent.height > 32px : Rectangle {
+            x: 6px;
+            y: 6px;
+            height: 20px;
+            width: dim_txt.preferred-width + 12px;
+            border-radius: 4px;
+            background: #141418cc;
+            border-width: 1px;
+            border-color: #38bdf888;
+
+            dim_txt := Text {
+                x: 6px;
+                y: (parent.height - self.height) / 2;
+                text: "\{root.crop_px_w} × \{root.crop_px_h}  (\{root.crop_px_x}, \{root.crop_px_y})";
+                font-size: 10px;
+                font-weight: 700;
+                color: #38bdf8;
+            }
+        }
+
+        // Interior Drag TouchArea to move the crop box around
+        move_ta := TouchArea {
+            mouse-cursor: move;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    AppLogic.crop_box_drag_start();
+                }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_box_drag_move(
+                        (self.mouse-x - self.pressed-x) / root.width,
+                        (self.mouse-y - self.pressed-y) / root.height
+                    );
+                }
+            }
+        }
+    }
+
+    // 8 Resize Handles (0=TL, 1=TR, 2=BL, 3=BR, 4=Top, 5=Bottom, 6=Left, 7=Right)
+    // Top-Left Corner (0)
+    Rectangle {
+        x: root.box_x - 6px;
+        y: root.box_y - 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: tl_ta.has-hover || tl_ta.pressed ? #fbbf24 : #ffffff;
+        border-width: 2px;
+        border-color: #0284c7;
+        tl_ta := TouchArea {
+            mouse-cursor: nwse-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        0,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Top-Right Corner (1)
+    Rectangle {
+        x: root.box_x + root.box_w - 6px;
+        y: root.box_y - 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: tr_ta.has-hover || tr_ta.pressed ? #fbbf24 : #ffffff;
+        border-width: 2px;
+        border-color: #0284c7;
+        tr_ta := TouchArea {
+            mouse-cursor: nesw-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        1,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Bottom-Left Corner (2)
+    Rectangle {
+        x: root.box_x - 6px;
+        y: root.box_y + root.box_h - 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: bl_ta.has-hover || bl_ta.pressed ? #fbbf24 : #ffffff;
+        border-width: 2px;
+        border-color: #0284c7;
+        bl_ta := TouchArea {
+            mouse-cursor: nesw-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        2,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Bottom-Right Corner (3)
+    Rectangle {
+        x: root.box_x + root.box_w - 6px;
+        y: root.box_y + root.box_h - 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: br_ta.has-hover || br_ta.pressed ? #fbbf24 : #ffffff;
+        border-width: 2px;
+        border-color: #0284c7;
+        br_ta := TouchArea {
+            mouse-cursor: nwse-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        3,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Top Edge (4)
+    Rectangle {
+        x: root.box_x + (root.box_w - 24px) / 2;
+        y: root.box_y - 4px;
+        width: 24px;
+        height: 8px;
+        border-radius: 2px;
+        background: t_ta.has-hover || t_ta.pressed ? #fbbf24 : #38bdf8;
+        t_ta := TouchArea {
+            mouse-cursor: ns-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        4,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Bottom Edge (5)
+    Rectangle {
+        x: root.box_x + (root.box_w - 24px) / 2;
+        y: root.box_y + root.box_h - 4px;
+        width: 24px;
+        height: 8px;
+        border-radius: 2px;
+        background: b_ta.has-hover || b_ta.pressed ? #fbbf24 : #38bdf8;
+        b_ta := TouchArea {
+            mouse-cursor: ns-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        5,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Left Edge (6)
+    Rectangle {
+        x: root.box_x - 4px;
+        y: root.box_y + (root.box_h - 24px) / 2;
+        width: 8px;
+        height: 24px;
+        border-radius: 2px;
+        background: l_ta.has-hover || l_ta.pressed ? #fbbf24 : #38bdf8;
+        l_ta := TouchArea {
+            mouse-cursor: ew-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        6,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+
+    // Right Edge (7)
+    Rectangle {
+        x: root.box_x + root.box_w - 4px;
+        y: root.box_y + (root.box_h - 24px) / 2;
+        width: 8px;
+        height: 24px;
+        border-radius: 2px;
+        background: r_ta.has-hover || r_ta.pressed ? #fbbf24 : #38bdf8;
+        r_ta := TouchArea {
+            mouse-cursor: ew-resize;
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+            }
+            moved => {
+                if self.pressed && root.width > 0px && root.height > 0px {
+                    AppLogic.crop_handle_drag(
+                        7,
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                    );
+                }
+            }
+        }
+    }
+}

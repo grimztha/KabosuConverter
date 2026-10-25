@@ -1,0 +1,26 @@
+export component Badge inherits Rectangle {
+    in property <string> label: "";
+    in property <color> bg_color: #1c1c22;
+    in property <color> fg_color: #a1a1aa;
+
+    height: 22px;
+    border-radius: 4px;
+    background: bg_color;
+    border-width: 1px;
+    border-color: bg_color.brighter(0.3);
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.label;
+                font-size: 11px;
+                color: root.fg_color;
+                font-weight: 500;
+            }
+        }
+    }
+}

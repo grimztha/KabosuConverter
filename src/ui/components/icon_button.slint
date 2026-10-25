@@ -1,0 +1,51 @@
+export component IconButton inherits Rectangle {
+    in property <string> text: "";
+    in property <image> icon_source;
+    in property <bool> has_icon: false;
+    in property <length> icon_size: 14px;
+    in property <color> text_color: #a1a1aa;
+    in property <color> hover_bg: #26262e;
+    in property <length> btn_width: 28px;
+    in property <length> btn_height: 28px;
+    in property <length> font_size: 13px;
+    callback clicked();
+
+    width: root.btn_width;
+    height: root.btn_height;
+    border-radius: 6px;
+    background: ta.has-hover ? hover_bg : #00000000;
+
+    animate background { duration: 150ms; }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 4px;
+        padding-left: 3px;
+        padding-right: 3px;
+
+        if root.has_icon : VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon_source;
+                width: root.icon_size;
+                height: root.icon_size;
+                colorize: ta.has-hover ? #f4f4f5 : root.text_color;
+            }
+        }
+
+        if root.text != "" : VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.text;
+                color: ta.has-hover ? #f4f4f5 : root.text_color;
+                font-size: root.font_size;
+                font-weight: 600;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}

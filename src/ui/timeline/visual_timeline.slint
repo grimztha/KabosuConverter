@@ -1,0 +1,280 @@
+import { ScrollView } from "std-widgets.slint";
+import { AppData } from "../globals.slint";
+import { TimelineScrollBar } from "timeline_scrollbar.slint";
+
+export component VisualTimeline inherits Rectangle {
+    in property <float> duration: 1.0;
+    in property <float> current_time: 0.0;
+    in property <float> in_point_norm: 0.0;
+    in property <float> out_point_norm: 1.0;
+    in property <float> in_point_sec: -1.0;
+    in property <float> out_point_sec: -1.0;
+    in property <bool> has_trim: false;
+    in-out property <float> zoom_level: AppData.timeline_zoom;
+    in property <int> center_trigger: AppData.center_timeline_trigger;
+    callback seek(float);
+    callback in_point_dragged(float);
+    callback out_point_dragged(float);
+
+    changed center_trigger => {
+        root.center_playhead();
+    }
+
+    changed zoom_level => {
+        if sv.width > 0px {
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            let max_s = max(0px, tw - sv.width);
+            sv.content-x = sv.content-x.clamp(-max_s, 0px);
+        }
+    }
+
+    public function zoom_in() {
+        root.zoom_level = min(8.0, root.zoom_level + 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function zoom_out() {
+        root.zoom_level = max(1.0, root.zoom_level - 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function set_zoom(val: float) {
+        root.zoom_level = val.clamp(1.0, 8.0);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function center_playhead() {
+        if root.duration > 0.0 && sv.width > 0px {
+            let norm = (root.current_time / root.duration).clamp(0.0, 1.0);
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            sv.content-x = min(0px, max(sv.width - tw, (sv.width / 2) - (tw * norm)));
+        }
+    }
+
+    height: root.zoom_level > 1.01 ? 87px : 68px;
+    border-radius: 8px;
+    background: #09090b;
+    border-width: 1px;
+    border-color: #2a2a30;
+    clip: true;
+
+    animate height { duration: 150ms; easing: ease-out; }
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        sv := ScrollView {
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+            vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+            vertical-stretch: 1;
+            content-width: max(self.width, self.width * root.zoom_level);
+
+            track := Rectangle {
+                width: max(parent.width, parent.width * root.zoom_level);
+                height: 100%;
+                background: #09090b;
+
+                // Subtle center horizontal baseline
+                Rectangle {
+                    y: track.height * 0.5 - 0.5px;
+                    width: 100%;
+                    height: 1px;
+                    background: #22222788;
+                }
+
+                // Audio Waveform Visualization Layer
+                if AppData.has_waveform : Image {
+                    x: 0px;
+                    y: 0px;
+                    width: 100%;
+                    height: 100%;
+                    source: AppData.timeline_waveform;
+                    image-fit: fill;
+                    opacity: 0.9;
+                }
+
+                // Timeline Track Background with subtle tick guides (ambient when no audio waveform)
+                if !AppData.has_waveform : HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: space-between;
+                    for i in 12 : Rectangle {
+                        width: 1px;
+                        height: 12px;
+                        background: #2a2a30;
+                    }
+                }
+
+                // Active Trim Region Highlight
+                if root.has_trim : Rectangle {
+                    x: max(0px, track.width * root.in_point_norm);
+                    width: max(4px, track.width * (root.out_point_norm - root.in_point_norm));
+                    height: 100%;
+                    background: @linear-gradient(90deg, #d9770633 0%, #f59e0b55 50%, #d9770633 100%);
+                    border-width: 1px;
+                    border-color: #f59e0b88;
+
+                    // Left boundary edge line
+                    Rectangle {
+                        x: 0px;
+                        width: 2px;
+                        height: 100%;
+                        background: #f59e0b;
+                    }
+
+                    // Right boundary edge line
+                    Rectangle {
+                        x: parent.width - 2px;
+                        width: 2px;
+                        height: 100%;
+                        background: #f59e0b;
+                    }
+                }
+
+                // Interactive TouchArea over Visual Timeline Track for Scrubbing
+                track_ta := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        if track.width > 0px && root.duration > 0.0 {
+                            root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                        }
+                    }
+                    moved => {
+                        if self.pressed && track.width > 0px && root.duration > 0.0 {
+                            root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                        }
+                    }
+                    scroll-event(event) => {
+                        if event.modifiers.control {
+                            if event.delta_y > 0px {
+                                root.zoom_in();
+                            } else if event.delta_y < 0px {
+                                root.zoom_out();
+                            }
+                            return accept;
+                        } else if root.zoom_level > 1.01 && sv.width > 0px {
+                            let tw = max(sv.width, sv.width * root.zoom_level);
+                            let max_s = max(0px, tw - sv.width);
+                            if max_s > 0px {
+                                let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                                sv.content-x = (sv.content-x + delta).clamp(-max_s, 0px);
+                                return accept;
+                            }
+                        }
+                        return reject;
+                    }
+                }
+
+                // Playhead Needle & Scrubber Cursor
+                Rectangle {
+                    property <float> norm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
+                    x: max(0px, min(track.width - 2px, (track.width - 2px) * self.norm));
+                    width: 2px;
+                    height: 100%;
+                    background: #38bdf8;
+
+                    // Playhead Knob Cap
+                    Rectangle {
+                        x: -5px;
+                        y: 0px;
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 6px;
+                        background: #38bdf8;
+                        border-width: 2px;
+                        border-color: #ffffff;
+                    }
+                }
+
+                // In-Point Flag Marker & Drag Handle
+                Rectangle {
+                    property <float> norm: root.in_point_sec >= 0.0 ? root.in_point_norm : 0.0;
+                    x: max(0px, min(track.width - 32px, track.width * self.norm - (root.in_point_sec >= 0.0 ? 16px : 0px)));
+                    y: 2px;
+                    width: root.in_point_sec >= 0.0 ? 32px : 18px;
+                    height: 22px;
+                    border-radius: 3px;
+                    background: in_ta.has-hover || in_ta.pressed ? #fbbf24 : (root.in_point_sec >= 0.0 ? #f59e0b : #78350f88);
+                    border-width: 1px;
+                    border-color: root.in_point_sec >= 0.0 ? #ffffff : #f59e0b88;
+
+                    Text {
+                        text: root.in_point_sec >= 0.0 ? "[ IN" : "[";
+                        font-size: root.in_point_sec >= 0.0 ? 9.5px : 11px;
+                        font-weight: 800;
+                        color: root.in_point_sec >= 0.0 ? #000000 : #fbbf24;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    in_ta := TouchArea {
+                        mouse-cursor: ew-resize;
+                        moved => {
+                            if self.pressed && track.width > 0px && root.duration > 0.0 {
+                                root.in_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                            }
+                        }
+                    }
+                }
+
+                // Out-Point Flag Marker & Drag Handle
+                Rectangle {
+                    property <float> norm: root.out_point_sec >= 0.0 ? root.out_point_norm : 1.0;
+                    x: max(0px, min(track.width - (root.out_point_sec >= 0.0 ? 36px : 18px), track.width * self.norm - (root.out_point_sec >= 0.0 ? 18px : 18px)));
+                    y: 2px;
+                    width: root.out_point_sec >= 0.0 ? 36px : 18px;
+                    height: 22px;
+                    border-radius: 3px;
+                    background: out_ta.has-hover || out_ta.pressed ? #fbbf24 : (root.out_point_sec >= 0.0 ? #f59e0b : #78350f88);
+                    border-width: 1px;
+                    border-color: root.out_point_sec >= 0.0 ? #ffffff : #f59e0b88;
+
+                    Text {
+                        text: root.out_point_sec >= 0.0 ? "OUT ]" : "]";
+                        font-size: root.out_point_sec >= 0.0 ? 9.5px : 11px;
+                        font-weight: 800;
+                        color: root.out_point_sec >= 0.0 ? #000000 : #fbbf24;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    out_ta := TouchArea {
+                        mouse-cursor: ew-resize;
+                        moved => {
+                            if self.pressed && track.width > 0px && root.duration > 0.0 {
+                                root.out_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.zoom_level > 1.01 : Rectangle {
+            height: 1px;
+            background: #1c1c22;
+        }
+
+        if root.zoom_level > 1.01 : HorizontalLayout {
+            padding-left: 6px;
+            padding-right: 6px;
+            padding-top: 3px;
+            padding-bottom: 3px;
+
+            TimelineScrollBar {
+                height: 12px;
+                track_width: track.width;
+                viewport_width: sv.width;
+                zoom_level: root.zoom_level;
+                content_x: sv.content-x;
+                duration: root.duration;
+                current_time: root.current_time;
+                has_trim: root.has_trim;
+                in_point_norm: root.in_point_norm;
+                out_point_norm: root.out_point_norm;
+                scroll_to(val) => {
+                    let max_s = max(0px, max(sv.width, sv.width * root.zoom_level) - sv.width);
+                    sv.content-x = val.clamp(-max_s, 0px);
+                }
+            }
+        }
+    }
+}

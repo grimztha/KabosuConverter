@@ -1,0 +1,245 @@
+import { QueueFile } from "types.slint";
+
+export global AppData {
+    in-out property <[QueueFile]> queue;
+    in-out property <int> selected_file_index: -1;
+    in-out property <bool> is_processing: false;
+    in-out property <float> progress_percent: 0.0;
+    in-out property <string> progress_text: "Ready";
+    in-out property <string> speed_text: "0.0x";
+    in-out property <string> fps_text: "0 fps";
+    in-out property <string> time_text: "00:00 / 00:00";
+    in-out property <string> status_summary: "No files loaded";
+    in-out property <string> output_directory: "Same as source";
+    in-out property <string> log_preview: "";
+    in-out property <bool> show_logs: false;
+
+    // Navigation tab: 0 = Player & Trimmer, 1 = Downloader, 2 = Transcoder Settings
+    in-out property <int> active_tab: 0;
+
+    // yt-dlp Web Downloader state
+    in-out property <string> ytdlp_url: "";
+    in-out property <bool> ytdlp_is_discovering: false;
+    in-out property <bool> ytdlp_has_discovered: false;
+    in-out property <string> ytdlp_title: "";
+    in-out property <string> ytdlp_uploader: "";
+    in-out property <string> ytdlp_duration: "";
+    in-out property <string> ytdlp_discovered_id: "";
+    in-out property <string> ytdlp_webpage_url: "";
+    in-out property <string> ytdlp_custom_filename: "";
+    in-out property <[string]> ytdlp_format_options: [
+        "[Video] Best Quality (Auto Best Video + Best Audio, Recommended)",
+        "[Video] 4K UHD 2160p (Best Video <= 2160p + Best Audio)",
+        "[Video] 1440p QHD (Best Video <= 1440p + Best Audio)",
+        "[Video] 1080p Full HD (Best Video <= 1080p + Best Audio)",
+        "[Video] 720p HD (Best Video <= 720p + Best Audio)",
+        "[Video] 480p SD (Fast / Mobile Compact)",
+        "[Audio] MP3 (High Quality 320 kbps)",
+        "[Audio] M4A / AAC (Best Source Audio)",
+        "[Audio] FLAC (Lossless Audio)",
+        "[Audio] WAV (Lossless PCM)"
+    ];
+    in-out property <int> ytdlp_selected_format_index: 0;
+    in-out property <string> ytdlp_output_dir: "";
+    in-out property <bool> ytdlp_is_downloading: false;
+    in-out property <float> ytdlp_progress: 0.0;
+    in-out property <string> ytdlp_progress_text: "0.0%";
+    in-out property <string> ytdlp_speed_text: "0.0 MiB/s";
+    in-out property <string> ytdlp_eta_text: "--:--";
+    in-out property <string> ytdlp_size_text: "-- / --";
+    in-out property <string> ytdlp_status_message: "Ready. Paste video or stream URL to discover formats.";
+    in-out property <string> ytdlp_error_message: "";
+    in-out property <bool> ytdlp_has_error: false;
+    in-out property <string> ytdlp_last_downloaded_file: "";
+    in-out property <bool> ytdlp_download_finished: false;
+
+    // Player and Media Preview state
+    in-out property <bool> player_has_media: false;
+    in-out property <string> selected_file_name: "";
+    in-out property <string> selected_file_path: "";
+    in-out property <bool> selected_is_video: false;
+    in-out property <bool> selected_is_audio: false;
+    in-out property <string> selected_resolution: "";
+    in-out property <string> selected_audio_desc: "";
+    in-out property <float> player_duration: 0.0;
+    in-out property <float> player_current_time: 0.0;
+    in-out property <string> player_time_text: "00:00.000";
+    in-out property <string> player_duration_text: "00:00.000";
+    in-out property <bool> player_is_playing: false;
+    in-out property <float> player_volume: 1.0;
+    in-out property <bool> player_is_muted: false;
+    in-out property <float> player_pre_mute_volume: 1.0;
+    in-out property <image> preview_frame;
+    in-out property <bool> preview_frame_loading: false;
+    in-out property <image> timeline_waveform;
+    in-out property <bool> has_waveform: false;
+    in-out property <float> timeline_zoom: 1.0;
+    in-out property <int> center_timeline_trigger: 0;
+
+    // Trimming In / Out state
+    in-out property <float> in_point_seconds: -1.0;
+    in-out property <float> out_point_seconds: -1.0;
+    in-out property <float> in_point_normalized: 0.0;
+    in-out property <float> out_point_normalized: 1.0;
+    in-out property <bool> has_active_trim: false;
+    in-out property <string> trim_duration_text: "Full Media";
+    in-out property <string> in_point: "";
+    in-out property <string> out_point: "";
+
+    // Controls state
+    in-out property <int> function_index: 0;
+    in-out property <int> hw_accel_index: 0;
+    in-out property <int> rate_control_index: 0;
+    in-out property <float> crf_value: 23.0;
+    in-out property <int> video_bitrate_index: 2; // 6000 kbps
+    in-out property <int> preset_index: 3; // medium
+    in-out property <int> resolution_index: 0; // original
+    in-out property <int> fps_index: 0; // original
+    in-out property <int> deinterlace_index: 0; // none
+    in-out property <int> prores_profile_index: 2; // standard
+    in-out property <bool> faststart: true;
+
+    in-out property <int> audio_codec_index: 0; // AAC
+    in-out property <int> audio_bitrate_index: 2; // 192k
+    in-out property <int> audio_channels_index: 0; // keep
+    in-out property <int> audio_sample_rate_index: 0; // keep
+    in-out property <int> normalize_index: 0; // disabled
+
+    in-out property <int> container_index: 0; // mp4
+
+    // Video Editing & Transform Panel state
+    in-out property <bool> edit_panel_expanded: true;
+    in-out property <int> selected_video_width: 1920;
+    in-out property <int> selected_video_height: 1080;
+    in-out property <int> effective_video_width: 1920;
+    in-out property <int> effective_video_height: 1080;
+
+    // Active video viewport inside the 640x360 preview image (normalized 0..1)
+    in-out property <float> preview_video_norm_x: 0.0;
+    in-out property <float> preview_video_norm_y: 0.0;
+    in-out property <float> preview_video_norm_w: 1.0;
+    in-out property <float> preview_video_norm_h: 1.0;
+
+    // Rotation & Mirror Flip state
+    // 0 = 0 deg, 1 = 90 deg, 2 = -90 deg, 3 = 180 deg
+    in-out property <int> video_rotation_index: 0;
+    in-out property <bool> video_flip_horizontal: false;
+    in-out property <bool> video_flip_vertical: false;
+
+    // Crop state
+    in-out property <bool> crop_enabled: false;
+    // 0 = Free, 1 = 16:9, 2 = 9:16, 3 = 4:3, 4 = 3:4, 5 = 1:1, 6 = 2:3, 7 = 3:2, 8 = 21:9, 9 = 4:5
+    in-out property <int> crop_aspect_index: 0;
+    in-out property <[string]> crop_aspect_options: [
+        "Free (Unlocked)",
+        "16:9 — Widescreen (HD / 4K / YouTube)",
+        "9:16 — Vertical (Shorts / Reels / TikTok)",
+        "4:3 — Standard Broadcast / Classic",
+        "3:4 — Portrait Standard",
+        "1:1 — Square (Social / Feed)",
+        "2:3 — Classic Portrait / Photo",
+        "3:2 — 35mm Film / Landscape",
+        "21:9 — Ultrawide Cinema",
+        "4:5 — Social Portrait"
+    ];
+    in-out property <int> crop_x: 0;
+    in-out property <int> crop_y: 0;
+    in-out property <int> crop_width: 1920;
+    in-out property <int> crop_height: 1080;
+    in-out property <string> crop_width_text: "1920";
+    in-out property <string> crop_height_text: "1080";
+    in-out property <string> crop_x_text: "0";
+    in-out property <string> crop_y_text: "0";
+
+    // Normalized crop box within the active video viewport (0..1)
+    in-out property <float> crop_norm_x: 0.0;
+    in-out property <float> crop_norm_y: 0.0;
+    in-out property <float> crop_norm_w: 1.0;
+    in-out property <float> crop_norm_h: 1.0;
+
+    // Arrow keys movement option
+    in-out property <bool> crop_arrow_keys_enabled: true;
+    in-out property <int> crop_nudge_step: 10;
+    in-out property <bool> has_active_video_edits: false;
+
+    // Audio Editing & Adjustment state
+    in-out property <float> audio_gain_db: 0.0;
+    in-out property <string> audio_gain_text: "0.0 dB";
+    in-out property <bool> audio_normalize_enabled: false;
+    in-out property <float> audio_normalize_lufs: -16.0;
+    in-out property <int> audio_normalize_preset_index: 0;
+    in-out property <bool> has_active_audio_edits: false;
+}
+
+export global AppLogic {
+    callback add_files();
+    callback remove_file(int);
+    callback select_file(int);
+    callback clear_queue();
+    callback select_output_dir();
+    callback open_output_dir();
+    callback run_task();
+    callback start_processing();
+    callback cancel_processing();
+    callback toggle_logs();
+    callback switch_tab(int);
+    callback quick_lossless_cut();
+
+    // Player and Trim callbacks
+    callback player_seek(float);
+    callback player_play_pause();
+    callback player_stop();
+    callback player_step(float);
+    callback player_volume_changed(float);
+    callback player_toggle_mute();
+    callback set_in_point_current();
+    callback set_out_point_current();
+    callback jump_to_in_point();
+    callback jump_to_out_point();
+    callback clear_trim_points();
+    callback play_trimmed_range();
+    callback launch_ffplay();
+    callback in_point_text_changed(string);
+    callback out_point_text_changed(string);
+    callback set_in_point_from_timeline(float);
+    callback set_out_point_from_timeline(float);
+
+    // Video Editing (Rotate, Flip, Crop) Callbacks
+    callback toggle_edit_panel();
+    callback set_video_rotation(int);
+    callback toggle_flip_horizontal();
+    callback toggle_flip_vertical();
+    callback toggle_crop_enabled();
+    callback set_crop_aspect_preset(int);
+    callback crop_width_edited(string);
+    callback crop_height_edited(string);
+    callback crop_x_edited(string);
+    callback crop_y_edited(string);
+    callback crop_box_drag_start();
+    callback crop_box_drag_move(float, float);
+    callback crop_handle_drag(int, float, float);
+    callback crop_nudge(int, int);
+    callback center_crop_box();
+    callback reset_crop();
+    callback reset_all_video_edits();
+    callback reset_all_edits();
+
+    // Audio Editing (Volume dB, Normalization) Callbacks
+    callback set_audio_gain_db(float);
+    callback step_audio_gain_db(float);
+    callback toggle_audio_normalize();
+    callback set_audio_normalize_preset(int);
+    callback reset_audio_edits();
+
+    // yt-dlp Web Downloader Callbacks
+    callback ytdlp_url_changed(string);
+    callback ytdlp_paste_clipboard();
+    callback ytdlp_clear_url();
+    callback ytdlp_discover();
+    callback ytdlp_select_output_dir();
+    callback ytdlp_open_output_dir();
+    callback ytdlp_start_download();
+    callback ytdlp_cancel_download();
+    callback ytdlp_load_in_player();
+    callback ytdlp_send_to_queue();
+}

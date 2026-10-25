@@ -1,0 +1,373 @@
+import { ScrollView } from "std-widgets.slint";
+import { AppData } from "../globals.slint";
+import { TimelineScrollBar } from "timeline_scrollbar.slint";
+
+export component AudioWaveformStudio inherits Rectangle {
+    in property <float> duration: 1.0;
+    in property <float> current_time: 0.0;
+    in property <float> in_point_norm: 0.0;
+    in property <float> out_point_norm: 1.0;
+    in property <float> in_point_sec: -1.0;
+    in property <float> out_point_sec: -1.0;
+    in property <bool> has_trim: false;
+    in-out property <float> zoom_level: AppData.timeline_zoom;
+    in property <int> center_trigger: AppData.center_timeline_trigger;
+    callback seek(float);
+    callback in_point_dragged(float);
+    callback out_point_dragged(float);
+
+    changed center_trigger => {
+        root.center_playhead();
+    }
+
+    changed zoom_level => {
+        if sv.width > 0px {
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            let max_s = max(0px, tw - sv.width);
+            sv.content-x = sv.content-x.clamp(-max_s, 0px);
+        }
+    }
+
+    public function zoom_in() {
+        root.zoom_level = min(8.0, root.zoom_level + 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function zoom_out() {
+        root.zoom_level = max(1.0, root.zoom_level - 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function set_zoom(val: float) {
+        root.zoom_level = val.clamp(1.0, 8.0);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+
+    public function center_playhead() {
+        if root.duration > 0.0 && sv.width > 0px {
+            let norm = (root.current_time / root.duration).clamp(0.0, 1.0);
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            sv.content-x = min(0px, max(sv.width - tw, (sv.width / 2) - (tw * norm)));
+        }
+    }
+
+    border-radius: 8px;
+    background: #09090b;
+    border-width: 1px;
+    border-color: #1c1c22;
+    clip: true;
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 6px;
+
+        // Center Waveform Track & Scale Layout
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 0px;
+
+            // Left Amplitude Scale & Channel Guide
+            Rectangle {
+                width: 38px;
+                background: #09090b;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: #1c1c22;
+                
+                VerticalLayout {
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    padding-left: 2px;
+                    padding-right: 2px;
+                    alignment: space-between;
+
+                    // Channel 1 / Left Top
+                    Text { text: "L / CH1"; font-size: 8px; font-weight: 800; color: #38bdf8; horizontal-alignment: center; }
+                    Text { text: "0 dB"; font-size: 7.5px; font-weight: 600; color: #71717a; horizontal-alignment: center; }
+                    Text { text: "-6 dB"; font-size: 7.5px; font-weight: 600; color: #383840; horizontal-alignment: center; }
+
+                    // Center 0.0 Baseline
+                    Rectangle {
+                        height: 12px;
+                        border-radius: 2px;
+                        background: #1c1c22;
+                        Text { text: "0.0"; font-size: 7.5px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+
+                    // Channel 2 / Right Bottom
+                    Text { text: "-6 dB"; font-size: 7.5px; font-weight: 600; color: #383840; horizontal-alignment: center; }
+                    Text { text: "0 dB"; font-size: 7.5px; font-weight: 600; color: #71717a; horizontal-alignment: center; }
+                    Text { text: "R / CH2"; font-size: 8px; font-weight: 800; color: #c084fc; horizontal-alignment: center; }
+                }
+            }
+
+            Rectangle { width: 4px; }
+
+            // Scrollable High-Detail Waveform Viewport
+            Rectangle {
+                horizontal-stretch: 1;
+                border-radius: 6px;
+                background: #09090b;
+                border-width: 1px;
+                border-color: #1c1c22;
+                clip: true;
+
+                VerticalLayout {
+                    padding: 0px;
+                    spacing: 0px;
+
+                    sv := ScrollView {
+                        horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+                        vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                        vertical-stretch: 1;
+                        content-width: max(self.width, self.width * root.zoom_level);
+
+                        track := Rectangle {
+                            width: max(parent.width, parent.width * root.zoom_level);
+                            height: 100%;
+                            background: #09090b;
+
+                            // Grid lines
+                            // Top 25% dB guide
+                            Rectangle {
+                                y: track.height * 0.25;
+                                width: 100%;
+                                height: 1px;
+                                background: #22222766;
+                            }
+
+                            // Center 50% Divider line
+                            Rectangle {
+                                y: track.height * 0.5 - 0.5px;
+                                width: 100%;
+                                height: 1px;
+                                background: #2a2a30;
+                            }
+
+                            // Bottom 75% dB guide
+                            Rectangle {
+                                y: track.height * 0.75;
+                                width: 100%;
+                                height: 1px;
+                                background: #22222766;
+                            }
+
+                            // Ambient vertical time tick lines across the track
+                            HorizontalLayout {
+                                padding-left: 20px;
+                                padding-right: 20px;
+                                alignment: space-between;
+                                for i in 24 : Rectangle {
+                                    width: 1px;
+                                    height: 100%;
+                                    background: #1c1c22;
+                                }
+                            }
+
+                            // Detailed Stereo Waveform Image
+                            if AppData.has_waveform : Image {
+                                x: 0px;
+                                y: 0px;
+                                width: 100%;
+                                height: 100%;
+                                source: AppData.timeline_waveform;
+                                image-fit: fill;
+                                opacity: 0.92;
+                            }
+
+                            // Active Trim Region Highlight
+                            if root.has_trim : Rectangle {
+                                x: max(0px, track.width * root.in_point_norm);
+                                width: max(4px, track.width * (root.out_point_norm - root.in_point_norm));
+                                height: 100%;
+                                background: @linear-gradient(90deg, #d9770633 0%, #f59e0b55 50%, #d9770633 100%);
+                                border-width: 1px;
+                                border-color: #f59e0b88;
+
+                                // Left boundary edge line
+                                Rectangle {
+                                    x: 0px;
+                                    width: 2px;
+                                    height: 100%;
+                                    background: #f59e0b;
+                                }
+
+                                // Right boundary edge line
+                                Rectangle {
+                                    x: parent.width - 2px;
+                                    width: 2px;
+                                    height: 100%;
+                                    background: #f59e0b;
+                                }
+                            }
+
+                            // Interactive TouchArea over Visual Timeline Track for Scrubbing
+                            track_ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    if track.width > 0px && root.duration > 0.0 {
+                                        root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                                    }
+                                }
+                                moved => {
+                                    if self.pressed && track.width > 0px && root.duration > 0.0 {
+                                        root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                                    }
+                                }
+                                scroll-event(event) => {
+                                    if event.modifiers.control {
+                                        if event.delta_y > 0px {
+                                            AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5);
+                                        } else if event.delta_y < 0px {
+                                            AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5);
+                                        }
+                                        return accept;
+                                    } else if root.zoom_level > 1.01 && sv.width > 0px {
+                                        let tw = max(sv.width, sv.width * root.zoom_level);
+                                        let max_s = max(0px, tw - sv.width);
+                                        if max_s > 0px {
+                                            let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                                            sv.content-x = (sv.content-x + delta).clamp(-max_s, 0px);
+                                            return accept;
+                                        }
+                                    }
+                                    return reject;
+                                }
+                            }
+
+                            // Playhead Needle & Floating Badge
+                            Rectangle {
+                                property <float> norm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
+                                x: max(0px, min(track.width - 2px, (track.width - 2px) * self.norm));
+                                width: 2px;
+                                height: 100%;
+                                background: #38bdf8;
+
+                                // Glowing playhead knob
+                                Rectangle {
+                                    x: -6px;
+                                    y: 0px;
+                                    width: 14px;
+                                    height: 14px;
+                                    border-radius: 7px;
+                                    background: #38bdf8;
+                                    border-width: 2px;
+                                    border-color: #ffffff;
+                                }
+
+                                // Floating time bubble badge
+                                Rectangle {
+                                    x: -30px;
+                                    y: 16px;
+                                    width: 62px;
+                                    height: 18px;
+                                    border-radius: 4px;
+                                    background: #000000dd;
+                                    border-width: 1px;
+                                    border-color: #38bdf8aa;
+                                    Text {
+                                        text: AppData.player_time_text;
+                                        font-size: 9.5px;
+                                        font-weight: 800;
+                                        color: #38bdf8;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+
+                            // Large In-Point Flag Marker & Drag Handle
+                            Rectangle {
+                                property <float> norm: root.in_point_sec >= 0.0 ? root.in_point_norm : 0.0;
+                                x: max(0px, min(track.width - 46px, track.width * self.norm - (root.in_point_sec >= 0.0 ? 23px : 0px)));
+                                y: 2px;
+                                width: root.in_point_sec >= 0.0 ? 46px : 24px;
+                                height: 26px;
+                                border-radius: 4px;
+                                background: ain_ta.has-hover || ain_ta.pressed ? #fbbf24 : (root.in_point_sec >= 0.0 ? #f59e0b : #78350f88);
+                                border-width: 1px;
+                                border-color: root.in_point_sec >= 0.0 ? #ffffff : #f59e0b88;
+
+                                Text {
+                                    text: root.in_point_sec >= 0.0 ? "[ IN" : "[";
+                                    font-size: root.in_point_sec >= 0.0 ? 11px : 13px;
+                                    font-weight: 800;
+                                    color: root.in_point_sec >= 0.0 ? #000000 : #fbbf24;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                ain_ta := TouchArea {
+                                    mouse-cursor: ew-resize;
+                                    moved => {
+                                        if self.pressed && track.width > 0px && root.duration > 0.0 {
+                                            root.in_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Large Out-Point Flag Marker & Drag Handle
+                            Rectangle {
+                                property <float> norm: root.out_point_sec >= 0.0 ? root.out_point_norm : 1.0;
+                                x: max(0px, min(track.width - (root.out_point_sec >= 0.0 ? 52px : 24px), track.width * self.norm - (root.out_point_sec >= 0.0 ? 26px : 24px)));
+                                y: 2px;
+                                width: root.out_point_sec >= 0.0 ? 52px : 24px;
+                                height: 26px;
+                                border-radius: 4px;
+                                background: aout_ta.has-hover || aout_ta.pressed ? #fbbf24 : (root.out_point_sec >= 0.0 ? #f59e0b : #78350f88);
+                                border-width: 1px;
+                                border-color: root.out_point_sec >= 0.0 ? #ffffff : #f59e0b88;
+
+                                Text {
+                                    text: root.out_point_sec >= 0.0 ? "OUT ]" : "]";
+                                    font-size: root.out_point_sec >= 0.0 ? 11px : 13px;
+                                    font-weight: 800;
+                                    color: root.out_point_sec >= 0.0 ? #000000 : #fbbf24;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                aout_ta := TouchArea {
+                                    mouse-cursor: ew-resize;
+                                    moved => {
+                                        if self.pressed && track.width > 0px && root.duration > 0.0 {
+                                            root.out_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.zoom_level > 1.01 : Rectangle {
+                        height: 1px;
+                        background: #1c1c22;
+                    }
+
+                    if root.zoom_level > 1.01 : HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        padding-top: 3px;
+                        padding-bottom: 3px;
+
+                        TimelineScrollBar {
+                            height: 12px;
+                            track_width: track.width;
+                            viewport_width: sv.width;
+                            zoom_level: root.zoom_level;
+                            content_x: sv.content-x;
+                            duration: root.duration;
+                            current_time: root.current_time;
+                            has_trim: root.has_trim;
+                            in_point_norm: root.in_point_norm;
+                            out_point_norm: root.out_point_norm;
+                            scroll_to(val) => {
+                                let max_s = max(0px, max(sv.width, sv.width * root.zoom_level) - sv.width);
+                                sv.content-x = val.clamp(-max_s, 0px);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

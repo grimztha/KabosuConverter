@@ -1,0 +1,170 @@
+import { ScrollView } from "std-widgets.slint";
+
+export component DownloaderFormatDropdown inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: 0;
+    callback selected(int);
+
+    pure function get_tag(s: string) -> string {
+        s.starts-with("[Audio]") ? "[Audio]" : (s.starts-with("[Video]") ? "[Video]" : "")
+    }
+
+    pure function get_tag_color(s: string) -> color {
+        s.starts-with("[Audio]") ? #a78bfa : (s.starts-with("[Video]") ? #38bdf8 : #f4f4f5)
+    }
+
+    pure function get_label(s: string) -> string {
+        s.starts-with("[Audio] ") ? s.replace-all("[Audio] ", "") : (s.starts-with("[Video] ") ? s.replace-all("[Video] ", "") : (s.starts-with("[Audio]") ? s.replace-all("[Audio]", "") : (s.starts-with("[Video]") ? s.replace-all("[Video]", "") : s)))
+    }
+
+    property <int> safe_index: Math.max(0, Math.min(root.current-index, root.model.length - 1));
+    property <string> current_raw: root.model.length > 0 ? root.model[root.safe_index] : "";
+    property <string> current_tag: root.get_tag(root.current_raw);
+    property <string> current_label: root.get_label(root.current_raw);
+    property <color> current_color: root.get_tag_color(root.current_raw);
+
+    height: 26px;
+    border-radius: 4px;
+    background: ta.has-hover ? #1c1c22 : #141418;
+    border-width: 1px;
+    border-color: ta.has-hover ? #38bdf8.with-alpha(0.6) : #2a2a30;
+
+    animate background { duration: 150ms; }
+    animate border-color { duration: 150ms; }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 6px;
+
+        // Group name tag (Colorized: Blue for [Video], Purple for [Audio])
+        if root.current_tag != "" : VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.current_tag;
+                font-size: 11px;
+                font-weight: 700;
+                color: root.current_color;
+            }
+        }
+
+        // Format label text
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.current_label;
+                font-size: 11px;
+                font-weight: 500;
+                color: #f4f4f5;
+                overflow: elide;
+            }
+        }
+
+        // Dropdown Chevron Icon
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("../icons/chevron-down.svg");
+                width: 10px;
+                height: 10px;
+                colorize: ta.has-hover ? #f4f4f5 : #a1a1aa;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            popup.show();
+        }
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 3px;
+        width: root.width;
+        height: 280px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            background: #141418;
+            border-width: 1px;
+            border-color: #2a2a32;
+            drop-shadow-blur: 16px;
+            drop-shadow-offset-y: 6px;
+            drop-shadow-color: #000000aa;
+            clip: true;
+
+            ScrollView {
+                width: 100%;
+                height: 100%;
+
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 2px;
+                    alignment: start;
+
+                    for opt[idx] in root.model : Rectangle {
+                        height: 25px;
+                        border-radius: 4px;
+                        background: idx == root.safe_index ? #27272a : (item_ta.has-hover ? #1f1f24 : #00000000);
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 6px;
+
+                            // Group tag in dropdown list (Colorized: Blue for [Video], Purple for [Audio])
+                            if root.get_tag(opt) != "" : VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: root.get_tag(opt);
+                                    font-size: 10.5px;
+                                    font-weight: 700;
+                                    color: root.get_tag_color(opt);
+                                }
+                            }
+
+                            // Format description text
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: root.get_label(opt);
+                                    font-size: 10.5px;
+                                    font-weight: idx == root.safe_index ? 600 : 400;
+                                    color: idx == root.safe_index ? #ffffff : (item_ta.has-hover ? #f4f4f5 : #d4d4d8);
+                                    overflow: elide;
+                                }
+                            }
+
+                            // Active checkmark
+                            if idx == root.safe_index : VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/check.svg");
+                                    width: 11px;
+                                    height: 11px;
+                                    colorize: root.get_tag_color(opt);
+                                }
+                            }
+                        }
+
+                        item_ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.current-index = idx;
+                                root.selected(idx);
+                                popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -198,7 +198,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     1 => HwAccel::Nvenc,
                     2 => HwAccel::Qsv,
                     3 => HwAccel::Amf,
-                    4 => HwAccel::Cpu,
+                    4 => HwAccel::VideoToolbox,
+                    5 => HwAccel::Cpu,
                     _ => HwAccel::Auto,
                 };
                 let chosen_audio_codec = match audio_codec_idx {
@@ -361,7 +362,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             1 => HwAccel::Nvenc,
                             2 => HwAccel::Qsv,
                             3 => HwAccel::Amf,
-                            4 => HwAccel::Cpu,
+                            4 => HwAccel::VideoToolbox,
+                            5 => HwAccel::Cpu,
                             _ => HwAccel::Auto,
                         };
 
@@ -495,22 +497,24 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let in_secs = in_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
                         let out_secs = out_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
 
-                        if in_secs.is_some() && out_secs.is_some() && in_secs.unwrap() >= out_secs.unwrap() {
-                            any_errors = true;
-                            let ui_w = ui_weak.clone();
-                            let idx = item_idx;
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_w.upgrade() {
-                                    let app_data = ui.global::<AppData>();
-                                    app_data.set_status_summary(SharedString::from("In point must be before out point"));
-                                    let model = app_data.get_queue();
-                                    if let Some(mut row) = model.row_data(idx) {
-                                        row.status = SharedString::from("Skipped: In >= Out");
-                                        model.set_row_data(idx, row);
+                        if let (Some(in_s), Some(out_s)) = (in_secs, out_secs) {
+                            if in_s >= out_s {
+                                any_errors = true;
+                                let ui_w = ui_weak.clone();
+                                let idx = item_idx;
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_w.upgrade() {
+                                        let app_data = ui.global::<AppData>();
+                                        app_data.set_status_summary(SharedString::from("In point must be before out point"));
+                                        let model = app_data.get_queue();
+                                        if let Some(mut row) = model.row_data(idx) {
+                                            row.status = SharedString::from("Skipped: In >= Out");
+                                            model.set_row_data(idx, row);
+                                        }
                                     }
-                                }
-                            });
-                            continue;
+                                });
+                                continue;
+                            }
                         }
 
                         if let Some(in_s) = in_secs {
@@ -708,7 +712,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         ui.global::<AppData>().get_log_preview().to_string();
                                     if cur.len() > 4000 {
                                         let mut split_idx = cur.len() - 3000;
-                                        while !cur.is_char_boundary(split_idx) {
+                                        while split_idx < cur.len() && !cur.is_char_boundary(split_idx) {
                                             split_idx += 1;
                                         }
                                         cur = cur[split_idx..].to_string();

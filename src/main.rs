@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 slint::include_modules!();
 
 use std::cell::RefCell;
@@ -26,19 +28,21 @@ mod win_drag_drop;
 use context::{AppContext, PreviewTask, WaveformTask};
 
 fn main() -> Result<()> {
-    // Locate FFmpeg & FFprobe binaries
     let binaries = match FFmpegBinaries::locate() {
         Ok(b) => {
-            println!("FFmpeg found at: {:?}", b.ffmpeg);
-            println!("FFprobe found at: {:?}", b.ffprobe);
-            if let Some(ref p) = b.ffplay {
-                println!("FFplay found at: {:?}", p);
+            #[cfg(debug_assertions)]
+            {
+                println!("FFmpeg found at: {:?}", b.ffmpeg);
+                println!("FFprobe found at: {:?}", b.ffprobe);
+                if let Some(ref p) = b.ffplay {
+                    println!("FFplay found at: {:?}", p);
+                }
             }
             Arc::new(b)
         }
-        Err(e) => {
-            eprintln!("Warning: FFmpeg binaries not found in project root path: {}", e);
-            // Default to local project root directory names
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("Warning: FFmpeg binaries not found: {}", _e);
             Arc::new(FFmpegBinaries {
                 ffmpeg: PathBuf::from(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
                 ffprobe: PathBuf::from(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
@@ -51,29 +55,27 @@ fn main() -> Result<()> {
     let app_settings = settings::load_settings();
     apply_settings_to_ui(&ui, &app_settings);
 
-    // Initialize empty queue model in Slint
+    // Dynamic engine version badge
+    let (_full_ver, badge_text) = binaries.detect_version();
+    ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
+
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
 
-    // Shared cancellation flag for child ffmpeg processes
     let cancel_flag = Arc::new(AtomicBool::new(false));
 
-    // Active ffplay child process for native playback preview (with atomic audio master clock)
     let active_player_child: Arc<Mutex<Option<AudioPlaybackSession>>> = Arc::new(Mutex::new(None));
-    // Active embedded 24fps stream child process
     let active_playback_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
     let playback_session_id = Arc::new(AtomicU64::new(0));
 
-    // Frame preview extraction channel and background worker thread (In-Memory, Zero Disk I/O)
     let (preview_tx, preview_rx) = std::sync::mpsc::channel::<PreviewTask>();
     let latest_preview_id = Arc::new(AtomicU64::new(0));
 
-    // Audio waveform extraction channel and background worker thread
     let (waveform_tx, waveform_rx) = std::sync::mpsc::channel::<WaveformTask>();
     let latest_waveform_id = Arc::new(AtomicU64::new(0));
 
-    // Locate yt-dlp binary
     let ytdlp_binary = Arc::new(ytdlp::find_ytdlp_binary());
+    #[cfg(debug_assertions)]
     if let Some(ref p) = *ytdlp_binary {
         println!("yt-dlp engine found at: {:?}", p);
     } else {
@@ -155,6 +157,7 @@ fn main() -> Result<()> {
 
         let initial_hwnd = native_hwnd.unwrap_or(std::ptr::null_mut());
         win_drag_drop::setup_drop_target(initial_hwnd, move |dropped_paths| {
+            #[cfg(debug_assertions)]
             println!("Dropped {} file(s) into queue", dropped_paths.len());
             handlers::queue::process_incoming_paths(
                 dropped_paths,
@@ -211,7 +214,8 @@ fn apply_settings_to_ui(ui: &MainWindow, settings: &AppSettings) {
         HwAccel::Nvenc => 1,
         HwAccel::Qsv => 2,
         HwAccel::Amf => 3,
-        HwAccel::Cpu => 4,
+        HwAccel::VideoToolbox => 4,
+        HwAccel::Cpu => 5,
     };
     data.set_hw_accel_index(hw_idx);
 

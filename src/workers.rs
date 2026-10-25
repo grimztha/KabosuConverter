@@ -8,7 +8,7 @@ use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer};
 use another_encoder::ffmpeg::{extract_frame_rgba_transformed, extract_waveform_rgba};
 use crate::context::{PreviewTask, WaveformTask};
 
-/// Background thread worker for extracting live preview frames from video at arbitrary seek positions.
+/// Background worker that extracts video frames for preview scrubbing.
 pub fn spawn_preview_worker(
     ffmpeg_bin: PathBuf,
     preview_rx: std::sync::mpsc::Receiver<PreviewTask>,
@@ -17,7 +17,7 @@ pub fn spawn_preview_worker(
 ) {
     thread::spawn(move || {
         while let Ok(task) = preview_rx.recv() {
-            // Drain newer tasks if user is scrubbing fast
+            // Drain pending tasks to keep up with scrubbing
             let mut current_task = task;
             while let Ok(newer) = preview_rx.try_recv() {
                 current_task = newer;
@@ -62,7 +62,7 @@ pub fn spawn_preview_worker(
     });
 }
 
-/// Background thread worker for extracting waveform visualization images for audio streams.
+/// Background worker that renders audio waveform images.
 pub fn spawn_waveform_worker(
     ffmpeg_bin: PathBuf,
     waveform_rx: std::sync::mpsc::Receiver<WaveformTask>,
@@ -81,9 +81,9 @@ pub fn spawn_waveform_worker(
             }
 
             let (wf_w, wf_h) = if current_task.is_video {
-                (2400, 68)
+                (8192, 68)
             } else {
-                (2400, 180)
+                (8192, 180)
             };
 
             match extract_waveform_rgba(&ffmpeg_bin, &current_task.media_path, wf_w, wf_h) {

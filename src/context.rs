@@ -24,7 +24,7 @@ pub struct WaveformTask {
     pub is_video: bool,
 }
 
-/// Send + Sync context containing handles for background tasks, probing, and preview frame extraction.
+/// Handles passed to background threads for probing and frame extraction.
 #[derive(Clone)]
 pub struct TaskContext {
     pub binaries: Arc<FFmpegBinaries>,
@@ -34,8 +34,7 @@ pub struct TaskContext {
     pub latest_waveform_id: Arc<AtomicU64>,
 }
 
-/// Central application runtime context holding thread-safe handles, cancellation flags,
-/// worker channels, and shared process states.
+/// Shared runtime context holding process handles, worker channels, and playback state.
 #[derive(Clone)]
 pub struct AppContext {
     pub binaries: Arc<FFmpegBinaries>,
@@ -56,7 +55,6 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    /// Return the Send + Sync task context for background probing and thread operations.
     pub fn task_context(&self) -> TaskContext {
         TaskContext {
             binaries: self.binaries.clone(),

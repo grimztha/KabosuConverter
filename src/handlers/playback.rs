@@ -261,13 +261,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                                         frame_index += 1;
 
-                                        // If this frame is significantly behind master clock (> 40ms / 1 frame late),
-                                        // drop it immediately so video catches up to master audio clock!
+                                        // Drop late frame (> 40ms) to stay in sync with audio
                                         if diff < -0.040 {
                                             continue;
                                         }
 
-                                        // If this frame is early relative to master clock, sleep until presentation time
                                         if diff > 0.002 {
                                             let sleep_sec = diff.min(0.045);
                                             thread::sleep(std::time::Duration::from_secs_f64(sleep_sec));
@@ -294,8 +292,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         });
                                     }
 
-                                    // Only clean up process handles if they still belong to this playback session!
-                                    // This prevents an exiting thread from killing the newly spawned child of a subsequent session.
+                                    // Clean up process handles if still belonging to this session
                                     if session_check.load(Ordering::SeqCst) == my_session {
                                         let mut s_lock = stream_child_ref.lock().unwrap_or_else(|e| e.into_inner());
                                         if let Some(mut c) = s_lock.take() {
@@ -309,8 +306,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     }
                                 });
                             }
-                            Err(e) => {
-                                eprintln!("Failed to spawn playback stream: {}", e);
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                eprintln!("Failed to spawn playback stream: {}", _e);
                                 app_data.set_player_is_playing(false);
                             }
                         }

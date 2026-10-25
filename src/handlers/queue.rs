@@ -105,7 +105,7 @@ pub fn process_incoming_paths(
             return;
         }
 
-        // Build lightweight placeholder items immediately (no external process spawns)
+        // Create queue placeholders immediately before probing
         let mut initial_items = Vec::with_capacity(expanded.len());
         for path in expanded {
             let path_str = path.to_string_lossy().to_string();
@@ -181,7 +181,7 @@ pub fn process_incoming_paths(
             }
         });
 
-        // Probe metadata concurrently using a bounded worker pool (up to 4 threads)
+        // Probe files concurrently (up to 4 threads)
         let to_probe = Arc::new(initial_items);
         let worker_count = to_probe.len().clamp(1, 4);
         let next_idx = Arc::new(AtomicUsize::new(0));

@@ -894,6 +894,119 @@ component VolumeBar inherits Rectangle {
     }
 }
 
+component TimelineScrollBar inherits Rectangle {
+    in property <length> track_width;
+    in property <length> viewport_width;
+    in property <float> zoom_level: 1.0;
+    in property <length> content_x: 0px;
+    in property <float> duration: 1.0;
+    in property <float> current_time: 0.0;
+    in property <bool> has_trim: false;
+    in property <float> in_point_norm: 0.0;
+    in property <float> out_point_norm: 1.0;
+    callback scroll_to(length);
+
+    height: 12px;
+    background: #09090d;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: #1c1c24;
+    clip: true;
+
+    property <length> max_scroll: max(0px, root.track_width - root.viewport_width);
+    property <length> current_scroll: (-root.content_x).clamp(0px, self.max_scroll);
+    property <float> scroll_ratio: self.max_scroll > 0px ? (self.current_scroll / self.max_scroll) : 0.0;
+    property <length> thumb_w: root.width > 0px ? min(root.width, max(28px, root.width / max(1.0, root.zoom_level))) : 0px;
+    property <length> max_travel: max(0px, root.width - self.thumb_w);
+    property <length> thumb_x: self.max_travel * self.scroll_ratio;
+
+    // Overview Minimap Elements on the Scrollbar Track:
+    // Active Trim Region Indicator (amber highlight)
+    if root.has_trim : Rectangle {
+        x: max(0px, root.width * root.in_point_norm);
+        width: max(2px, root.width * (root.out_point_norm - root.in_point_norm));
+        height: 100%;
+        background: #f59e0b33;
+    }
+
+    // Current Playhead Position Indicator (subtle vertical cyan needle)
+    Rectangle {
+        property <float> pnorm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
+        x: max(0px, min(root.width - 2px, (root.width - 2px) * self.pnorm));
+        y: 1px;
+        width: 2px;
+        height: root.height - 2px;
+        border-radius: 1px;
+        background: #38bdf888;
+    }
+
+    // Draggable Thumb Handle representing the current viewport
+    thumb := Rectangle {
+        x: root.thumb_x;
+        y: 1.5px;
+        width: root.thumb_w;
+        height: root.height - 3px;
+        border-radius: 3px;
+        background: sb_ta.pressed ? #38bdf8 : (sb_ta.has-hover ? #52525b : #383842);
+        border-width: 1px;
+        border-color: sb_ta.pressed ? #7dd3fc : (sb_ta.has-hover ? #71717a : #27272e);
+
+        animate background, border-color { duration: 120ms; }
+
+        // Center grip dots on the thumb when wide enough
+        if root.thumb_w > 36px : HorizontalLayout {
+            alignment: center;
+            spacing: 3px;
+            for i in 3 : Rectangle {
+                width: 1.5px;
+                height: 5px;
+                border-radius: 0.5px;
+                background: sb_ta.pressed ? #0369a1 : (sb_ta.has-hover ? #a1a1aa : #71717a);
+            }
+        }
+    }
+
+    sb_ta := TouchArea {
+        mouse-cursor: pointer;
+        property <length> drag_offset: 0px;
+
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                if self.mouse-x >= root.thumb_x && self.mouse-x <= root.thumb_x + root.thumb_w {
+                    self.drag_offset = self.mouse-x - root.thumb_x;
+                } else {
+                    self.drag_offset = root.thumb_w / 2;
+                    if root.max_travel > 0px && root.max_scroll > 0px {
+                        let target_x = (self.mouse-x - self.drag_offset).clamp(0px, root.max_travel);
+                        let r = target_x / root.max_travel;
+                        root.scroll_to(- (r * root.max_scroll));
+                    }
+                }
+            }
+        }
+
+        moved => {
+            if self.pressed && root.max_travel > 0px && root.max_scroll > 0px {
+                let target_x = (self.mouse-x - self.drag_offset).clamp(0px, root.max_travel);
+                let r = target_x / root.max_travel;
+                root.scroll_to(- (r * root.max_scroll));
+            }
+        }
+
+        scroll-event(event) => {
+            if root.max_travel > 0px && root.max_scroll > 0px {
+                let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                if delta != 0px {
+                    let new_val = (root.content_x + delta).clamp(-root.max_scroll, 0px);
+                    root.scroll_to(new_val);
+                    return accept;
+                }
+            }
+            return reject;
+        }
+    }
+}
+
 component VisualTimeline inherits Rectangle {
     in property <float> duration: 1.0;
     in property <float> current_time: 0.0;
@@ -910,6 +1023,14 @@ component VisualTimeline inherits Rectangle {
 
     changed center_trigger => {
         root.center_playhead();
+    }
+
+    changed zoom_level => {
+        if sv.width > 0px {
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            let max_s = max(0px, tw - sv.width);
+            sv.content-x = sv.content-x.clamp(-max_s, 0px);
+        }
     }
 
     public function zoom_in() {
@@ -932,21 +1053,28 @@ component VisualTimeline inherits Rectangle {
         }
     }
 
-    height: 68px;
+    height: root.zoom_level > 1.01 ? 87px : 68px;
     border-radius: 8px;
     background: #09090b;
     border-width: 1px;
     border-color: #2a2a30;
     clip: true;
 
-    sv := ScrollView {
-        width: 100%;
-        height: 100%;
+    animate height { duration: 150ms; easing: ease-out; }
 
-        track := Rectangle {
-            width: max(parent.width, parent.width * root.zoom_level);
-            height: 100%;
-            background: #09090b;
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        sv := ScrollView {
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+            vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+            vertical-stretch: 1;
+
+            track := Rectangle {
+                width: max(parent.width, parent.width * root.zoom_level);
+                height: 100%;
+                background: #09090b;
 
             // Subtle center horizontal baseline
             Rectangle {
@@ -1026,6 +1154,14 @@ component VisualTimeline inherits Rectangle {
                             root.zoom_out();
                         }
                         return accept;
+                    } else if root.zoom_level > 1.01 && sv.width > 0px {
+                        let tw = max(sv.width, sv.width * root.zoom_level);
+                        let max_s = max(0px, tw - sv.width);
+                        if max_s > 0px {
+                            let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                            sv.content-x = (sv.content-x + delta).clamp(-max_s, 0px);
+                            return accept;
+                        }
                     }
                     return reject;
                 }
@@ -1115,6 +1251,35 @@ component VisualTimeline inherits Rectangle {
             }
         }
     }
+
+    if root.zoom_level > 1.01 : Rectangle {
+            height: 1px;
+            background: #1c1c22;
+        }
+
+        if root.zoom_level > 1.01 : HorizontalLayout {
+            padding-left: 6px;
+            padding-right: 6px;
+            padding-top: 3px;
+            padding-bottom: 3px;
+
+            TimelineScrollBar {
+                height: 12px;
+                track_width: track.width;
+                viewport_width: sv.width;
+                zoom_level: root.zoom_level;
+                content_x: sv.content-x;
+                duration: root.duration;
+                current_time: root.current_time;
+                has_trim: root.has_trim;
+                in_point_norm: root.in_point_norm;
+                out_point_norm: root.out_point_norm;
+                scroll_to(val) => {
+                    sv.content-x = val;
+                }
+            }
+        }
+    }
 }
 
 component AudioWaveformStudio inherits Rectangle {
@@ -1133,6 +1298,27 @@ component AudioWaveformStudio inherits Rectangle {
 
     changed center_trigger => {
         root.center_playhead();
+    }
+
+    changed zoom_level => {
+        if sv.width > 0px {
+            let tw = max(sv.width, sv.width * root.zoom_level);
+            let max_s = max(0px, tw - sv.width);
+            sv.content-x = sv.content-x.clamp(-max_s, 0px);
+        }
+    }
+
+    public function zoom_in() {
+        root.zoom_level = min(8.0, root.zoom_level + 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function zoom_out() {
+        root.zoom_level = max(1.0, root.zoom_level - 0.5);
+        AppData.timeline_zoom = root.zoom_level;
+    }
+    public function set_zoom(val: float) {
+        root.zoom_level = val.clamp(1.0, 8.0);
+        AppData.timeline_zoom = root.zoom_level;
     }
 
     public function center_playhead() {
@@ -1204,14 +1390,19 @@ component AudioWaveformStudio inherits Rectangle {
                 border-color: #1c1c22;
                 clip: true;
 
-                sv := ScrollView {
-                    width: 100%;
-                    height: 100%;
+                VerticalLayout {
+                    padding: 0px;
+                    spacing: 0px;
 
-                    track := Rectangle {
-                        width: max(parent.width, parent.width * root.zoom_level);
-                        height: 100%;
-                        background: #09090b;
+                    sv := ScrollView {
+                        horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+                        vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                        vertical-stretch: 1;
+
+                        track := Rectangle {
+                            width: max(parent.width, parent.width * root.zoom_level);
+                            height: 100%;
+                            background: #09090b;
 
                         // Grid lines
                         // Top 25% dB guide
@@ -1308,6 +1499,14 @@ component AudioWaveformStudio inherits Rectangle {
                                         AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5);
                                     }
                                     return accept;
+                                } else if root.zoom_level > 1.01 && sv.width > 0px {
+                                    let tw = max(sv.width, sv.width * root.zoom_level);
+                                    let max_s = max(0px, tw - sv.width);
+                                    if max_s > 0px {
+                                        let delta = event.delta-x != 0px ? event.delta-x : event.delta-y;
+                                        sv.content-x = (sv.content-x + delta).clamp(-max_s, 0px);
+                                        return accept;
+                                    }
                                 }
                                 return reject;
                             }
@@ -1417,9 +1616,38 @@ component AudioWaveformStudio inherits Rectangle {
                         }
                     }
                 }
+
+                if root.zoom_level > 1.01 : Rectangle {
+                    height: 1px;
+                    background: #1c1c22;
+                }
+
+                if root.zoom_level > 1.01 : HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    padding-top: 3px;
+                    padding-bottom: 3px;
+
+                    TimelineScrollBar {
+                        height: 12px;
+                        track_width: track.width;
+                        viewport_width: sv.width;
+                        zoom_level: root.zoom_level;
+                        content_x: sv.content-x;
+                        duration: root.duration;
+                        current_time: root.current_time;
+                        has_trim: root.has_trim;
+                        in_point_norm: root.in_point_norm;
+                        out_point_norm: root.out_point_norm;
+                        scroll_to(val) => {
+                            sv.content-x = val;
+                        }
+                    }
+                }
             }
         }
     }
+}
 }
 
 component CropOverlayView inherits Rectangle {

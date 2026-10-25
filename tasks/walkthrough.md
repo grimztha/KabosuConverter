@@ -260,3 +260,47 @@ All issues were resolved, verified, and backed by automated unit tests.
 ## 3. Automated Test Suite
 - `tests/ffmpeg_tests.rs`: Added `test_qsv_and_amf_hardware_command_generation` verifying Intel QSV and AMD AMF command lines.
 - All 42 tests passing cleanly.
+
+---
+
+# Migration to FFmpeg 8.1+ & Cross-Platform Hardware Acceleration
+
+**Date:** October 2026  
+**Scope:** Dynamic version resolution, native Apple VideoToolbox hardware acceleration, cross-platform app bundle binary location, and UI subtitle bar integration.
+
+## 1. Summary of Upgrades
+- **Dynamic Engine Versioning:** The application dynamically queries the installed binary (`ffmpeg -version`) on startup and populates the bottom-right engine badge (`AppData.ffmpeg_version_badge`), automatically adapting to `FFmpeg 8.x Engine` without hardcoded version strings.
+- **Apple VideoToolbox Acceleration (`HwAccel::VideoToolbox`):** Added native hardware encoding for macOS Apple Silicon / Intel (`h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox`). When running on macOS, `Auto Detect` automatically selects VideoToolbox.
+- **Apple Compatibility & Tagging:** HEVC encoding includes `-tag:v hvc1` across all hardware paths for seamless QuickTime and iOS playback compatibility.
+- **Cross-Platform Locator:** `FFmpegBinaries::locate()` expanded to search standard macOS Application Bundle structures (`Contents/Resources/bin`, `Contents/Resources`, `Contents/MacOS`) alongside Windows project paths.
+- **UI Subtitle & Bottom Bar Redesign:** Added `"High Performance Rust Transcoder & Video Downloader by SThao"` to the bottom status bar, unifying elements into an elastic layout with expanding stretch spacers to eliminate all control collisions.
+
+## 2. Unit Tests Added
+- `test_ffmpeg_version_parser`: Validates clean version extraction and badge generation across release versions, git tags, and fallbacks.
+- `test_live_ffmpeg_version_detection`: Asserts that the live local binary in the workspace resolves as `8.1.x` and yields `"FFmpeg 8.x Engine"`.
+- `test_videotoolbox_hardware_command_generation`: Verifies CLI argument generation for `h264_videotoolbox`, `hevc_videotoolbox` (with `hvc1`), and `prores_videotoolbox`.
+
+## 3. Test Suite Verification
+- **Test Results:** 45 passed, 0 failed across all suites (`ffmpeg_tests`, `timeline_scrollbar_tests`, `ytdlp_tests`, `settings_tests`).
+- **Clippy:** 0 warnings across `--all-targets --all-features`.
+- **Slint DSL:** Validated with `slint-viewer --check` and visual screenshot inspection.
+
+---
+
+# Audit, Security Hardening & UI Stabilization (v0.8.3)
+
+**Date:** October 2026  
+**Scope:** Security hardening, runtime stability, invariant UI panel layouts, release console suppression, and senior-engineer comment humanization.
+
+## 1. Summary of Changes
+- **Win32 OLE Drag-and-Drop Lifetime (`SEC-04`):** Fixed memory leak in `src/win_drag_drop.rs` by calling `ReleaseStgMedium` whenever `GetData` succeeds, regardless of handle unpacking. Added null guard on subclass `ref_data`.
+- **yt-dlp Template Path Traversal (`SEC-05`):** Sanitized extension replacement in `src/ytdlp.rs` by stripping path delimiters (`/`, `\`, `:`).
+- **Process Console Window Suppression (`SEC-06`):** Ensured `CREATE_NO_WINDOW` is applied to `spawn_ffplay` in `src/ffmpeg/preview.rs`.
+- **Timecode Millisecond Rollover (`BUG-04`):** Fixed `format_duration_hms` in `src/ffmpeg/probe.rs` using total rounded millisecond integer math.
+- **Timecode Finiteness Validation (`BUG-05`):** Added `.filter(|s| s.is_finite())` in `src/ffmpeg/preview.rs`.
+- **Buffer Growth Cap (`BUG-06`):** Bounded `read_ffplay_clock` buffer to 64KB in `src/ffmpeg/preview.rs`.
+- **Queue Panel Invariant Width (`UI-FIX-01`):** Locked `QueuePanel` to `min-width: 300px; max-width: 300px; horizontal-stretch: 0;` in `src/ui/views/queue_panel.slint` and `src/ui/main.slint`.
+- **Release Build Console Suppression:** Gated binary locator `println!` calls behind `#[cfg(debug_assertions)]` in `src/main.rs`.
+- **Code & Comment Cleanup:** Humanized comments across core modules, removing redundant AI prose and adhering to Rust software engineering best practices.
+
+

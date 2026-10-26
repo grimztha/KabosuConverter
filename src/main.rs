@@ -82,6 +82,65 @@ fn main() -> Result<()> {
         eprintln!("Warning: yt-dlp binary not found in project root path");
     }
 
+    // If external dependencies are missing, initiate background auto-download into app-local storage
+    let needs_download = !binaries.ffmpeg.is_file() || ytdlp_binary.is_none();
+    if needs_download {
+        let ui_weak = ui.as_weak();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            if let Ok(rt) = rt {
+                rt.block_on(async move {
+                    if let Ok(dm) = another_encoder::binaries::DependencyManager::new(another_encoder::settings::APP_NAME) {
+                        let ui_prog = ui_weak.clone();
+                        let result = dm.ensure_dependencies(move |name, prog| {
+                            let status = match prog {
+                                another_encoder::binaries::DownloadProgress::Started { total_bytes } => {
+                                    format!("Downloading {} ({:?} bytes)...", name, total_bytes)
+                                }
+                                another_encoder::binaries::DownloadProgress::Transferred { total_downloaded, .. } => {
+                                    format!("Downloading {}: {:.1} MB", name, total_downloaded as f64 / 1_048_576.0)
+                                }
+                                another_encoder::binaries::DownloadProgress::VerifyingHash => {
+                                    format!("Verifying {} SHA-256 integrity...", name)
+                                }
+                                another_encoder::binaries::DownloadProgress::Extracting => {
+                                    format!("Extracting {} into app-local storage...", name)
+                                }
+                                another_encoder::binaries::DownloadProgress::Complete => {
+                                    format!("{} installed successfully.", name)
+                                }
+                            };
+                            let ui_cb = ui_prog.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_cb.upgrade() {
+                                    ui.global::<AppData>().set_status_summary(status.into());
+                                }
+                            });
+                        }).await;
+
+                        if let Ok(paths) = result {
+                            let loc = FFmpegBinaries {
+                                ffmpeg: paths.ffmpeg,
+                                ffprobe: paths.ffprobe,
+                                ffplay: paths.ffplay,
+                            };
+                            let (_full_ver, badge_text) = loc.detect_version();
+                            let ui_cb = ui_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_cb.upgrade() {
+                                    ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
+                                    ui.global::<AppData>().set_status_summary("Dependencies installed and verified.".into());
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     if app_settings.default_output_dir.is_none() {
         let default_dl_dir = dirs::download_dir()
             .or_else(dirs::video_dir)

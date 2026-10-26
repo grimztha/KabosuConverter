@@ -25,8 +25,10 @@ pub struct FFmpegBinaries {
 }
 
 impl FFmpegBinaries {
-    /// Locates ffmpeg, ffprobe, and ffplay binaries strictly within the project root
-    /// or application bundle resources on macOS.
+    /// Locates ffmpeg, ffprobe, and ffplay binaries following the priority order:
+    /// 1. App-Local Folder (%LOCALAPPDATA%\<app_name>\bin or macOS ~/Library/Application Support/<app_name>/bin)
+    /// 2. Standalone / portable directory or project root
+    /// 3. System $PATH fallback (for power users maintaining their own builds)
     pub fn locate() -> anyhow::Result<Self> {
         let exe_ext = if cfg!(windows) { ".exe" } else { "" };
         let ffmpeg_name = format!("ffmpeg{}", exe_ext);
@@ -39,36 +41,51 @@ impl FFmpegBinaries {
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let search_dirs = vec![
-            cwd.clone(),
-            cwd.join("bin"),
-            exe_dir.clone(),
-            exe_dir.join("bin"),
-            exe_dir.join(".."),
-            exe_dir.join("../.."),
-            // macOS App Bundle standard paths
-            exe_dir.join("../Resources"),
-            exe_dir.join("../Resources/bin"),
-            exe_dir.join("../MacOS"),
-            #[cfg(debug_assertions)]
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-        ];
+        let mut search_dirs = Vec::new();
+
+        // 1. App-Local OS folder (e.g. %LOCALAPPDATA%\AnotherEncoder\bin)
+        if let Some(local_app) = dirs::data_local_dir() {
+            search_dirs.push(local_app.join(crate::settings::APP_NAME).join("bin"));
+        }
+
+        // 2. Standalone / portable & project directory
+        search_dirs.push(cwd.clone());
+        search_dirs.push(cwd.join("bin"));
+        search_dirs.push(exe_dir.clone());
+        search_dirs.push(exe_dir.join("bin"));
+        search_dirs.push(exe_dir.join(".."));
+        search_dirs.push(exe_dir.join("../.."));
+
+        // macOS App Bundle standard paths
+        search_dirs.push(exe_dir.join("../Resources"));
+        search_dirs.push(exe_dir.join("../Resources/bin"));
+        search_dirs.push(exe_dir.join("../MacOS"));
+
+        #[cfg(debug_assertions)]
+        search_dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
         let find_binary = |name: &str| -> Option<PathBuf> {
+            // Check designated search directories
             for dir in &search_dirs {
                 let candidate = dir.join(name);
                 if candidate.is_file() {
                     return Some(candidate.canonicalize().unwrap_or(candidate));
                 }
             }
+
+            // Check System $PATH (Optional fallback)
+            if let Some(system_candidate) = crate::binaries::DependencyManager::find_in_system_path(name) {
+                return Some(system_candidate);
+            }
+
             None
         };
 
         let ffmpeg = find_binary(&ffmpeg_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in project root path", ffmpeg_name))?;
+            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local, project, or system PATH", ffmpeg_name))?;
 
         let ffprobe = find_binary(&ffprobe_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in project root path", ffprobe_name))?;
+            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local, project, or system PATH", ffprobe_name))?;
 
         let ffplay = find_binary(&ffplay_name);
 

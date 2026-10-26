@@ -129,12 +129,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
-            let bin_path = match ytdlp_bin_arc.as_ref() {
-                Some(p) => p.clone(),
+            let bin_path = match ytdlp_bin_arc.as_ref().clone().or_else(ytdlp::find_ytdlp_binary) {
+                Some(p) => p,
                 None => {
                     data.set_ytdlp_has_error(true);
                     data.set_ytdlp_error_message(SharedString::from(
-                        "yt-dlp binary not found in project root path",
+                        "yt-dlp binary not found in app-local storage or system PATH",
                     ));
                     return;
                 }
@@ -227,12 +227,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
-            let bin_path = match ytdlp_bin_arc.as_ref() {
-                Some(p) => p.clone(),
+            let bin_path = match ytdlp_bin_arc.as_ref().clone().or_else(ytdlp::find_ytdlp_binary) {
+                Some(p) => p,
                 None => {
                     data.set_ytdlp_has_error(true);
                     data.set_ytdlp_error_message(SharedString::from(
-                        "yt-dlp binary not found in project root path",
+                        "yt-dlp binary not found in app-local storage or system PATH",
                     ));
                     return;
                 }

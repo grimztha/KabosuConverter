@@ -235,10 +235,8 @@ impl DependencyManager {
     pub async fn resolve_binary(&self, filename: &str, test_arg: &str) -> Option<PathBuf> {
         // Priority 1: Check App-Local bin directory
         let local_path = self.bin_dir.join(filename);
-        if local_path.is_file() {
-            if Self::verify_binary_executable(&local_path, test_arg).await.is_ok() {
-                return Some(local_path.canonicalize().unwrap_or(local_path));
-            }
+        if local_path.is_file() && Self::verify_binary_executable(&local_path, test_arg).await.is_ok() {
+            return Some(local_path.canonicalize().unwrap_or(local_path));
         }
 
         // Priority 1b: Check application root / executable directory
@@ -257,10 +255,8 @@ impl DependencyManager {
 
         for dir in &candidate_dirs {
             let candidate = dir.join(filename);
-            if candidate.is_file() {
-                if Self::verify_binary_executable(&candidate, test_arg).await.is_ok() {
-                    return Some(candidate.canonicalize().unwrap_or(candidate));
-                }
+            if candidate.is_file() && Self::verify_binary_executable(&candidate, test_arg).await.is_ok() {
+                return Some(candidate.canonicalize().unwrap_or(candidate));
             }
         }
 

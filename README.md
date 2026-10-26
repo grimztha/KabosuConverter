@@ -52,20 +52,36 @@ Inspired by the comprehensive capabilities of Shutter Encoder, **Another Encoder
 - **Native FFplay Integration**: One-click launch to open full-speed GPU accelerated playback with native audio output via bundled `ffplay.exe`.
 
 ### 6. Media Intelligence & Real-Time Monitoring
-- **Deep Metadata Inspection**: Automatically inspects width, height, framerate, duration, video codec, audio codec, channels, sample rate, and bitrates via bundled `ffprobe.exe`.
+- **Deep Metadata Inspection**: Automatically inspects width, height, framerate, duration, video codec, audio codec, channels, sample rate, and bitrates via bundled or auto-downloaded `ffprobe`.
 - **Live Performance Feedback**: Percentage progress, elapsed time / total duration, instant encoding speed multiplier (e.g. `3.2x`), encoding FPS, and instantaneous bitrate.
 - **Log Stream Viewer**: Collapsible live console displaying exact generated FFmpeg commands and real-time stderr output.
+
+### 7. Web Video & Stream Downloader (`yt-dlp`)
+- **Direct Stream Inspection**: Paste any video or stream URL (YouTube, Twitch, Vimeo, etc.) to discover available formats, resolutions, codecs, and audio-only streams.
+- **Multi-Format Selection**: Best Video + Audio muxing, 4K/1080p MP4/MKV, or standalone audio extraction (MP3, WAV, FLAC, Opus).
+- **One-Click Workflow Integration**: Directly push downloaded media into the Player/Trimmer or the Queue for immediate editing or transcoding.
+
+### 8. Self-Contained Binary Auto-Download Subsystem
+- **Zero-Config Deployment**: The application operates self-sufficiently without bundling bulky external binaries in git.
+- **Three-Tier Discovery**:
+  1. Checks App-Local directory (`%LOCALAPPDATA%\AnotherEncoder\bin` on Windows, `~/Library/Application Support/AnotherEncoder/bin` on macOS, or standalone `./bin`).
+  2. Fallback to system `$PATH` for power users maintaining custom builds.
+  3. Automatic background streaming download strictly into the app-local folder if missing.
+- **SHA-256 Hash Verification**: All downloads are checked against official release checksum manifests (`SHA2-256SUMS` and `checksums.sha256`) prior to extraction.
+- **Clean Uninstallation**: All settings and downloaded binaries reside together in the OS local app data folder; deleting `%LOCALAPPDATA%\AnotherEncoder` leaves the host machine completely clean.
 
 ---
 
 ## Architecture
 
-- **`src/ffmpeg/locator.rs`**: Automatic detection and validation of bundled or system `ffmpeg.exe` and `ffprobe.exe`.
+- **`src/binaries/`**: Dynamic binary management subsystem (download streaming, SHA-256 verification, archive decompression, and metadata manifest).
+- **`src/ffmpeg/locator.rs`**: Multi-tier binary locator with smoke-test execution verification.
 - **`src/ffmpeg/probe.rs`**: JSON-based media probe engine.
 - **`src/ffmpeg/builder.rs`**: Type-safe FFmpeg CLI generator for all workflow modes.
 - **`src/ffmpeg/runner.rs`**: Asynchronous child process runner with regex-based progress stream parsing and thread-safe cancellation.
+- **`src/ytdlp.rs`**: Type-safe `yt-dlp` discovery, format parsing, and download engine.
 - **`src/ui/main.slint`**: Declarative Slint UI styled with a modern dark theme, smooth sliders, custom badges, and responsive queue views.
-- **`src/settings.rs`**: Configuration persistence to user app data.
+- **`src/settings.rs`**: Configuration persistence to OS-designated app data or portable standalone directory.
 
 ---
 
@@ -74,8 +90,8 @@ Inspired by the comprehensive capabilities of Shutter Encoder, **Another Encoder
 ### Requirements
 - Rust (1.80+ or latest stable)
 - Slint 1.18+
-- Windows x64 (or compatible platform)
-- `ffmpeg.exe` and `ffprobe.exe` (included in project root)
+- Windows x64, macOS, or Linux
+- External binaries (`ffmpeg`, `yt-dlp`) are automatically provisioned and verified into the local app data folder on first run if not present on your system.
 
 ### Development Run
 ```bash

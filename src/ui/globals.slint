@@ -217,9 +217,12 @@ export global AppLogic {
     callback crop_height_edited(string);
     callback crop_x_edited(string);
     callback crop_y_edited(string);
-    callback crop_box_drag_start();
+    callback crop_box_drag_start(float, float);
     callback crop_box_drag_move(float, float);
+    callback crop_box_drag_end();
+    callback crop_handle_drag_start(int, float, float);
     callback crop_handle_drag(int, float, float);
+    callback crop_handle_drag_end();
     callback crop_nudge(int, int);
     callback center_crop_box();
     callback reset_crop();

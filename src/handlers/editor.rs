@@ -1,9 +1,14 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use slint::{ComponentHandle, SharedString};
 
-use another_encoder::ffmpeg::{compute_letterbox_viewport, CropAspectRatio, CropRect, VideoRotation};
+use another_encoder::ffmpeg::{
+    compute_letterbox_viewport, CropAspectRatio, CropBoxDragSession, CropHandleDragSession,
+    CropRect, VideoRotation,
+};
 use crate::context::{AppContext, PreviewTask};
 use crate::{AppData, AppLogic, MainWindow};
 
@@ -350,162 +355,126 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Visual Crop Box Drag Start & Move
+    let box_drag_session: Rc<RefCell<Option<CropBoxDragSession>>> = Rc::new(RefCell::new(None));
+    let handle_drag_session: Rc<RefCell<Option<CropHandleDragSession>>> = Rc::new(RefCell::new(None));
+
+    // Handle Visual Crop Box Drag (Start, Move, End)
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_crop_box_drag_start(move || {
+        let session_cell = Rc::clone(&box_drag_session);
+        ui.global::<AppLogic>().on_crop_box_drag_start(move |norm_x, norm_y| {
             if let Some(ui) = ui_handle.upgrade() {
-                ui.global::<AppData>().set_crop_enabled(true);
+                let app_data = ui.global::<AppData>();
+                app_data.set_crop_enabled(true);
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let cur = CropRect {
+                    x: app_data.get_crop_x().max(0) as u32,
+                    y: app_data.get_crop_y().max(0) as u32,
+                    width: app_data.get_crop_width().max(16) as u32,
+                    height: app_data.get_crop_height().max(16) as u32,
+                };
+                *session_cell.borrow_mut() = Some(CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h));
             }
         });
     }
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_crop_box_drag_move(move |norm_dx, norm_dy| {
+        let session_cell = Rc::clone(&box_drag_session);
+        ui.global::<AppLogic>().on_crop_box_drag_move(move |norm_x, norm_y| {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
-                let eff_w = app_data.get_effective_video_width().max(2);
-                let eff_h = app_data.get_effective_video_height().max(2);
-                let dx = (norm_dx * eff_w as f32).round() as i32;
-                let dy = (norm_dy * eff_h as f32).round() as i32;
-                if dx == 0 && dy == 0 {
-                    return;
-                }
-                let rect = CropRect {
-                    x: app_data.get_crop_x().max(0) as u32,
-                    y: app_data.get_crop_y().max(0) as u32,
-                    width: app_data.get_crop_width().max(16) as u32,
-                    height: app_data.get_crop_height().max(16) as u32,
-                }
-                .nudge(dx, dy, eff_w as u32, eff_h as u32);
+                let eff_w = app_data.get_effective_video_width().max(2) as u32;
+                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let session = {
+                    let mut b = session_cell.borrow_mut();
+                    match *b {
+                        Some(ref s) => *s,
+                        None => {
+                            let cur = CropRect {
+                                x: app_data.get_crop_x().max(0) as u32,
+                                y: app_data.get_crop_y().max(0) as u32,
+                                width: app_data.get_crop_width().max(16) as u32,
+                                height: app_data.get_crop_height().max(16) as u32,
+                            };
+                            let s = CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h);
+                            *b = Some(s);
+                            s
+                        }
+                    }
+                };
+                let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h);
                 sync_crop_rect_to_ui(&app_data, rect, true);
             }
+        });
+    }
+    {
+        let session_cell = Rc::clone(&box_drag_session);
+        ui.global::<AppLogic>().on_crop_box_drag_end(move || {
+            *session_cell.borrow_mut() = None;
         });
     }
 
     // Handle Visual Crop Resize Handles (0..7)
     {
         let ui_handle = ui.as_weak();
+        let session_cell = Rc::clone(&handle_drag_session);
+        ui.global::<AppLogic>().on_crop_handle_drag_start(move |handle_id, norm_x, norm_y| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_crop_enabled(true);
+                let eff_w = app_data.get_effective_video_width().max(32) as u32;
+                let eff_h = app_data.get_effective_video_height().max(32) as u32;
+                let cur = CropRect {
+                    x: app_data.get_crop_x().max(0) as u32,
+                    y: app_data.get_crop_y().max(0) as u32,
+                    width: app_data.get_crop_width().max(16) as u32,
+                    height: app_data.get_crop_height().max(16) as u32,
+                };
+                *session_cell.borrow_mut() = Some(CropHandleDragSession::new(
+                    handle_id, cur, norm_x, norm_y, eff_w, eff_h,
+                ));
+            }
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let session_cell = Rc::clone(&handle_drag_session);
         ui.global::<AppLogic>().on_crop_handle_drag(move |handle_id, norm_x, norm_y| {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 app_data.set_crop_enabled(true);
-                let eff_w = app_data.get_effective_video_width().max(32);
-                let eff_h = app_data.get_effective_video_height().max(32);
-                let cur_x = app_data.get_crop_x().clamp(0, eff_w - 16);
-                let cur_y = app_data.get_crop_y().clamp(0, eff_h - 16);
-                let cur_w = app_data.get_crop_width().clamp(16, eff_w - cur_x);
-                let cur_h = app_data.get_crop_height().clamp(16, eff_h - cur_y);
-                let right = cur_x + cur_w;
-                let bottom = cur_y + cur_h;
-
-                let px = (norm_x.clamp(0.0, 1.0) * eff_w as f32).round() as i32;
-                let py = (norm_y.clamp(0.0, 1.0) * eff_h as f32).round() as i32;
-                let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
-
-                let (mut new_x, mut new_y, mut new_w, mut new_h) = match handle_id {
-                    0 => {
-                        let w = (right - px).clamp(16, right);
-                        let h = (bottom - py).clamp(16, bottom);
-                        (right - w, bottom - h, w, h)
-                    }
-                    1 => {
-                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
-                        let h = (bottom - py).clamp(16, bottom);
-                        (cur_x, bottom - h, w, h)
-                    }
-                    2 => {
-                        let w = (right - px).clamp(16, right);
-                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
-                        (right - w, cur_y, w, h)
-                    }
-                    3 => {
-                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
-                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
-                        (cur_x, cur_y, w, h)
-                    }
-                    4 => {
-                        let h = (bottom - py).clamp(16, bottom);
-                        (cur_x, bottom - h, cur_w, h)
-                    }
-                    5 => {
-                        let h = (py - cur_y).clamp(16, eff_h - cur_y);
-                        (cur_x, cur_y, cur_w, h)
-                    }
-                    6 => {
-                        let w = (right - px).clamp(16, right);
-                        (right - w, cur_y, w, cur_h)
-                    }
-                    _ => {
-                        let w = (px - cur_x).clamp(16, eff_w - cur_x);
-                        (cur_x, cur_y, w, cur_h)
+                let eff_w = app_data.get_effective_video_width().max(32) as u32;
+                let eff_h = app_data.get_effective_video_height().max(32) as u32;
+                let session = {
+                    let mut b = session_cell.borrow_mut();
+                    match *b {
+                        Some(ref s) if s.handle_id == handle_id => *s,
+                        _ => {
+                            let cur = CropRect {
+                                x: app_data.get_crop_x().max(0) as u32,
+                                y: app_data.get_crop_y().max(0) as u32,
+                                width: app_data.get_crop_width().max(16) as u32,
+                                height: app_data.get_crop_height().max(16) as u32,
+                            };
+                            let s = CropHandleDragSession::new(
+                                handle_id, cur, norm_x, norm_y, eff_w, eff_h,
+                            );
+                            *b = Some(s);
+                            s
+                        }
                     }
                 };
-
-                // Enforce aspect ratio lock if active
-                if let Some((num, den)) = aspect.ratio() {
-                    let num_i = num as i64;
-                    let den_i = den as i64;
-                    match handle_id {
-                        4 | 5 => {
-                            let max_h = if handle_id == 4 { bottom } else { eff_h - cur_y };
-                            let mut h = new_h.clamp(16, max_h);
-                            let mut w = ((h as i64 * num_i) / den_i) as i32;
-                            if w > eff_w {
-                                w = eff_w;
-                                h = ((w as i64 * den_i) / num_i) as i32;
-                            }
-                            new_w = w.max(16);
-                            new_h = h.max(16);
-                            new_x = (cur_x + (cur_w - new_w) / 2).clamp(0, (eff_w - new_w).max(0));
-                            new_y = if handle_id == 4 { bottom - new_h } else { cur_y };
-                        }
-                        _ => {
-                            let max_w = if handle_id == 0 || handle_id == 2 || handle_id == 6 {
-                                right
-                            } else {
-                                eff_w - cur_x
-                            };
-                            let max_h = if handle_id == 0 || handle_id == 1 {
-                                bottom
-                            } else if handle_id == 2 || handle_id == 3 {
-                                eff_h - cur_y
-                            } else {
-                                eff_h
-                            };
-                            let mut w = new_w.clamp(16, max_w);
-                            let mut h = ((w as i64 * den_i) / num_i) as i32;
-                            if h > max_h {
-                                h = max_h;
-                                w = ((h as i64 * num_i) / den_i) as i32;
-                            }
-                            new_w = w.max(16);
-                            new_h = h.max(16);
-                            new_x = if handle_id == 0 || handle_id == 2 || handle_id == 6 {
-                                (right - new_w).max(0)
-                            } else {
-                                cur_x
-                            };
-                            new_y = if handle_id == 0 || handle_id == 1 {
-                                (bottom - new_h).max(0)
-                            } else if handle_id == 2 || handle_id == 3 {
-                                cur_y
-                            } else {
-                                (cur_y + (cur_h - new_h) / 2).clamp(0, (eff_h - new_h).max(0))
-                            };
-                        }
-                    }
-                }
-
-                let rect = CropRect {
-                    x: new_x.max(0) as u32,
-                    y: new_y.max(0) as u32,
-                    width: new_w.max(16) as u32,
-                    height: new_h.max(16) as u32,
-                }
-                .sanitize(eff_w as u32, eff_h as u32);
+                let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+                let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h, aspect);
                 sync_crop_rect_to_ui(&app_data, rect, true);
             }
+        });
+    }
+    {
+        let session_cell = Rc::clone(&handle_drag_session);
+        ui.global::<AppLogic>().on_crop_handle_drag_end(move || {
+            *session_cell.borrow_mut() = None;
         });
     }
 

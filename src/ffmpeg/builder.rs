@@ -274,6 +274,318 @@ impl CropRect {
     }
 }
 
+/// Tracks an active handle drag operation with immutable starting anchors.
+///
+/// Prevents non-selected edges from shifting or drifting due to parity rounding
+/// or micro-movements during interactive resize.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CropHandleDragSession {
+    pub handle_id: i32,
+    pub start_x: i32,
+    pub start_y: i32,
+    pub start_w: i32,
+    pub start_h: i32,
+    pub fixed_right: i32,
+    pub fixed_bottom: i32,
+    pub start_norm_x: f32,
+    pub start_norm_y: f32,
+}
+
+impl CropHandleDragSession {
+    pub fn new(
+        handle_id: i32,
+        start_rect: CropRect,
+        start_norm_x: f32,
+        start_norm_y: f32,
+        eff_w: u32,
+        eff_h: u32,
+    ) -> Self {
+        let clean = start_rect.sanitize(eff_w, eff_h);
+        let start_x = clean.x as i32;
+        let start_y = clean.y as i32;
+        let start_w = clean.width as i32;
+        let start_h = clean.height as i32;
+        let fixed_right = start_x + start_w;
+        let fixed_bottom = start_y + start_h;
+
+        Self {
+            handle_id,
+            start_x,
+            start_y,
+            start_w,
+            start_h,
+            fixed_right,
+            fixed_bottom,
+            start_norm_x,
+            start_norm_y,
+        }
+    }
+
+    /// Computes the updated `CropRect` given current normalized mouse coordinates.
+    ///
+    /// Preserves all non-selected edges exactly without cumulative drift.
+    pub fn compute_rect(
+        &self,
+        norm_x: f32,
+        norm_y: f32,
+        eff_w: u32,
+        eff_h: u32,
+        aspect: CropAspectRatio,
+    ) -> CropRect {
+        let eff_w_i = (eff_w.max(32) & !1) as i32;
+        let eff_h_i = (eff_h.max(32) & !1) as i32;
+        let delta_px = ((norm_x - self.start_norm_x) * eff_w_i as f32).round() as i32;
+        let delta_py = ((norm_y - self.start_norm_y) * eff_h_i as f32).round() as i32;
+
+        let (new_x, new_y, new_w, new_h) = if let Some((num, den)) = aspect.ratio() {
+            let num_i = num as i64;
+            let den_i = den as i64;
+            match self.handle_id {
+                0 => { // Top-Left: anchor is (fixed_right, fixed_bottom)
+                    let max_w = self.fixed_right;
+                    let max_h = self.fixed_bottom;
+                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > max_h {
+                        h = max_h;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    (self.fixed_right - w, self.fixed_bottom - h, w, h)
+                }
+                1 => { // Top-Right: anchor is (start_x, fixed_bottom)
+                    let max_w = eff_w_i - self.start_x;
+                    let max_h = self.fixed_bottom;
+                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > max_h {
+                        h = max_h;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    (self.start_x, self.fixed_bottom - h, w, h)
+                }
+                2 => { // Bottom-Left: anchor is (fixed_right, start_y)
+                    let max_w = self.fixed_right;
+                    let max_h = eff_h_i - self.start_y;
+                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > max_h {
+                        h = max_h;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    (self.fixed_right - w, self.start_y, w, h)
+                }
+                3 => { // Bottom-Right: anchor is (start_x, start_y)
+                    let max_w = eff_w_i - self.start_x;
+                    let max_h = eff_h_i - self.start_y;
+                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > max_h {
+                        h = max_h;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    (self.start_x, self.start_y, w, h)
+                }
+                4 => { // Top Edge: anchor is fixed_bottom, center x preserved
+                    let max_h = self.fixed_bottom;
+                    let raw_h = (self.start_h - delta_py).clamp(16, max_h);
+                    let mut h = raw_h;
+                    let mut w = (h as i64 * num_i / den_i) as i32;
+                    if w > eff_w_i {
+                        w = eff_w_i;
+                        h = (w as i64 * den_i / num_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, eff_w_i & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    let center_x = self.start_x + self.start_w / 2;
+                    let x = (center_x - w / 2).clamp(0, eff_w_i - w) & !1;
+                    (x, self.fixed_bottom - h, w, h)
+                }
+                5 => { // Bottom Edge: anchor is start_y, center x preserved
+                    let max_h = eff_h_i - self.start_y;
+                    let raw_h = (self.start_h + delta_py).clamp(16, max_h);
+                    let mut h = raw_h;
+                    let mut w = (h as i64 * num_i / den_i) as i32;
+                    if w > eff_w_i {
+                        w = eff_w_i;
+                        h = (w as i64 * den_i / num_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, eff_w_i & !1);
+                    let h = (h & !1).clamp(16, max_h & !1);
+                    let center_x = self.start_x + self.start_w / 2;
+                    let x = (center_x - w / 2).clamp(0, eff_w_i - w) & !1;
+                    (x, self.start_y, w, h)
+                }
+                6 => { // Left Edge: anchor is fixed_right, center y preserved
+                    let max_w = self.fixed_right;
+                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > eff_h_i {
+                        h = eff_h_i;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, eff_h_i & !1);
+                    let center_y = self.start_y + self.start_h / 2;
+                    let y = (center_y - h / 2).clamp(0, eff_h_i - h) & !1;
+                    (self.fixed_right - w, y, w, h)
+                }
+                _ => { // Right Edge: anchor is start_x, center y preserved
+                    let max_w = eff_w_i - self.start_x;
+                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
+                    let mut w = raw_w;
+                    let mut h = (w as i64 * den_i / num_i) as i32;
+                    if h > eff_h_i {
+                        h = eff_h_i;
+                        w = (h as i64 * num_i / den_i) as i32;
+                    }
+                    let w = (w & !1).clamp(16, max_w & !1);
+                    let h = (h & !1).clamp(16, eff_h_i & !1);
+                    let center_y = self.start_y + self.start_h / 2;
+                    let y = (center_y - h / 2).clamp(0, eff_h_i - h) & !1;
+                    (self.start_x, y, w, h)
+                }
+            }
+        } else {
+            // Free aspect ratio
+            match self.handle_id {
+                0 => { // Top-Left: anchor is (fixed_right, fixed_bottom)
+                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
+                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
+                    let new_x = raw_x & !1;
+                    let new_y = raw_y & !1;
+                    let new_w = self.fixed_right - new_x;
+                    let new_h = self.fixed_bottom - new_y;
+                    (new_x, new_y, new_w, new_h)
+                }
+                1 => { // Top-Right: anchor is (start_x, fixed_bottom)
+                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
+                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
+                    let new_right = raw_right & !1;
+                    let new_y = raw_y & !1;
+                    let new_w = new_right - self.start_x;
+                    let new_h = self.fixed_bottom - new_y;
+                    (self.start_x, new_y, new_w, new_h)
+                }
+                2 => { // Bottom-Left: anchor is (fixed_right, start_y)
+                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
+                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
+                    let new_x = raw_x & !1;
+                    let new_bottom = raw_bottom & !1;
+                    let new_w = self.fixed_right - new_x;
+                    let new_h = new_bottom - self.start_y;
+                    (new_x, self.start_y, new_w, new_h)
+                }
+                3 => { // Bottom-Right: anchor is (start_x, start_y)
+                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
+                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
+                    let new_right = raw_right & !1;
+                    let new_bottom = raw_bottom & !1;
+                    let new_w = new_right - self.start_x;
+                    let new_h = new_bottom - self.start_y;
+                    (self.start_x, self.start_y, new_w, new_h)
+                }
+                4 => { // Top Edge: anchor is bottom, left, right
+                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
+                    let new_y = raw_y & !1;
+                    let new_h = self.fixed_bottom - new_y;
+                    (self.start_x, new_y, self.start_w, new_h)
+                }
+                5 => { // Bottom Edge: anchor is top, left, right
+                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
+                    let new_bottom = raw_bottom & !1;
+                    let new_h = new_bottom - self.start_y;
+                    (self.start_x, self.start_y, self.start_w, new_h)
+                }
+                6 => { // Left Edge: anchor is right, top, bottom
+                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
+                    let new_x = raw_x & !1;
+                    let new_w = self.fixed_right - new_x;
+                    (new_x, self.start_y, new_w, self.start_h)
+                }
+                _ => { // Right Edge: anchor is left, top, bottom
+                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
+                    let new_right = raw_right & !1;
+                    let new_w = new_right - self.start_x;
+                    (self.start_x, self.start_y, new_w, self.start_h)
+                }
+            }
+        };
+
+        CropRect {
+            x: new_x.max(0) as u32,
+            y: new_y.max(0) as u32,
+            width: new_w.max(16) as u32,
+            height: new_h.max(16) as u32,
+        }
+        .sanitize(eff_w, eff_h)
+    }
+}
+
+/// Tracks moving the entire crop box without changing its dimensions.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CropBoxDragSession {
+    pub start_x: i32,
+    pub start_y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub start_norm_x: f32,
+    pub start_norm_y: f32,
+}
+
+impl CropBoxDragSession {
+    pub fn new(
+        start_rect: CropRect,
+        start_norm_x: f32,
+        start_norm_y: f32,
+        eff_w: u32,
+        eff_h: u32,
+    ) -> Self {
+        let clean = start_rect.sanitize(eff_w, eff_h);
+        Self {
+            start_x: clean.x as i32,
+            start_y: clean.y as i32,
+            width: clean.width,
+            height: clean.height,
+            start_norm_x,
+            start_norm_y,
+        }
+    }
+
+    pub fn compute_rect(&self, norm_x: f32, norm_y: f32, eff_w: u32, eff_h: u32) -> CropRect {
+        let eff_w_i = (eff_w.max(32) & !1) as i32;
+        let eff_h_i = (eff_h.max(32) & !1) as i32;
+        let delta_px = ((norm_x - self.start_norm_x) * eff_w_i as f32).round() as i32;
+        let delta_py = ((norm_y - self.start_norm_y) * eff_h_i as f32).round() as i32;
+
+        let max_x = (eff_w.saturating_sub(self.width) & !1) as i32;
+        let max_y = (eff_h.saturating_sub(self.height) & !1) as i32;
+
+        let target_x = (self.start_x + delta_px).clamp(0, max_x.max(0));
+        let target_y = (self.start_y + delta_py).clamp(0, max_y.max(0));
+
+        CropRect {
+            x: (target_x & !1) as u32,
+            y: (target_y & !1) as u32,
+            width: self.width,
+            height: self.height,
+        }
+        .sanitize(eff_w, eff_h)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncodeJobConfig {
     pub function: EncoderFunction,

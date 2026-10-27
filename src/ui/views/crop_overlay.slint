@@ -137,14 +137,21 @@ export component CropOverlayView inherits Rectangle {
             pointer-event(ev) => {
                 if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
                     root.focus_requested();
-                    AppLogic.crop_box_drag_start();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_box_drag_start(
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_box_drag_end();
                 }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
                     AppLogic.crop_box_drag_move(
-                        (self.mouse-x - self.pressed-x) / root.width,
-                        (self.mouse-y - self.pressed-y) / root.height
+                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
                     );
                 }
             }
@@ -165,7 +172,18 @@ export component CropOverlayView inherits Rectangle {
         tl_ta := TouchArea {
             mouse-cursor: nwse-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            0,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -192,7 +210,18 @@ export component CropOverlayView inherits Rectangle {
         tr_ta := TouchArea {
             mouse-cursor: nesw-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            1,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -219,7 +248,18 @@ export component CropOverlayView inherits Rectangle {
         bl_ta := TouchArea {
             mouse-cursor: nesw-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            2,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -246,7 +286,18 @@ export component CropOverlayView inherits Rectangle {
         br_ta := TouchArea {
             mouse-cursor: nwse-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            3,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -271,7 +322,18 @@ export component CropOverlayView inherits Rectangle {
         t_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            4,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -296,7 +358,18 @@ export component CropOverlayView inherits Rectangle {
         b_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            5,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -321,7 +394,18 @@ export component CropOverlayView inherits Rectangle {
         l_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            6,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {
@@ -346,7 +430,18 @@ export component CropOverlayView inherits Rectangle {
         r_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down { root.focus_requested(); }
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.focus_requested();
+                    if root.width > 0px && root.height > 0px {
+                        AppLogic.crop_handle_drag_start(
+                            7,
+                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
+                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
+                        );
+                    }
+                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                    AppLogic.crop_handle_drag_end();
+                }
             }
             moved => {
                 if self.pressed && root.width > 0px && root.height > 0px {

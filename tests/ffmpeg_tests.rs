@@ -683,6 +683,146 @@ fn test_crop_aspect_ratio_presets() {
 }
 
 #[test]
+fn test_crop_handle_drag_session_free_mode_anchors() {
+    use another_encoder::ffmpeg::{CropAspectRatio, CropHandleDragSession, CropRect};
+
+    let eff_w = 1920;
+    let eff_h = 1080;
+    let start_rect = CropRect {
+        x: 200,
+        y: 150,
+        width: 600,
+        height: 400,
+    };
+    // Anchors:
+    // fixed_left = 200
+    // fixed_top = 150
+    // fixed_right = 200 + 600 = 800
+    // fixed_bottom = 150 + 400 = 550
+
+    let start_norm_x = 0.5;
+    let start_norm_y = 0.5;
+
+    // Test Handle 0 (Top-Left): Right edge and Bottom edge MUST STAY EXACTLY FIXED.
+    let session_0 = CropHandleDragSession::new(0, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    assert_eq!(session_0.fixed_right, 800);
+    assert_eq!(session_0.fixed_bottom, 550);
+
+    for delta_px in -30..=30 {
+        for delta_py in -30..=30 {
+            let norm_x = start_norm_x + (delta_px as f32 / eff_w as f32);
+            let norm_y = start_norm_y + (delta_py as f32 / eff_h as f32);
+            let rect = session_0.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+            assert_eq!(rect.x + rect.width, 800, "Handle 0 right edge must be exactly 800 at delta ({}, {})", delta_px, delta_py);
+            assert_eq!(rect.y + rect.height, 550, "Handle 0 bottom edge must be exactly 550 at delta ({}, {})", delta_px, delta_py);
+            assert_eq!(rect.x % 2, 0, "x must be even");
+            assert_eq!(rect.y % 2, 0, "y must be even");
+            assert_eq!(rect.width % 2, 0, "width must be even");
+            assert_eq!(rect.height % 2, 0, "height must be even");
+        }
+    }
+
+    // Test Handle 1 (Top-Right): Left edge and Bottom edge MUST STAY EXACTLY FIXED.
+    let session_1 = CropHandleDragSession::new(1, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
+        let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
+        let rect = session_1.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x, 200, "Handle 1 left edge must remain at 200");
+        assert_eq!(rect.y + rect.height, 550, "Handle 1 bottom edge must remain at 550");
+    }
+
+    // Test Handle 2 (Bottom-Left): Right edge and Top edge MUST STAY EXACTLY FIXED.
+    let session_2 = CropHandleDragSession::new(2, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
+        let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
+        let rect = session_2.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x + rect.width, 800, "Handle 2 right edge must remain at 800");
+        assert_eq!(rect.y, 150, "Handle 2 top edge must remain at 150");
+    }
+
+    // Test Handle 3 (Bottom-Right): Left edge and Top edge MUST STAY EXACTLY FIXED.
+    let session_3 = CropHandleDragSession::new(3, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
+        let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
+        let rect = session_3.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x, 200, "Handle 3 left edge must remain at 200");
+        assert_eq!(rect.y, 150, "Handle 3 top edge must remain at 150");
+    }
+
+    // Test Handle 4 (Top Edge): Left, Right, Bottom MUST STAY EXACTLY FIXED.
+    let session_4 = CropHandleDragSession::new(4, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
+        let rect = session_4.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x, 200);
+        assert_eq!(rect.width, 600);
+        assert_eq!(rect.y + rect.height, 550);
+    }
+
+    // Test Handle 5 (Bottom Edge): Left, Right, Top MUST STAY EXACTLY FIXED.
+    let session_5 = CropHandleDragSession::new(5, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
+        let rect = session_5.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x, 200);
+        assert_eq!(rect.width, 600);
+        assert_eq!(rect.y, 150);
+    }
+
+    // Test Handle 6 (Left Edge): Right, Top, Bottom MUST STAY EXACTLY FIXED.
+    let session_6 = CropHandleDragSession::new(6, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
+        let rect = session_6.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x + rect.width, 800);
+        assert_eq!(rect.y, 150);
+        assert_eq!(rect.height, 400);
+    }
+
+    // Test Handle 7 (Right Edge): Left, Top, Bottom MUST STAY EXACTLY FIXED.
+    let session_7 = CropHandleDragSession::new(7, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
+        let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
+        let rect = session_7.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        assert_eq!(rect.x, 200);
+        assert_eq!(rect.y, 150);
+        assert_eq!(rect.height, 400);
+    }
+}
+
+#[test]
+fn test_crop_box_drag_session_preserves_dimensions() {
+    use another_encoder::ffmpeg::{CropBoxDragSession, CropRect};
+
+    let eff_w = 1920;
+    let eff_h = 1080;
+    let start_rect = CropRect {
+        x: 300,
+        y: 200,
+        width: 640,
+        height: 360,
+    };
+    let session = CropBoxDragSession::new(start_rect, 0.4, 0.4, eff_w, eff_h);
+
+    for delta_x in [-200, -77, 0, 50, 123, 500] {
+        for delta_y in [-150, -33, 0, 40, 99, 400] {
+            let norm_x = 0.4 + (delta_x as f32 / eff_w as f32);
+            let norm_y = 0.4 + (delta_y as f32 / eff_h as f32);
+            let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h);
+            assert_eq!(rect.width, 640, "Width must never change during box drag");
+            assert_eq!(rect.height, 360, "Height must never change during box drag");
+            assert!(rect.x + rect.width <= eff_w, "Box must stay within eff_w");
+            assert!(rect.y + rect.height <= eff_h, "Box must stay within eff_h");
+            assert_eq!(rect.x % 2, 0);
+            assert_eq!(rect.y % 2, 0);
+        }
+    }
+}
+
+#[test]
 fn test_combined_transform_crop_scale_filter_order() {
     use another_encoder::ffmpeg::{
         CropRect, DeinterlaceMode, ResolutionPreset, VideoRotation,

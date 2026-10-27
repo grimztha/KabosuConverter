@@ -55,6 +55,28 @@ pub fn find_ytdlp_binary() -> Option<PathBuf> {
     None
 }
 
+/// Queries `yt-dlp --version` to extract the release tag and formatted UI badge.
+/// e.g. ("2026.10.26", "yt-dlp 2026.10.26 (Local Engine)")
+pub fn detect_version(bin: &Path) -> (String, String) {
+    let mut cmd = Command::new(bin);
+    cmd.arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    crate::set_no_window(&mut cmd);
+
+    if let Ok(output) = cmd.output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let ver = stdout.trim();
+        if !ver.is_empty() {
+            return (ver.to_string(), format!("yt-dlp {} (Local Engine)", ver));
+        }
+    }
+
+    ("2026.10.26".to_string(), "yt-dlp 2026.10.26 (Local Engine)".to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YtDlpFormatItem {
     pub format_id: String,

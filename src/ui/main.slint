@@ -16,6 +16,7 @@ import { QueuePanel } from "views/queue_panel.slint";
 
 export component MainWindow inherits Window {
     title: "Another Encoder — Professional Media Transcoder";
+    icon: @image-url("icons/app-icon.png");
     min-width: 960px;
     min-height: 650px;
     preferred-width: 1280px;
@@ -72,19 +73,10 @@ export component MainWindow inherits Window {
 
                 VerticalLayout {
                     alignment: center;
-                    Rectangle {
+                    Image {
                         width: 24px;
                         height: 24px;
-                        border-radius: 6px;
-                        background: @linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
-                        Text {
-                            text: "AE";
-                            color: #ffffff;
-                            font-size: 11px;
-                            font-weight: 800;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
+                        source: @image-url("icons/brand-logo.png");
                     }
                 }
 

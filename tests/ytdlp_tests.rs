@@ -1,5 +1,5 @@
 use another_encoder::ytdlp::{
-    build_output_template, discover_media, find_ytdlp_binary, sanitize_filename_stem,
+    build_output_template, detect_version, discover_media, find_ytdlp_binary, sanitize_filename_stem,
     DownloadFormatOption, YtDlpFormatItem, YtDlpMediaInfo,
 };
 
@@ -173,4 +173,14 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
     // 4. Standard clean filenames
     let normal_rel = "Rick_Astley_Never_Gonna_Give_You_Up.mp4";
     assert_eq!(parse_downloaded_filepath(normal_rel, dest_dir), Some(dest_dir.join(normal_rel)));
+}
+
+#[test]
+fn test_ytdlp_version_detection() {
+    if let Some(path) = find_ytdlp_binary() {
+        let (ver, badge) = detect_version(&path);
+        assert!(!ver.is_empty(), "Version string must not be empty");
+        assert!(badge.contains("yt-dlp"), "Badge should contain 'yt-dlp'");
+        assert!(badge.contains(&ver), "Badge should contain version");
+    }
 }

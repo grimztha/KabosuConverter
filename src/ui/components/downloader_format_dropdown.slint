@@ -23,8 +23,8 @@ export component DownloaderFormatDropdown inherits Rectangle {
     property <string> current_label: root.get_label(root.current_raw);
     property <color> current_color: root.get_tag_color(root.current_raw);
 
-    height: 26px;
-    border-radius: 4px;
+    height: 34px;
+    border-radius: 6px;
     background: ta.has-hover ? #1c1c22 : #141418;
     border-width: 1px;
     border-color: ta.has-hover ? #38bdf8.with-alpha(0.6) : #2a2a30;
@@ -33,16 +33,16 @@ export component DownloaderFormatDropdown inherits Rectangle {
     animate border-color { duration: 150ms; }
 
     HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
-        spacing: 6px;
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
 
         // Group name tag (Colorized: Blue for [Video], Purple for [Audio])
         if root.current_tag != "" : VerticalLayout {
             alignment: center;
             Text {
                 text: root.current_tag;
-                font-size: 11px;
+                font-size: 11.5px;
                 font-weight: 700;
                 color: root.current_color;
             }
@@ -54,7 +54,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
             horizontal-stretch: 1;
             Text {
                 text: root.current_label;
-                font-size: 11px;
+                font-size: 11.5px;
                 font-weight: 500;
                 color: #f4f4f5;
                 overflow: elide;
@@ -109,14 +109,14 @@ export component DownloaderFormatDropdown inherits Rectangle {
                     alignment: start;
 
                     for opt[idx] in root.model : Rectangle {
-                        height: 25px;
-                        border-radius: 4px;
+                        height: 28px;
+                        border-radius: 5px;
                         background: idx == root.safe_index ? #27272a : (item_ta.has-hover ? #1f1f24 : #00000000);
 
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 6px;
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 8px;
 
                             // Group tag in dropdown list (Colorized: Blue for [Video], Purple for [Audio])
                             if root.get_tag(opt) != "" : VerticalLayout {

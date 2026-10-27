@@ -82,6 +82,13 @@ fn main() -> Result<()> {
         eprintln!("Warning: yt-dlp binary not found in project root path");
     }
 
+    // Dynamic yt-dlp engine version badge
+    let (_ytdlp_ver, ytdlp_badge) = match ytdlp_binary.as_ref() {
+        Some(ref p) => ytdlp::detect_version(p),
+        None => ("2026.10.26".to_string(), "yt-dlp 2026.10.26 (Local Engine)".to_string()),
+    };
+    ui.global::<AppData>().set_ytdlp_version_badge(ytdlp_badge.into());
+
     // If external dependencies are missing, initiate background auto-download into app-local storage
     let needs_download = !binaries.ffmpeg.is_file() || ytdlp_binary.is_none();
     if needs_download {
@@ -131,6 +138,8 @@ fn main() -> Result<()> {
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_cb.upgrade() {
                                     ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
+                                    let (_y_ver, y_badge) = ytdlp::detect_version(&paths.yt_dlp);
+                                    ui.global::<AppData>().set_ytdlp_version_badge(y_badge.into());
                                     ui.global::<AppData>().set_status_summary("Dependencies installed and verified.".into());
                                 }
                             });

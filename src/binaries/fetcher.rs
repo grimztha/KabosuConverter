@@ -24,7 +24,7 @@ pub struct BinaryFetcher {
 impl BinaryFetcher {
     pub fn new() -> Result<Self, BinaryError> {
         let client = Client::builder()
-            .user_agent("AnotherEncoder/0.9.0")
+            .user_agent(concat!("AnotherEncoder/", env!("CARGO_PKG_VERSION")))
             .build()?;
         Ok(Self { client })
     }

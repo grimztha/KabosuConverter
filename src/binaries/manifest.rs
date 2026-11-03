@@ -44,6 +44,9 @@ impl LocalBinaryManifest {
 
         let content = serde_json::to_string_pretty(self)?;
         fs::write(&tmp_path, content)?;
+        if manifest_path.exists() {
+            let _ = fs::remove_file(&manifest_path);
+        }
         fs::rename(&tmp_path, &manifest_path)?;
 
         Ok(())

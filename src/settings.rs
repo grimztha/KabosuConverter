@@ -110,14 +110,26 @@ pub fn load_settings() -> AppSettings {
     AppSettings::default()
 }
 
-/// Saves persistent application settings.
+/// Saves persistent application settings atomically via temporary file replacement.
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let path = get_settings_path()?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).ok();
     }
     let content = serde_json::to_string_pretty(settings)?;
-    fs::write(&path, content)?;
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, &content)?;
+
+    // Atomic replace on Windows/POSIX
+    if path.exists() {
+        let _ = fs::remove_file(&path);
+    }
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        // Fallback direct write if filesystem rename fails
+        let _ = fs::remove_file(&tmp_path);
+        fs::write(&path, content)?;
+        return Err(e.into());
+    }
     Ok(())
 }
 

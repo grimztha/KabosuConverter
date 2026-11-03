@@ -43,9 +43,10 @@ fn main() -> Result<()> {
         Err(_e) => {
             #[cfg(debug_assertions)]
             eprintln!("Warning: FFmpeg binaries not found: {}", _e);
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             Arc::new(FFmpegBinaries {
-                ffmpeg: PathBuf::from(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
-                ffprobe: PathBuf::from(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
+                ffmpeg: cwd.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
+                ffprobe: cwd.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
                 ffplay: None,
             })
         }
@@ -199,6 +200,32 @@ fn main() -> Result<()> {
 
     // Register all event callbacks onto the UI
     handlers::register_all(&ui, &ctx);
+
+    // Register custom window control callbacks (minimize, maximize, close)
+    let ui_min = ui.as_weak();
+    let ui_max = ui.as_weak();
+    let ui_close = ui.as_weak();
+
+    ui.global::<AppLogic>().on_window_minimize(move || {
+        if let Some(ui) = ui_min.upgrade() {
+            ui.window().set_minimized(true);
+        }
+    });
+
+    ui.global::<AppLogic>().on_window_maximize(move || {
+        if let Some(ui) = ui_max.upgrade() {
+            let is_max = ui.window().is_maximized();
+            ui.window().set_maximized(!is_max);
+            ui.global::<AppData>().set_is_window_maximized(!is_max);
+        }
+    });
+
+    ui.global::<AppLogic>().on_window_close(move || {
+        if let Some(ui) = ui_close.upgrade() {
+            let _ = ui.window().hide();
+        }
+        let _ = slint::quit_event_loop();
+    });
 
     ui.show()
         .map_err(|e| anyhow::anyhow!("Failed to show window: {:?}", e))?;

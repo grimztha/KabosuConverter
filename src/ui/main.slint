@@ -7,6 +7,7 @@ import { AppData, AppLogic } from "globals.slint";
 export { AppData, AppLogic }
 
 import { IconButton } from "components/icon_button.slint";
+import { WindowControls } from "components/window_controls.slint";
 
 import { PlayerTab } from "views/player_tab.slint";
 import { DownloaderTab } from "views/downloader_tab.slint";
@@ -22,12 +23,20 @@ export component MainWindow inherits Window {
     preferred-width: 1280px;
     preferred-height: 850px;
     background: #09090b; // Deep dark neutral background
+    no-frame: true;
+    resize-border-width: 6px;
+    maximized <=> AppData.is_window_maximized;
 
     forward-focus: fs;
 
     property <length> queue_panel_width: 300px;
 
-    fs := FocusScope {
+    Rectangle {
+        border-width: AppData.is_window_maximized ? 0px : 1px;
+        border-color: #23232a;
+        background: #09090b;
+
+        fs := FocusScope {
         key-pressed(event) => {
             if event.text == " " {
                 if AppData.active_tab == 0 && AppData.player_has_media {
@@ -59,204 +68,236 @@ export component MainWindow inherits Window {
         VerticalLayout {
             spacing: 0px;
 
-        // TOP HEADER BAR (Brand Title on Left + Workspace Navigation Tabs)
-        Rectangle {
-            height: 42px;
-            background: #121215;
+            // UNIFIED TOP HEADER BAR (Integrated Title Bar + Workspace Tabs + Window Controls)
+            Rectangle {
+                height: 42px;
+                background: #101013;
 
-            // Left: Brand Logo & Title (Top-Left Corner)
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 16px;
-                spacing: 8px;
-                alignment: start;
+                WindowMoveArea {
+                    width: 100%;
+                    height: 100%;
 
-                VerticalLayout {
-                    alignment: center;
-                    Image {
-                        width: 24px;
-                        height: 24px;
-                        source: @image-url("icons/brand-logo.png");
-                    }
-                }
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 0px;
+                        spacing: 0px;
 
-                VerticalLayout {
-                    alignment: center;
-                    Text {
-                        text: "ANOTHER ENCODER";
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: #f4f4f5;
-                        vertical-alignment: center;
+                        // Left: Brand Identity & Title Bar Text
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    width: 20px;
+                                    height: 20px;
+                                    source: @image-url("icons/brand-logo.png");
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "ANOTHER ENCODER";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    letter-spacing: 0.5px;
+                                    color: #f4f4f5;
+                                }
+                            }
+                        }
+
+                        // Flexible Draggable Space (Left of Tabs)
+                        Rectangle {
+                            horizontal-stretch: 1;
+                        }
+
+                        // Center: Workspace Navigation Tabs (Segmented Control Pill)
+                        VerticalLayout {
+                            alignment: center;
+
+                            Rectangle {
+                                height: 32px;
+                                border-radius: 8px;
+                                background: #141418;
+                                border-width: 1px;
+                                border-color: #24242c;
+
+                                HorizontalLayout {
+                                    padding-left: 3px;
+                                    padding-right: 3px;
+                                    padding-top: 3px;
+                                    padding-bottom: 3px;
+                                    spacing: 3px;
+
+                                    // Tab 0: View & Edit
+                                    t0 := Rectangle {
+                                        border-radius: 6px;
+                                        background: AppData.active_tab == 0 ? #1f1f27 : (t0_ta.has-hover ? #181820 : #00000000);
+                                        border-width: 1px;
+                                        border-color: AppData.active_tab == 0 ? #38bdf8 : #00000000;
+
+                                        animate background { duration: 120ms; }
+                                        animate border-color { duration: 120ms; }
+
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            padding-right: 10px;
+                                            spacing: 6px;
+                                            alignment: center;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("icons/film.svg");
+                                                    width: 13px;
+                                                    height: 13px;
+                                                    colorize: AppData.active_tab == 0 ? #38bdf8 : (t0_ta.has-hover ? #e4e4e7 : #9ca3af);
+                                                }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "View & Edit";
+                                                    font-size: 12px;
+                                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
+                                                    color: AppData.active_tab == 0 ? #38bdf8 : (t0_ta.has-hover ? #ffffff : #9ca3af);
+                                                }
+                                            }
+
+                                            if AppData.has_active_trim : VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 6px;
+                                                    height: 6px;
+                                                    border-radius: 3px;
+                                                    background: #f59e0b;
+                                                }
+                                            }
+                                        }
+
+                                        t0_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.switch_tab(0); }
+                                        }
+                                    }
+
+                                    // Tab 1: Downloader
+                                    t1 := Rectangle {
+                                        border-radius: 6px;
+                                        background: AppData.active_tab == 1 ? #1f1f27 : (t1_ta.has-hover ? #181820 : #00000000);
+                                        border-width: 1px;
+                                        border-color: AppData.active_tab == 1 ? #38bdf8 : #00000000;
+
+                                        animate background { duration: 120ms; }
+                                        animate border-color { duration: 120ms; }
+
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            padding-right: 10px;
+                                            spacing: 6px;
+                                            alignment: center;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("icons/download.svg");
+                                                    width: 13px;
+                                                    height: 13px;
+                                                    colorize: AppData.active_tab == 1 ? #38bdf8 : (t1_ta.has-hover ? #e4e4e7 : #9ca3af);
+                                                }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Downloader";
+                                                    font-size: 12px;
+                                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
+                                                    color: AppData.active_tab == 1 ? #38bdf8 : (t1_ta.has-hover ? #ffffff : #9ca3af);
+                                                }
+                                            }
+
+                                            if AppData.ytdlp_is_downloading : VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 6px;
+                                                    height: 6px;
+                                                    border-radius: 3px;
+                                                    background: #34d399;
+                                                }
+                                            }
+                                        }
+
+                                        t1_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.switch_tab(1); }
+                                        }
+                                    }
+
+                                    // Tab 2: Transcoder Settings
+                                    t2 := Rectangle {
+                                        border-radius: 6px;
+                                        background: AppData.active_tab == 2 ? #1f1f27 : (t2_ta.has-hover ? #181820 : #00000000);
+                                        border-width: 1px;
+                                        border-color: AppData.active_tab == 2 ? #38bdf8 : #00000000;
+
+                                        animate background { duration: 120ms; }
+                                        animate border-color { duration: 120ms; }
+
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            padding-right: 10px;
+                                            spacing: 6px;
+                                            alignment: center;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("icons/settings.svg");
+                                                    width: 13px;
+                                                    height: 13px;
+                                                    colorize: AppData.active_tab == 2 ? #38bdf8 : (t2_ta.has-hover ? #e4e4e7 : #9ca3af);
+                                                }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "Transcoder Settings";
+                                                    font-size: 12px;
+                                                    font-weight: AppData.active_tab == 2 ? 700 : 500;
+                                                    color: AppData.active_tab == 2 ? #38bdf8 : (t2_ta.has-hover ? #ffffff : #9ca3af);
+                                                }
+                                            }
+                                        }
+
+                                        t2_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.switch_tab(2); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Flexible Draggable Space (Right of Tabs)
+                        Rectangle {
+                            horizontal-stretch: 1;
+                        }
+
+                        // Right: Windows Native-Style Control Buttons (Minimize, Maximize/Restore, Close)
+                        WindowControls {
+                            height: 100%;
+                        }
                     }
                 }
             }
 
-            // Center-Right: Workspace Navigation Tabs (aligned above right workspace panel)
-            HorizontalLayout {
-                x: root.queue_panel_width + 1px;
-                width: parent.width - root.queue_panel_width - 1px;
-                height: 100%;
-                spacing: 14px;
-                alignment: center;
-
-                // Tab 0: View & Edit
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 114px;
-                        height: 30px;
-                        border-radius: 6px;
-                        background: AppData.active_tab == 0 ? #141418 : #00000000;
-                        border-width: 1px;
-                        border-color: AppData.active_tab == 0 ? #38bdf8 : #00000000;
-
-                        HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 10px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            spacing: 6px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("icons/film.svg");
-                                    width: 14px;
-                                    height: 14px;
-                                    colorize: AppData.active_tab == 0 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "View & Edit";
-                                    font-size: 12px;
-                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
-                                    color: AppData.active_tab == 0 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                            if AppData.has_active_trim : VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 6px;
-                                    height: 6px;
-                                    border-radius: 3px;
-                                    background: #f59e0b;
-                                }
-                            }
-                        }
-
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { AppLogic.switch_tab(0); }
-                        }
-                    }
-                }
-
-                // Tab 1: Downloader
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 114px;
-                        height: 30px;
-                        border-radius: 6px;
-                        background: AppData.active_tab == 1 ? #141418 : #00000000;
-                        border-width: 1px;
-                        border-color: AppData.active_tab == 1 ? #38bdf8 : #00000000;
-
-                        HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 10px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            spacing: 6px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("icons/download.svg");
-                                    width: 14px;
-                                    height: 14px;
-                                    colorize: AppData.active_tab == 1 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "Downloader";
-                                    font-size: 12px;
-                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
-                                    color: AppData.active_tab == 1 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                            if AppData.ytdlp_is_downloading : VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 6px;
-                                    height: 6px;
-                                    border-radius: 3px;
-                                    background: #34d399;
-                                }
-                            }
-                        }
-
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { AppLogic.switch_tab(1); }
-                        }
-                    }
-                }
-
-                // Tab 2: Transcoder Settings
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 160px;
-                        height: 30px;
-                        border-radius: 6px;
-                        background: AppData.active_tab == 2 ? #141418 : #00000000;
-                        border-width: 1px;
-                        border-color: AppData.active_tab == 2 ? #38bdf8 : #00000000;
-
-                        HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 10px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            spacing: 6px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("icons/settings.svg");
-                                    width: 14px;
-                                    height: 14px;
-                                    colorize: AppData.active_tab == 2 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "Transcoder Settings";
-                                    font-size: 12px;
-                                    font-weight: AppData.active_tab == 2 ? 700 : 500;
-                                    color: AppData.active_tab == 2 ? #38bdf8 : #a1a1aa;
-                                }
-                            }
-                        }
-
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { AppLogic.switch_tab(2); }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Header Divider
-        Rectangle { height: 1px; background: #2a2a30; }
+            // Header Subtle Divider
+            Rectangle { height: 1px; background: #1f1f26; }
 
         // MAIN BODY (Split Left: Queue, Right: Inspector)
         HorizontalLayout {
@@ -515,5 +556,6 @@ export component MainWindow inherits Window {
             }
         }
     }
+}
 }
 }

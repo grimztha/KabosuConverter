@@ -1,0 +1,124 @@
+import { AppData, AppLogic } from "../globals.slint";
+
+export component WindowControls inherits HorizontalLayout {
+    spacing: 0px;
+    alignment: end;
+
+    // Minimize Button
+    min_btn := Rectangle {
+        width: 46px;
+        height: 100%;
+        background: min_ta.pressed ? #2a2a34 : (min_ta.has-hover ? #1f1f26 : #00000000);
+
+        animate background { duration: 100ms; }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 10px;
+                    height: 1px;
+                    background: min_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                }
+            }
+        }
+
+        min_ta := TouchArea {
+            mouse-cursor: default;
+            clicked => {
+                AppLogic.window_minimize();
+            }
+        }
+    }
+
+    // Maximize / Restore Button
+    max_btn := Rectangle {
+        width: 46px;
+        height: 100%;
+        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : #00000000);
+
+        animate background { duration: 100ms; }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+
+                // When maximized: show overlapping restore squares
+                if AppData.is_window_maximized : Rectangle {
+                    width: 11px;
+                    height: 11px;
+
+                    // Back square
+                    Rectangle {
+                        x: 2px;
+                        y: 0px;
+                        width: 8px;
+                        height: 8px;
+                        border-width: 1px;
+                        border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                        background: #00000000;
+                    }
+
+                    // Front square
+                    Rectangle {
+                        x: 0px;
+                        y: 2px;
+                        width: 8px;
+                        height: 8px;
+                        border-width: 1px;
+                        border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : #111114);
+                    }
+                }
+
+                // When normal / restored: show single square
+                if !AppData.is_window_maximized : Rectangle {
+                    width: 10px;
+                    height: 10px;
+                    border-width: 1px;
+                    border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                    background: #00000000;
+                    border-radius: 1px;
+                }
+            }
+        }
+
+        max_ta := TouchArea {
+            mouse-cursor: default;
+            clicked => {
+                AppLogic.window_maximize();
+            }
+        }
+    }
+
+    // Close Button (turns Windows red on hover)
+    close_btn := Rectangle {
+        width: 46px;
+        height: 100%;
+        background: close_ta.pressed ? #c4101e : (close_ta.has-hover ? #e81123 : #00000000);
+
+        animate background { duration: 100ms; }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("../icons/x.svg");
+                    width: 10px;
+                    height: 10px;
+                    colorize: close_ta.has-hover ? #ffffff : #a1a1aa;
+                }
+            }
+        }
+
+        close_ta := TouchArea {
+            mouse-cursor: default;
+            clicked => {
+                AppLogic.window_close();
+            }
+        }
+    }
+}

@@ -1256,6 +1256,102 @@ fn test_videotoolbox_hardware_command_generation() {
     assert!(cmd_prores.contains(&"3".to_string())); // HQ = 3
 }
 
+#[test]
+fn test_svtav1_rate_control_modes() {
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+
+    // 1. SVT-AV1 with CRF
+    let config_crf = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::AV1,
+        rate_control: RateControlMode::CRF,
+        crf: 28,
+        ..Default::default()
+    };
+    let cmd_crf = FFmpegCommandBuilder::build(&config_crf, ffmpeg_bin);
+    assert!(cmd_crf.contains(&"-c:v".to_string()));
+    assert!(cmd_crf.contains(&"libsvtav1".to_string()));
+    assert!(cmd_crf.contains(&"-crf".to_string()));
+    let crf_idx = cmd_crf.iter().position(|r| r == "-crf").unwrap();
+    assert_eq!(cmd_crf[crf_idx + 1], "28");
+    assert!(!cmd_crf.contains(&"-b:v".to_string()));
+
+    // 2. SVT-AV1 with CBR
+    let config_cbr = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::AV1,
+        rate_control: RateControlMode::CBR,
+        video_bitrate_kbps: 4500,
+        ..Default::default()
+    };
+    let cmd_cbr = FFmpegCommandBuilder::build(&config_cbr, ffmpeg_bin);
+    assert!(cmd_cbr.contains(&"-c:v".to_string()));
+    assert!(cmd_cbr.contains(&"libsvtav1".to_string()));
+    assert!(cmd_cbr.contains(&"-b:v".to_string()));
+    let b_idx = cmd_cbr.iter().position(|r| r == "-b:v").unwrap();
+    assert_eq!(cmd_cbr[b_idx + 1], "4500k");
+    assert!(!cmd_cbr.contains(&"-crf".to_string()));
+
+    // 3. SVT-AV1 with VBR
+    let config_vbr = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::AV1,
+        rate_control: RateControlMode::VBR,
+        video_bitrate_kbps: 6000,
+        ..Default::default()
+    };
+    let cmd_vbr = FFmpegCommandBuilder::build(&config_vbr, ffmpeg_bin);
+    assert!(cmd_vbr.contains(&"-b:v".to_string()));
+    let vbr_idx = cmd_vbr.iter().position(|r| r == "-b:v").unwrap();
+    assert_eq!(cmd_vbr[vbr_idx + 1], "6000k");
+    assert!(!cmd_vbr.contains(&"-crf".to_string()));
+}
+
+#[test]
+fn test_faststart_case_insensitivity() {
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+
+    for ext in &["out.MP4", "out.MOV", "out.M4V", "out.mp4", "out.mov", "out.m4v"] {
+        let config = EncodeJobConfig {
+            function: EncoderFunction::Transcode,
+            input_path: "in.mkv".to_string(),
+            output_path: ext.to_string(),
+            faststart: true,
+            ..Default::default()
+        };
+        let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+        assert!(
+            cmd.contains(&"-movflags".to_string()) && cmd.contains(&"+faststart".to_string()),
+            "faststart must be applied for extension {}",
+            ext
+        );
+    }
+
+    // Rewrap case-insensitivity
+    for ext in &["out.MP4", "out.MOV", "out.M4V"] {
+        let config = EncodeJobConfig {
+            function: EncoderFunction::Rewrap,
+            input_path: "in.mkv".to_string(),
+            output_path: ext.to_string(),
+            faststart: true,
+            ..Default::default()
+        };
+        let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+        assert!(
+            cmd.contains(&"-movflags".to_string()) && cmd.contains(&"+faststart".to_string()),
+            "faststart must be applied in rewrap for extension {}",
+            ext
+        );
+    }
+}
+
+
 
 
 

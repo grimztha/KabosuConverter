@@ -73,19 +73,14 @@ impl FFmpegBinaries {
                 }
             }
 
-            // Check System $PATH (Optional fallback)
-            if let Some(system_candidate) = crate::binaries::DependencyManager::find_in_system_path(name) {
-                return Some(system_candidate);
-            }
-
             None
         };
 
         let ffmpeg = find_binary(&ffmpeg_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local, project, or system PATH", ffmpeg_name))?;
+            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local storage or project root path", ffmpeg_name))?;
 
         let ffprobe = find_binary(&ffprobe_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local, project, or system PATH", ffprobe_name))?;
+            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local storage or project root path", ffprobe_name))?;
 
         let ffplay = find_binary(&ffplay_name);
 

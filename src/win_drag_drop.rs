@@ -376,7 +376,9 @@ pub unsafe fn get_window_class(hwnd: *mut std::ffi::c_void) -> String {
 /// - `hdrop` must be a valid HDROP handle obtained from a drop operation.
 /// - This function assumes the Windows API returns valid data.
 pub unsafe fn parse_hdrop(hdrop: *mut std::ffi::c_void) -> Vec<PathBuf> {
-    debug_assert!(!hdrop.is_null());
+    if hdrop.is_null() {
+        return Vec::new();
+    }
     let count = DragQueryFileW(hdrop, 0xFFFFFFFF, std::ptr::null_mut(), 0);
     let mut paths = Vec::with_capacity(count as usize);
     let mut buffer = [0u16; 2048];

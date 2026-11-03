@@ -705,6 +705,15 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         let ui_w_log = ui_weak.clone();
                         let log_callback = move |line: String| {
+                            let trimmed = line.trim();
+                            // Filter out high-frequency in-place progress updates (frame=... or size=... time=...)
+                            // These are already handled by progress_callback and would flood the Slint UI event loop.
+                            if trimmed.starts_with("frame=")
+                                || (trimmed.starts_with("size=") && trimmed.contains("time="))
+                            {
+                                return;
+                            }
+
                             let ui_w = ui_w_log.clone();
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_w.upgrade() {

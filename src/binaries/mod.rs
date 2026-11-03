@@ -260,13 +260,6 @@ impl DependencyManager {
             }
         }
 
-        // Priority 2: Check System $PATH (Optional fallback)
-        if let Some(path_bin) = Self::find_in_system_path(filename) {
-            if Self::verify_binary_executable(&path_bin, test_arg).await.is_ok() {
-                return Some(path_bin);
-            }
-        }
-
         None
     }
 

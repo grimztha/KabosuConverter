@@ -134,7 +134,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => {
                     data.set_ytdlp_has_error(true);
                     data.set_ytdlp_error_message(SharedString::from(
-                        "yt-dlp binary not found in app-local storage or system PATH",
+                        "yt-dlp binary not found in local binaries or application folder",
                     ));
                     return;
                 }
@@ -232,7 +232,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => {
                     data.set_ytdlp_has_error(true);
                     data.set_ytdlp_error_message(SharedString::from(
-                        "yt-dlp binary not found in app-local storage or system PATH",
+                        "yt-dlp binary not found in local binaries or application folder",
                     ));
                     return;
                 }

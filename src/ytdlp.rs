@@ -47,11 +47,6 @@ pub fn find_ytdlp_binary() -> Option<PathBuf> {
         }
     }
 
-    // 3. System $PATH (Optional fallback)
-    if let Some(system_candidate) = crate::binaries::DependencyManager::find_in_system_path(exe_name) {
-        return Some(system_candidate);
-    }
-
     None
 }
 
@@ -124,6 +119,9 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     }
     if trimmed.starts_with('-') {
         return Err(anyhow!("Invalid stream URL: input cannot begin with a command flag"));
+    }
+    if trimmed.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("Invalid stream URL: input cannot contain control characters"));
     }
 
     let mut cmd = Command::new(ytdlp_bin);
@@ -280,7 +278,7 @@ pub fn sanitize_filename_stem(name: &str) -> String {
 pub fn build_output_template(custom_filename: Option<&str>) -> String {
     if let Some(custom) = custom_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
         if custom.contains("%(ext)s") {
-            let sanitized = custom.replace(['\\', '/', ':'], "_");
+            let sanitized = custom.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_");
             return sanitized;
         }
         let clean = sanitize_filename_stem(custom);
@@ -341,6 +339,9 @@ pub fn start_download(
     }
     if trimmed_url.starts_with('-') {
         return Err(anyhow!("Invalid stream URL: input cannot begin with a command flag"));
+    }
+    if trimmed_url.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("Invalid stream URL: input cannot contain control characters"));
     }
 
     // Ensure the destination folder exists on disk before starting
@@ -418,7 +419,9 @@ pub fn start_download(
             if cancel_clone.load(Ordering::SeqCst) {
                 break;
             }
-            on_log_out(line.clone());
+            if !line.starts_with("download:") {
+                on_log_out(line.clone());
+            }
 
             let trimmed = line.trim();
             // Capture after_move:filepath output

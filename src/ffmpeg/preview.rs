@@ -437,6 +437,9 @@ pub fn read_ffplay_clock<R: std::io::Read>(reader: R, clock: Arc<AtomicU64>) {
             clock.store((pts * 1_000_000.0) as u64, Ordering::Release);
         }
         line_buf.clear();
+        if line_buf.capacity() > 16384 {
+            line_buf.shrink_to(4096);
+        }
     }
 }
 

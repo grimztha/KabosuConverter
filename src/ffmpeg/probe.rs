@@ -100,11 +100,14 @@ fn parse_fraction(s: &str) -> Option<f64> {
         let num: f64 = parts[0].trim().parse().ok()?;
         let den: f64 = parts[1].trim().parse().ok()?;
         if den != 0.0 && num.is_finite() && den.is_finite() {
-            return Some(num / den);
+            let res = num / den;
+            if res > 0.0 {
+                return Some(res);
+            }
         }
     } else if parts.len() == 1 {
         let val: f64 = parts[0].trim().parse().ok()?;
-        if val.is_finite() {
+        if val.is_finite() && val > 0.0 {
             return Some(val);
         }
     }
@@ -251,6 +254,16 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
                     .as_str()
                     .and_then(|s| s.parse().ok())
                     .or_else(|| stream["duration"].as_f64())
+                    .or_else(|| {
+                        stream["tags"]["DURATION"]
+                            .as_str()
+                            .and_then(crate::ffmpeg::parse_timecode_to_seconds)
+                    })
+                    .or_else(|| {
+                        stream["tags"]["DURATION-eng"]
+                            .as_str()
+                            .and_then(crate::ffmpeg::parse_timecode_to_seconds)
+                    })
                     .unwrap_or(0.0);
                 if stream_dur > duration_seconds {
                     duration_seconds = stream_dur;

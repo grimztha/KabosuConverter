@@ -1042,8 +1042,16 @@ impl FFmpegCommandBuilder {
                 args.push(encoder.to_string());
 
                 if encoder == "libsvtav1" {
-                    args.push("-crf".to_string());
-                    args.push(config.crf.to_string());
+                    match config.rate_control {
+                        RateControlMode::CRF => {
+                            args.push("-crf".to_string());
+                            args.push(config.crf.to_string());
+                        }
+                        RateControlMode::CBR | RateControlMode::VBR => {
+                            args.push("-b:v".to_string());
+                            args.push(format!("{}k", config.video_bitrate_kbps));
+                        }
+                    }
                     args.push("-pix_fmt".to_string());
                     args.push("yuv420p10le".to_string());
                 } else if encoder == "av1_qsv" {
@@ -1137,7 +1145,8 @@ impl FFmpegCommandBuilder {
         }
 
         // Faststart for streaming web containers
-        if config.faststart && (config.output_path.ends_with(".mp4") || config.output_path.ends_with(".mov") || config.output_path.ends_with(".m4v")) {
+        let out_lower = config.output_path.to_lowercase();
+        if config.faststart && (out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v")) {
             args.push("-movflags".to_string());
             args.push("+faststart".to_string());
         }
@@ -1239,7 +1248,8 @@ impl FFmpegCommandBuilder {
         args.push("0".to_string());
         args.push("-ignore_unknown".to_string());
 
-        if config.output_path.ends_with(".mp4") || config.output_path.ends_with(".mov") {
+        let out_lower = config.output_path.to_lowercase();
+        if out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v") {
             args.push("-movflags".to_string());
             args.push("+faststart".to_string());
         }

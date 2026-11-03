@@ -101,8 +101,9 @@ fn test_build_output_template_and_sanitization() {
     let template = build_output_template(Some("Illegal: Char * Test? <World> | Cool / Slanted\\Name"));
     assert_eq!(template, "Illegal_ Char _ Test_ _World_ _ Cool _ Slanted_Name.%(ext)s");
 
-    // 5. Explicit %(ext)s preserved
+    // 5. Explicit %(ext)s preserved and forbidden characters sanitized
     assert_eq!(build_output_template(Some("custom_pattern_%(id)s.%(ext)s")), "custom_pattern_%(id)s.%(ext)s");
+    assert_eq!(build_output_template(Some("My*Video?Title:Part1.%(ext)s")), "My_Video_Title_Part1.%(ext)s");
 
     // 6. Sanitization edge cases
     assert_eq!(sanitize_filename_stem("   ...   "), "downloaded_media");
@@ -134,6 +135,15 @@ fn test_ytdlp_url_validation_security() {
     let single_flag_res = discover_media(&bin, "-o evil.bat");
     assert!(single_flag_res.is_err());
     assert!(single_flag_res.unwrap_err().to_string().contains("cannot begin with a command flag"));
+
+    // 3. Control character and null byte rejection
+    let null_res = discover_media(&bin, "https://example.com/video\0.mp4");
+    assert!(null_res.is_err());
+    assert!(null_res.unwrap_err().to_string().contains("cannot contain control characters"));
+
+    let newline_res = discover_media(&bin, "https://example.com/video\n--exec=calc");
+    assert!(newline_res.is_err());
+    assert!(newline_res.unwrap_err().to_string().contains("cannot contain control characters"));
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::Path;
 
 use super::error::BinaryError;
@@ -123,6 +123,7 @@ impl BinaryExtractor {
 
         let ffmpeg_name = platform.ffmpeg_filename();
         let ffprobe_name = platform.ffprobe_filename();
+        let ffplay_name = platform.ffplay_filename();
 
         let mut extracted_ffmpeg = false;
         let mut extracted_ffprobe = false;
@@ -147,6 +148,8 @@ impl BinaryExtractor {
             } else if path_str.ends_with(&format!("/{}", ffprobe_name)) || path_str == ffprobe_name {
                 extracted_ffprobe = true;
                 Some(ffprobe_name)
+            } else if path_str.ends_with(&format!("/{}", ffplay_name)) || path_str == ffplay_name {
+                Some(ffplay_name)
             } else {
                 None
             };
@@ -156,9 +159,7 @@ impl BinaryExtractor {
                 let tmp_out_path = bin_dir.join(format!("{}.extract.tmp", out_name));
 
                 let mut outfile = File::create(&tmp_out_path)?;
-                let mut buffer = Vec::new();
-                entry.read_to_end(&mut buffer)?;
-                outfile.write_all(&buffer)?;
+                io::copy(&mut entry, &mut outfile)?;
                 outfile.flush()?;
                 drop(outfile);
 

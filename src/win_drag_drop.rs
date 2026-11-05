@@ -351,6 +351,37 @@ extern "system" {
     fn GetClassNameW(hWnd: *mut std::ffi::c_void, lpClassName: *mut u16, nMaxCount: i32) -> i32;
 }
 
+#[link(name = "dwmapi")]
+extern "system" {
+    fn DwmSetWindowAttribute(
+        hwnd: *mut std::ffi::c_void,
+        dwAttribute: u32,
+        pvAttribute: *const std::ffi::c_void,
+        cbAttribute: u32,
+    ) -> i32;
+}
+
+pub const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+pub const DWMWCP_ROUND: u32 = 2;
+
+/// Applies native Windows 11 rounded window corners to the application HWND
+pub unsafe fn apply_window_rounded_corners(hwnd: *mut std::ffi::c_void) {
+    if hwnd.is_null() {
+        return;
+    }
+    let preference = DWMWCP_ROUND;
+    let hr = DwmSetWindowAttribute(
+        hwnd,
+        DWMWA_WINDOW_CORNER_PREFERENCE,
+        &preference as *const u32 as *const std::ffi::c_void,
+        std::mem::size_of::<u32>() as u32,
+    );
+    log_dd(&format!(
+        "DwmSetWindowAttribute DWMWCP_ROUND hr={:#x} on HWND {:p}",
+        hr, hwnd
+    ));
+}
+
 pub unsafe fn get_window_title(hwnd: *mut std::ffi::c_void) -> String {
     let mut buf = [0u16; 512];
     let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
@@ -500,6 +531,7 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
         && class != "NVOpenGLPbuffer";
     if is_real {
         ATTACHED_REAL_HWND.store(hwnd as usize, Ordering::SeqCst);
+        apply_window_rounded_corners(hwnd);
     }
 
     log_dd(&format!(

@@ -251,6 +251,11 @@ fn main() -> Result<()> {
         let task_ctx_drop = ctx.task_context();
 
         let initial_hwnd = native_hwnd.unwrap_or(std::ptr::null_mut());
+        if !initial_hwnd.is_null() {
+            unsafe {
+                win_drag_drop::apply_window_rounded_corners(initial_hwnd);
+            }
+        }
         win_drag_drop::setup_drop_target(initial_hwnd, move |dropped_paths| {
             #[cfg(debug_assertions)]
             println!("Dropped {} file(s) into queue", dropped_paths.len());

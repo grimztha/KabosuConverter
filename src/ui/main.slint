@@ -22,7 +22,7 @@ export component MainWindow inherits Window {
     min-height: 650px;
     preferred-width: 1280px;
     preferred-height: 850px;
-    background: #09090b; // Deep dark neutral background
+    background: transparent;
     no-frame: true;
     resize-border-width: 6px;
     maximized <=> AppData.is_window_maximized;
@@ -32,9 +32,11 @@ export component MainWindow inherits Window {
     property <length> queue_panel_width: 300px;
 
     Rectangle {
+        border-radius: AppData.is_window_maximized ? 0px : 12px;
         border-width: AppData.is_window_maximized ? 0px : 1px;
         border-color: #23232a;
         background: #09090b;
+        clip: true;
 
         fs := FocusScope {
         key-pressed(event) => {

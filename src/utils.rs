@@ -102,7 +102,13 @@ pub fn normalize_path_for_explorer(path: &Path) -> PathBuf {
     };
     let resolved = std::fs::canonicalize(&abs).unwrap_or(abs);
     let s = resolved.to_string_lossy();
-    let stripped = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    let stripped = if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{}", unc)
+    } else if let Some(local) = s.strip_prefix(r"\\?\") {
+        local.to_string()
+    } else {
+        s.to_string()
+    };
     let mut clean = stripped.replace('/', r"\");
     while clean.len() > 3 && clean.ends_with('\\') {
         clean.pop();
@@ -133,21 +139,39 @@ pub fn reveal_in_explorer(file_path: &Path) {
     let clean = normalize_path_for_explorer(file_path);
     #[cfg(windows)]
     {
-        if clean.exists() {
-            let _ = std::process::Command::new("explorer")
-                .arg(format!("/select,{}", clean.to_string_lossy()))
+        use std::os::windows::process::CommandExt;
+        if clean.exists() && clean.is_file() {
+            let path_str = clean.to_string_lossy();
+            // In Windows, explorer command switch /select,"PATH" must NOT enclose /select in quotes.
+            // Rust's standard .arg() wraps the whole argument in quotes if it contains spaces,
+            // which breaks explorer's command-line parser and causes it to open Documents.
+            // .raw_arg() preserves /select,"PATH" verbatim.
+            let spawned = std::process::Command::new("explorer")
+                .raw_arg(format!("/select,\"{}\"", path_str))
                 .spawn();
-            return;
+            if spawned.is_ok() {
+                return;
+            }
         }
-        if let Some(parent) = clean.parent() {
-            open_folder_in_explorer(parent);
-        }
+        let target_dir = if clean.is_dir() {
+            clean.clone()
+        } else if let Some(parent) = clean.parent() {
+            parent.to_path_buf()
+        } else {
+            clean.clone()
+        };
+        open_folder_in_explorer(&target_dir);
     }
     #[cfg(not(windows))]
     {
-        if let Some(parent) = clean.parent() {
-            open_folder_in_explorer(parent);
-        }
+        let target_dir = if clean.is_dir() {
+            clean.clone()
+        } else if let Some(parent) = clean.parent() {
+            parent.to_path_buf()
+        } else {
+            clean.clone()
+        };
+        open_folder_in_explorer(&target_dir);
     }
 }
 

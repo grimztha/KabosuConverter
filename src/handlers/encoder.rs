@@ -29,6 +29,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     ui.global::<AppData>().set_output_directory(SharedString::from(
                         &folder_str,
                     ));
+                    ui.global::<AppData>().set_ytdlp_output_dir(SharedString::from(
+                        &folder_str,
+                    ));
                     let mut s = another_encoder::settings::load_settings();
                     s.default_output_dir = Some(folder_str);
                     let _ = another_encoder::settings::save_settings(&s);

@@ -99,13 +99,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     }
                 }
 
-                let folder = target_folder.unwrap_or_else(|| {
-                    if !dir.is_empty() {
-                        PathBuf::from(&dir)
-                    } else {
-                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-                    }
-                });
+                let folder = if !dir.is_empty() {
+                    PathBuf::from(&dir)
+                } else if let Some(target) = target_folder {
+                    target
+                } else {
+                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                };
 
                 open_folder_in_explorer(&folder);
             }
@@ -289,6 +289,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 Some(custom_fname.as_str())
             };
 
+            let dest_dir_complete = dest_dir.clone();
+
             let job = ytdlp::start_download(
                 &bin_path,
                 f_dir.as_deref(),
@@ -340,13 +342,19 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 },
                 move |res| {
                     let ui_w = ui_complete.clone();
+                    let dest_dir_inner = dest_dir_complete.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w.upgrade() {
                             let data = ui.global::<AppData>();
                             data.set_ytdlp_is_downloading(false);
                             match res {
                                 Ok(file_path) => {
-                                    let clean_file_path = normalize_path_for_explorer(&file_path);
+                                    let resolved_file_path = if file_path.is_absolute() {
+                                        file_path
+                                    } else {
+                                        dest_dir_inner.join(&file_path)
+                                    };
+                                    let clean_file_path = normalize_path_for_explorer(&resolved_file_path);
                                     data.set_ytdlp_has_error(false);
                                     data.set_ytdlp_error_message(SharedString::from(""));
                                     data.set_ytdlp_download_finished(true);
@@ -365,7 +373,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         crate::utils::play_notification_sound();
                                     }
                                     if data.get_open_folder_on_finish() {
-                                        crate::utils::reveal_in_explorer(&clean_file_path);
+                                        if clean_file_path.exists() {
+                                            crate::utils::reveal_in_explorer(&clean_file_path);
+                                        } else {
+                                            crate::utils::open_folder_in_explorer(&dest_dir_inner);
+                                        }
                                     }
 
                                     // Record into current open session download history

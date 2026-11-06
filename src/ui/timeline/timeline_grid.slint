@@ -1,0 +1,131 @@
+export component TimelineGrid inherits Rectangle {
+    in property <float> duration: 1.0;
+    in property <bool> is_dual_channel: false;
+    in property <length> ruler_height: 18px;
+
+    pure function get_nice_step(raw: float) -> float {
+        if raw <= 0.05 { return 0.05; }
+        if raw <= 0.1  { return 0.1; }
+        if raw <= 0.2  { return 0.2; }
+        if raw <= 0.5  { return 0.5; }
+        if raw <= 1.0  { return 1.0; }
+        if raw <= 2.0  { return 2.0; }
+        if raw <= 5.0  { return 5.0; }
+        if raw <= 10.0 { return 10.0; }
+        if raw <= 15.0 { return 15.0; }
+        if raw <= 30.0 { return 30.0; }
+        if raw <= 60.0 { return 60.0; }       // 1 min
+        if raw <= 120.0 { return 120.0; }     // 2 min
+        if raw <= 300.0 { return 300.0; }     // 5 min
+        if raw <= 600.0 { return 600.0; }     // 10 min
+        if raw <= 900.0 { return 900.0; }     // 15 min
+        if raw <= 1800.0 { return 1800.0; }   // 30 min
+        if raw <= 3600.0 { return 3600.0; }   // 1 hour
+        if raw <= 7200.0 { return 7200.0; }   // 2 hours
+        return max(3600.0, floor(raw / 3600.0) * 3600.0);
+    }
+
+    pure function format_timecode(sec: float, show_millis: bool) -> string {
+        let s = max(0.0, sec);
+        let total_sec: int = floor(s + 0.0001);
+        let hrs: int = floor(total_sec / 3600);
+        let rem: int = total_sec - hrs * 3600;
+        let mins: int = floor(rem / 60);
+        let secs: int = rem - mins * 60;
+        let m_str = mins < 10 ? "0\{mins}" : "\{mins}";
+        let s_str = secs < 10 ? "0\{secs}" : "\{secs}";
+        if hrs > 0 {
+            let h_str = hrs < 10 ? "0\{hrs}" : "\{hrs}";
+            return "\{h_str}:\{m_str}:\{s_str}";
+        }
+        if show_millis {
+            let frac: int = floor((s - floor(s) + 0.0001) * 10);
+            return "\{m_str}:\{s_str}.\{frac}";
+        }
+        return "\{m_str}:\{s_str}";
+    }
+
+    property <float> step_sec: root.duration > 0.0 && self.width > 0px
+        ? root.get_nice_step((root.duration / (self.width / 1px)) * 90.0)
+        : 10.0;
+
+    property <int> num_ticks: root.duration > 0.0 && root.step_sec > 0.0
+        ? min(180, max(1, ceil(root.duration / root.step_sec)))
+        : 1;
+
+    property <bool> show_fraction: root.step_sec < 1.0;
+
+    // Top Ruler Background Bar
+    Rectangle {
+        y: 0px;
+        width: 100%;
+        height: root.ruler_height;
+        background: @linear-gradient(180deg, #14141a 0%, #0d0d12 100%);
+
+        // Ruler bottom divider
+        Rectangle {
+            y: parent.height - 1px;
+            width: 100%;
+            height: 1px;
+            background: #272732;
+        }
+    }
+
+    // Vertical Grid Lines & Timecodes
+    for i in root.num_ticks + 1 : tick_item := Rectangle {
+        property <float> tick_sec: i * root.step_sec;
+        visible: self.tick_sec <= root.duration + 0.001;
+        x: root.duration > 0.0 ? root.width * (self.tick_sec / root.duration) : 0px;
+        width: 1px;
+        height: 100%;
+
+        // Major Vertical Grid Line through Waveform
+        Rectangle {
+            y: root.ruler_height;
+            width: 1px;
+            height: max(0px, parent.height - root.ruler_height);
+            background: root.is_dual_channel ? #38bdf824 : #38bdf820;
+        }
+
+        // Major Tick Mark in Ruler Bar
+        Rectangle {
+            y: root.ruler_height - 6px;
+            width: 1px;
+            height: 6px;
+            background: #94a3b8;
+        }
+
+        // Timecode Label in Ruler Bar
+        Text {
+            x: 4px;
+            y: 2px;
+            text: root.format_timecode(tick_item.tick_sec, root.show_fraction);
+            font-size: 8.5px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        // Minor Tick & Grid Line at Halfway
+        if (tick_item.tick_sec + root.step_sec * 0.5) <= root.duration : Rectangle {
+            x: root.duration > 0.0 ? root.width * ((root.step_sec * 0.5) / root.duration) : 0px;
+            width: 1px;
+            height: 100%;
+
+            // Minor vertical line through waveform
+            Rectangle {
+                y: root.ruler_height;
+                width: 1px;
+                height: max(0px, parent.height - root.ruler_height);
+                background: #1e293b26;
+            }
+
+            // Minor tick in ruler
+            Rectangle {
+                y: root.ruler_height - 3px;
+                width: 1px;
+                height: 3px;
+                background: #64748b66;
+            }
+        }
+    }
+}

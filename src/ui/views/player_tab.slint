@@ -164,10 +164,10 @@ export component PlayerTab inherits VerticalLayout {
                 }
             }
 
-            // Media Screen Area (Dynamic height: stretches to fill all available vertical space, no vertical scroll)
-            Rectangle {
-                vertical-stretch: 1;
-                min-height: 120px;
+            // Media Screen Area (Dynamic height: stretches to fill available space, reduced by 1/3 when audio queue is selected)
+            media_screen := Rectangle {
+                vertical-stretch: AppData.selected_is_video ? 3 : 2;
+                min-height: 100px;
                 border-radius: 8px;
                 background: #000000;
                 border-width: 1px;
@@ -663,6 +663,11 @@ export component PlayerTab inherits VerticalLayout {
                     font_size: 10.5px;
                     clicked => { AppLogic.switch_tab(2); }
                 }
+            }
+
+            // Spacer reducing visual waveform viewer section's height by 1/3 when audio queue is selected
+            if !AppData.selected_is_video : Rectangle {
+                vertical-stretch: 1;
             }
         }
     }

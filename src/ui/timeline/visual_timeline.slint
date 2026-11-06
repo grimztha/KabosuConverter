@@ -1,6 +1,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { AppData } from "../globals.slint";
 import { TimelineScrollBar } from "timeline_scrollbar.slint";
+import { TimelineGrid } from "timeline_grid.slint";
 
 export component VisualTimeline inherits Rectangle {
     in property <float> duration: 1.0;
@@ -41,7 +42,7 @@ export component VisualTimeline inherits Rectangle {
         }
     }
 
-    height: root.zoom_level > 1.01 ? 87px : 68px;
+    height: root.zoom_level > 1.01 ? 92px : 74px;
     border-radius: 8px;
     background: #09090b;
     border-width: 1px;
@@ -65,43 +66,33 @@ export component VisualTimeline inherits Rectangle {
                 height: 100%;
                 background: #09090b;
 
-                // Subtle center horizontal baseline
-                Rectangle {
-                    y: track.height * 0.5 - 0.5px;
-                    width: 100%;
-                    height: 1px;
-                    background: #22222788;
-                }
-
                 // Audio Waveform Visualization Layer
                 if AppData.has_waveform : Image {
                     x: 0px;
-                    y: 0px;
+                    y: 18px;
                     width: 100%;
-                    height: 100%;
+                    height: max(0px, parent.height - 18px);
                     source: AppData.timeline_waveform;
                     image-fit: fill;
                     image-rendering: smooth;
                     opacity: 0.9;
                 }
 
-                // Timeline Track Background with subtle tick guides (ambient when no audio waveform)
-                if !AppData.has_waveform : HorizontalLayout {
-                    padding-left: 10px;
-                    padding-right: 10px;
-                    alignment: space-between;
-                    for i in 12 : Rectangle {
-                        width: 1px;
-                        height: 12px;
-                        background: #2a2a30;
-                    }
+                // Visual Grid & Timecode on top of the timeline waveform
+                TimelineGrid {
+                    width: 100%;
+                    height: 100%;
+                    duration: root.duration;
+                    is_dual_channel: false;
+                    ruler_height: 18px;
                 }
 
                 // Active Trim Region Highlight
                 if root.has_trim : Rectangle {
                     x: max(0px, track.width * root.in_point_norm);
                     width: max(4px, track.width * (root.out_point_norm - root.in_point_norm));
-                    height: 100%;
+                    y: 18px;
+                    height: max(0px, parent.height - 18px);
                     background: @linear-gradient(90deg, #d9770633 0%, #f59e0b55 50%, #d9770633 100%);
                     border-width: 1px;
                     border-color: #f59e0b88;

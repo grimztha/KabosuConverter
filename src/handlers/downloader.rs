@@ -9,7 +9,7 @@ use another_encoder::ytdlp;
 use crate::context::AppContext;
 use crate::handlers::queue::{load_selected_file, process_incoming_paths};
 use crate::utils::{get_clipboard_string, normalize_path_for_explorer, open_folder_in_explorer};
-use crate::{AppData, AppLogic, MainWindow, QueueFile};
+use crate::{AppData, AppLogic, DownloadHistoryItem, MainWindow, QueueFile};
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
     // Handle yt-dlp URL Changed
@@ -355,9 +355,26 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     data.set_ytdlp_status_message(SharedString::from(
                                         "Download completed successfully!",
                                     ));
+                                    let path_str = clean_file_path.to_string_lossy().to_string();
                                     data.set_ytdlp_last_downloaded_file(SharedString::from(
-                                        clean_file_path.to_string_lossy().as_ref(),
+                                        &path_str,
                                     ));
+
+                                    // Record into current open session download history
+                                    let fname = clean_file_path
+                                        .file_name()
+                                        .map(|f| f.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "Downloaded File".to_string());
+                                    let size_formatted = std::fs::metadata(&clean_file_path)
+                                        .map(|m| crate::utils::format_bytes_fast(m.len()))
+                                        .unwrap_or_default();
+
+                                    let cur_history = data.get_ytdlp_history();
+                                    let mut history_vec: Vec<DownloadHistoryItem> = (0..cur_history.row_count())
+                                        .filter_map(|i| cur_history.row_data(i))
+                                        .collect();
+                                    add_item_to_history(&mut history_vec, &fname, &path_str, &size_formatted);
+                                    data.set_ytdlp_history(ModelRc::new(VecModel::from(history_vec)));
                                 }
                                 Err(e) => {
                                     data.set_ytdlp_has_error(true);
@@ -430,7 +447,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             }
 
             ctx.stop_active_playback(&app_data);
-            app_data.set_active_tab(0);
+            app_data.set_active_tab(1);
             let ui_w = ui_handle.clone();
             let bins_c = bins.clone();
             let task_ctx_c = task_ctx.clone();
@@ -529,8 +546,110 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
-            app_data.set_active_tab(2);
+            app_data.set_active_tab(1);
             process_incoming_paths(vec![path], ui_handle.clone(), task_ctx.clone());
         });
+    }
+
+    // Handle yt-dlp Open History Item in Explorer (with file selected)
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_ytdlp_open_history_item(move |idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let history = ui.global::<AppData>().get_ytdlp_history();
+                let idx = idx as usize;
+                if idx < history.row_count() {
+                    if let Some(item) = history.row_data(idx) {
+                        let path = PathBuf::from(item.file_path.as_str());
+                        crate::utils::reveal_in_explorer(&path);
+                    }
+                }
+            }
+        });
+    }
+
+    // Handle yt-dlp Remove History Item from session list
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_ytdlp_remove_history_item(move |idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let history = ui.global::<AppData>().get_ytdlp_history();
+                let idx = idx as usize;
+                if idx < history.row_count() {
+                    let mut list: Vec<DownloadHistoryItem> = (0..history.row_count())
+                        .filter_map(|i| history.row_data(i))
+                        .collect();
+                    if idx < list.len() {
+                        list.remove(idx);
+                        ui.global::<AppData>().set_ytdlp_history(ModelRc::new(VecModel::from(list)));
+                    }
+                }
+            }
+        });
+    }
+
+    // Handle yt-dlp Clear All History
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_ytdlp_clear_history(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                ui.global::<AppData>().set_ytdlp_history(ModelRc::new(VecModel::from(Vec::<DownloadHistoryItem>::new())));
+            }
+        });
+    }
+}
+
+/// Prepends a new downloaded item to the top (index 0) of the history list.
+/// If an item with the same file path already exists, it is moved to the top without duplicate entries.
+pub fn add_item_to_history(
+    history_vec: &mut Vec<DownloadHistoryItem>,
+    file_name: &str,
+    file_path: &str,
+    file_size_formatted: &str,
+) {
+    history_vec.retain(|item| item.file_path.as_str() != file_path);
+    let new_id = (history_vec.len() + 1) as i32;
+    history_vec.insert(
+        0,
+        DownloadHistoryItem {
+            id: new_id,
+            file_name: SharedString::from(file_name),
+            file_path: SharedString::from(file_path),
+            file_size_formatted: SharedString::from(file_size_formatted),
+        },
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_item_to_history_prepends_latest_to_top() {
+        let mut history = Vec::new();
+        add_item_to_history(&mut history, "first.mp4", "/path/to/first.mp4", "10 MB");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].file_name.as_str(), "first.mp4");
+
+        // Download second file - must be placed at the very top (index 0)
+        add_item_to_history(&mut history, "second.mp4", "/path/to/second.mp4", "25 MB");
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].file_name.as_str(), "second.mp4");
+        assert_eq!(history[1].file_name.as_str(), "first.mp4");
+
+        // Download third file - must be placed at the very top (index 0)
+        add_item_to_history(&mut history, "third.mp4", "/path/to/third.mp4", "50 MB");
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].file_name.as_str(), "third.mp4");
+        assert_eq!(history[1].file_name.as_str(), "second.mp4");
+        assert_eq!(history[2].file_name.as_str(), "first.mp4");
+
+        // Re-download first file - moves to top without duplicate
+        add_item_to_history(&mut history, "first.mp4", "/path/to/first.mp4", "12 MB");
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].file_name.as_str(), "first.mp4");
+        assert_eq!(history[1].file_name.as_str(), "third.mp4");
+        assert_eq!(history[2].file_name.as_str(), "second.mp4");
+        assert_eq!(history[0].file_size_formatted.as_str(), "12 MB");
     }
 }

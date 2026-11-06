@@ -1,4 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../globals.slint";
 
 export component DownloaderFormatDropdown inherits Rectangle {
     in property <[string]> model;
@@ -10,7 +11,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
     }
 
     pure function get_tag_color(s: string) -> color {
-        s.starts-with("[Audio]") ? #a78bfa : (s.starts-with("[Video]") ? #38bdf8 : #f4f4f5)
+        s.starts-with("[Audio]") ? #a78bfa : (s.starts-with("[Video]") ? #38bdf8 : Theme.text_primary)
     }
 
     pure function get_label(s: string) -> string {
@@ -25,9 +26,9 @@ export component DownloaderFormatDropdown inherits Rectangle {
 
     height: 34px;
     border-radius: 6px;
-    background: ta.has-hover ? #1c1c22 : #141418;
+    background: ta.has-hover ? #1c1c22 : Theme.card_bg;
     border-width: 1px;
-    border-color: ta.has-hover ? #38bdf8.with-alpha(0.6) : #2a2a30;
+    border-color: ta.has-hover ? Theme.accent_cyan : Theme.border_color;
 
     animate background { duration: 150ms; }
     animate border-color { duration: 150ms; }
@@ -56,7 +57,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
                 text: root.current_label;
                 font-size: 11.5px;
                 font-weight: 500;
-                color: #f4f4f5;
+                color: Theme.text_primary;
                 overflow: elide;
             }
         }
@@ -68,7 +69,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
                 source: @image-url("../icons/chevron-down.svg");
                 width: 10px;
                 height: 10px;
-                colorize: ta.has-hover ? #f4f4f5 : #a1a1aa;
+                colorize: ta.has-hover ? Theme.text_primary : Theme.text_muted;
             }
         }
     }
@@ -83,7 +84,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
     popup := PopupWindow {
         x: 0;
         y: root.height + 3px;
-        width: root.width;
+        width: Math.max(root.width, 390px);
         height: 280px;
         close-policy: close-on-click-outside;
 
@@ -91,9 +92,9 @@ export component DownloaderFormatDropdown inherits Rectangle {
             width: 100%;
             height: 100%;
             border-radius: 6px;
-            background: #141418;
+            background: Theme.card_bg;
             border-width: 1px;
-            border-color: #2a2a32;
+            border-color: Theme.card_border;
             drop-shadow-blur: 16px;
             drop-shadow-offset-y: 6px;
             drop-shadow-color: #000000aa;
@@ -137,7 +138,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
                                     text: root.get_label(opt);
                                     font-size: 10.5px;
                                     font-weight: idx == root.safe_index ? 600 : 400;
-                                    color: idx == root.safe_index ? #ffffff : (item_ta.has-hover ? #f4f4f5 : #d4d4d8);
+                                    color: idx == root.safe_index ? Theme.text_primary : (item_ta.has-hover ? Theme.text_primary : Theme.text_secondary);
                                     overflow: elide;
                                 }
                             }

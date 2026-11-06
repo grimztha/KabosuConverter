@@ -80,42 +80,51 @@ export component MainWindow inherits Window {
                     height: 100%;
 
                     HorizontalLayout {
-                        padding-left: 14px;
+                        padding-left: 0px;
                         padding-right: 0px;
                         spacing: 0px;
 
-                        // Left: Brand Identity & Title Bar Text
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: start;
-
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    width: 20px;
-                                    height: 20px;
-                                    source: @image-url("icons/brand-logo.png");
-                                }
-                            }
-
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "ANOTHER ENCODER";
-                                    font-size: 12px;
-                                    font-weight: 700;
-                                    letter-spacing: 0.5px;
-                                    color: Theme.text_primary;
-                                }
-                            }
-                        }
-
-                        // Flexible Draggable Space (Left of Tabs)
+                        // Left Section (Above QueuePanel): Brand Identity & Title Bar Text
                         Rectangle {
-                            horizontal-stretch: 1;
+                            min-width: root.queue_panel_width + 1px;
+                            max-width: root.queue_panel_width + 1px;
+                            horizontal-stretch: 0;
+
+                            HorizontalLayout {
+                                padding-left: 14px;
+                                spacing: 8px;
+                                alignment: start;
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        width: 20px;
+                                        height: 20px;
+                                        source: @image-url("icons/brand-logo.png");
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: "ANOTHER ENCODER";
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        letter-spacing: 0.5px;
+                                        color: Theme.text_primary;
+                                    }
+                                }
+                            }
                         }
 
-                        // Center: Workspace Navigation Tabs (Segmented Control Pill)
+                        // Spacer aligning Tabs with middle panel content (20px padding)
+                        Rectangle {
+                            min-width: 20px;
+                            max-width: 20px;
+                            horizontal-stretch: 0;
+                        }
+
+                        // Center-Left: Workspace Navigation Tabs (Segmented Control Pill, static left-aligned with middle panel)
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 0;

@@ -83,7 +83,7 @@ impl AppContext {
 
     /// Restart live audio playback preview with updated audio filters (gain, normalization).
     pub fn restart_audio_preview(&self, app_data: &crate::AppData) {
-        if !app_data.get_player_is_playing() {
+        if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {
             return;
         }
         if let Ok(mut t) = self.last_audio_restart.lock() {
@@ -99,9 +99,6 @@ impl AppContext {
             app_data.get_player_volume()
         };
         let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
-        if vol_int <= 0 {
-            return;
-        }
 
         if let Some(ref ffplay_bin) = self.binaries.ffplay {
             let cur_time = app_data.get_player_current_time() as f64;

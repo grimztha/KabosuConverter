@@ -106,11 +106,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         };
                         let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
 
-                        let audio_expected = vol_int > 0 && ctx.binaries.ffplay.is_some();
+                        let audio_expected = app_data.get_selected_is_audio() && ctx.binaries.ffplay.is_some();
                         let mut initial_audio_clock: Option<Arc<std::sync::atomic::AtomicU64>> = None;
 
                         // Launch audio playback in parallel via ffplay in headless mode (-nodisp)
-                        if vol_int > 0 {
+                        // Runs even if muted or volume=0 so the render output audio meter continues measuring!
+                        if app_data.get_selected_is_audio() {
                             if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
                                 let dur_opt = if out_sec > start_sec {
                                     Some(out_sec - start_sec)
@@ -325,36 +326,34 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         };
                         let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
 
-                        if vol_int > 0 {
-                            if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                                let dur_opt = if out_sec > start_sec {
-                                    Some(out_sec - start_sec)
-                                } else {
-                                    None
-                                };
-                                let edit_gain_db = app_data.get_audio_gain_db();
-                                let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
-                                    Some(edit_gain_db)
-                                } else {
-                                    None
-                                };
-                                let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
-                                    Some(app_data.get_audio_normalize_lufs())
-                                } else {
-                                    None
-                                };
-                                if let Ok(session) = spawn_audio_playback(
-                                    ffplay_bin,
-                                    &path,
-                                    start_sec,
-                                    dur_opt,
-                                    vol_int,
-                                    edit_gain_opt,
-                                    edit_norm_opt,
-                                ) {
-                                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                                    *lock = Some(session);
-                                }
+                        if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
+                            let dur_opt = if out_sec > start_sec {
+                                Some(out_sec - start_sec)
+                            } else {
+                                None
+                            };
+                            let edit_gain_db = app_data.get_audio_gain_db();
+                            let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
+                                Some(edit_gain_db)
+                            } else {
+                                None
+                            };
+                            let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
+                                Some(app_data.get_audio_normalize_lufs())
+                            } else {
+                                None
+                            };
+                            if let Ok(session) = spawn_audio_playback(
+                                ffplay_bin,
+                                &path,
+                                start_sec,
+                                dur_opt,
+                                vol_int,
+                                edit_gain_opt,
+                                edit_norm_opt,
+                            ) {
+                                let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                                *lock = Some(session);
                             }
                         }
 
@@ -566,27 +565,27 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         if let Some(mut old) = lock.take() {
                             let _ = old.kill();
                         }
-                        if vol_int > 0 {
-                                if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                                    let cur_time = app_data.get_player_current_time() as f64;
-                                    let out_sec = app_data.get_out_point_seconds() as f64;
-                                    let dur_opt = if out_sec > cur_time {
-                                        Some(out_sec - cur_time)
-                                    } else {
-                                        None
-                                    };
-                                    let path = app_data.get_selected_file_path().to_string();
-                                    let edit_gain_db = app_data.get_audio_gain_db();
-                                    let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
-                                    let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
-                                    if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
-                                        *lock = Some(session);
-                                    }
+                        if app_data.get_selected_is_audio() {
+                            if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
+                                let cur_time = app_data.get_player_current_time() as f64;
+                                let out_sec = app_data.get_out_point_seconds() as f64;
+                                let dur_opt = if out_sec > cur_time {
+                                    Some(out_sec - cur_time)
+                                } else {
+                                    None
+                                };
+                                let path = app_data.get_selected_file_path().to_string();
+                                let edit_gain_db = app_data.get_audio_gain_db();
+                                let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                                let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                                if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
+                                    *lock = Some(session);
                                 }
                             }
                         }
                     }
                 }
+            }
         });
     }
 
@@ -607,7 +606,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     app_data.set_player_volume(restore_vol);
                     app_data.set_player_is_muted(false);
 
-                    if app_data.get_player_is_playing() {
+                    if app_data.get_player_is_playing() && app_data.get_selected_is_audio() {
                         let cur_time = app_data.get_player_current_time() as f64;
                         let out_sec = app_data.get_out_point_seconds() as f64;
                         let dur_opt = if out_sec > cur_time {
@@ -622,15 +621,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         if let Some(mut old) = lock.take() {
                             let _ = old.kill();
                         }
-                        if vol_int > 0 {
-                                if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                                    let edit_gain_db = app_data.get_audio_gain_db();
-                                    let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
-                                    let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
-                                    if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
-                                        *lock = Some(session);
-                                    }
-                                }
+                        if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
+                            let edit_gain_db = app_data.get_audio_gain_db();
+                            let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                            let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                            if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
+                                *lock = Some(session);
+                            }
                         }
                     }
                 } else {
@@ -641,13 +638,131 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     }
                     app_data.set_player_is_muted(true);
 
-                    // Silence audio immediately
-                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(mut old) = lock.take() {
-                        let _ = old.kill();
+                    // Silence audio output to speakers, but keep ffplay running at volume=0
+                    // so render-output audio meter levels and clock synchronization continue accurately!
+                    if app_data.get_player_is_playing() && app_data.get_selected_is_audio() {
+                        let cur_time = app_data.get_player_current_time() as f64;
+                        let out_sec = app_data.get_out_point_seconds() as f64;
+                        let dur_opt = if out_sec > cur_time {
+                            Some(out_sec - cur_time)
+                        } else {
+                            None
+                        };
+                        let path = app_data.get_selected_file_path().to_string();
+                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(mut old) = lock.take() {
+                            let _ = old.kill();
+                        }
+                        if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
+                            let edit_gain_db = app_data.get_audio_gain_db();
+                            let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
+                            let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
+                            if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, 0, edit_gain_opt, edit_norm_opt) {
+                                *lock = Some(session);
+                            }
+                        }
+                    } else {
+                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(mut old) = lock.take() {
+                            let _ = old.kill();
+                        }
                     }
                 }
             }
         });
+    }
+
+    // Handle Toggle Volume Meter
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_toggle_volume_meter(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_show_volume_meter(!app_data.get_show_volume_meter());
+            }
+        });
+    }
+
+    // Meter Update & Decay Timer (30ms frequency for smooth VU meter movement & peak hold decay)
+    {
+        let ui_handle = ui.as_weak();
+        let ctx = ctx.clone();
+        let mut disp_l = -60.0f32;
+        let mut disp_r = -60.0f32;
+        let mut peak_l = -60.0f32;
+        let mut peak_r = -60.0f32;
+        let mut peak_hold_time_l = std::time::Instant::now();
+        let mut peak_hold_time_r = std::time::Instant::now();
+
+        let meter_timer = std::rc::Rc::new(std::cell::RefCell::new(slint::Timer::default()));
+
+        meter_timer.borrow().start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_millis(30),
+            move || {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let is_playing = app_data.get_player_is_playing();
+                    let is_audio = app_data.get_selected_is_audio();
+
+                    let (target_l, target_r) = if is_playing && is_audio {
+                        if let Ok(lock) = ctx.active_player_child.try_lock() {
+                            if let Some(ref session) = *lock {
+                                session.get_meter_levels()
+                            } else {
+                                (-60.0, -60.0)
+                            }
+                        } else {
+                            (disp_l, disp_r)
+                        }
+                    } else {
+                        (-60.0, -60.0)
+                    };
+
+                    let now = std::time::Instant::now();
+
+                    // Left channel level smoothing (instant attack, smooth decay)
+                    if target_l >= disp_l {
+                        disp_l = target_l;
+                    } else {
+                        disp_l = (disp_l - 2.5).max(target_l).max(-60.0);
+                    }
+
+                    // Left channel peak hold (holds for 800ms, then drops)
+                    if disp_l >= peak_l {
+                        peak_l = disp_l;
+                        peak_hold_time_l = now;
+                    } else if now.duration_since(peak_hold_time_l) > std::time::Duration::from_millis(800) {
+                        peak_l = (peak_l - 1.5).max(disp_l).max(-60.0);
+                    }
+
+                    // Right channel level smoothing (instant attack, smooth decay)
+                    if target_r >= disp_r {
+                        disp_r = target_r;
+                    } else {
+                        disp_r = (disp_r - 2.5).max(target_r).max(-60.0);
+                    }
+
+                    // Right channel peak hold (holds for 800ms, then drops)
+                    if disp_r >= peak_r {
+                        peak_r = disp_r;
+                        peak_hold_time_r = now;
+                    } else if now.duration_since(peak_hold_time_r) > std::time::Duration::from_millis(800) {
+                        peak_r = (peak_r - 1.5).max(disp_r).max(-60.0);
+                    }
+
+                    // Clean floor clamping
+                    if disp_l < -59.5 { disp_l = -60.0; }
+                    if disp_r < -59.5 { disp_r = -60.0; }
+                    if peak_l < -59.5 { peak_l = -60.0; }
+                    if peak_r < -59.5 { peak_r = -60.0; }
+
+                    app_data.set_audio_meter_l_db(disp_l);
+                    app_data.set_audio_meter_r_db(disp_r);
+                    app_data.set_audio_meter_peak_l_db(peak_l);
+                    app_data.set_audio_meter_peak_r_db(peak_r);
+                }
+            },
+        );
     }
 }

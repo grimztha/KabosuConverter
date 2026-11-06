@@ -4,6 +4,7 @@ import { IconButton } from "../components/icon_button.slint";
 import { ActionButton } from "../components/action_button.slint";
 import { Badge } from "../components/badge.slint";
 import { VolumeBar } from "../components/volume_bar.slint";
+import { VolumeMeter } from "../components/volume_meter.slint";
 import { VisualTimeline } from "../timeline/visual_timeline.slint";
 import { AudioWaveformStudio } from "../timeline/audio_waveform.slint";
 import { CropOverlayView } from "./crop_overlay.slint";
@@ -156,83 +157,116 @@ export component PlayerTab inherits VerticalLayout {
                 border-color: Theme.card_border;
                 clip: true;
 
-                // Video Canvas
-                if AppData.selected_is_video : video_screen := Rectangle {
-                    property <length> img_box_w: min(self.width, self.height * 16 / 9);
-                    property <length> img_box_h: min(self.height, self.width * 9 / 16);
-                    property <length> img_box_x: (self.width - self.img_box_w) / 2;
-                    property <length> img_box_y: (self.height - self.img_box_h) / 2;
+                HorizontalLayout {
+                    padding: 0px;
+                    spacing: 0px;
 
-                    property <length> active_vid_x: self.img_box_x + self.img_box_w * AppData.preview_video_norm_x;
-                    property <length> active_vid_y: self.img_box_y + self.img_box_h * AppData.preview_video_norm_y;
-                    property <length> active_vid_w: max(16px, self.img_box_w * AppData.preview_video_norm_w);
-                    property <length> active_vid_h: max(16px, self.img_box_h * AppData.preview_video_norm_h);
+                    // Main Viewer Screen (Video canvas or Audio Waveform Studio)
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        clip: true;
 
-                    Image {
-                        source: AppData.preview_frame;
-                        width: 100%;
-                        height: 100%;
-                        image-fit: contain;
-                    }
+                        // Video Canvas
+                        if AppData.selected_is_video : video_screen := Rectangle {
+                            property <length> img_box_w: min(self.width, self.height * 16 / 9);
+                            property <length> img_box_h: min(self.height, self.width * 9 / 16);
+                            property <length> img_box_x: (self.width - self.img_box_w) / 2;
+                            property <length> img_box_y: (self.height - self.img_box_h) / 2;
 
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => {
-                            root.request_focus();
-                            AppLogic.player_play_pause();
+                            property <length> active_vid_x: self.img_box_x + self.img_box_w * AppData.preview_video_norm_x;
+                            property <length> active_vid_y: self.img_box_y + self.img_box_h * AppData.preview_video_norm_y;
+                            property <length> active_vid_w: max(16px, self.img_box_w * AppData.preview_video_norm_w);
+                            property <length> active_vid_h: max(16px, self.img_box_h * AppData.preview_video_norm_h);
+
+                            Image {
+                                source: AppData.preview_frame;
+                                width: 100%;
+                                height: 100%;
+                                image-fit: contain;
+                            }
+
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.request_focus();
+                                    AppLogic.player_play_pause();
+                                }
+                            }
+
+                            // Interactive Drag & Drop Visual Crop Overlay Box
+                            if AppData.crop_enabled : CropOverlayView {
+                                x: video_screen.active_vid_x;
+                                y: video_screen.active_vid_y;
+                                width: video_screen.active_vid_w;
+                                height: video_screen.active_vid_h;
+                                norm_x: AppData.crop_norm_x;
+                                norm_y: AppData.crop_norm_y;
+                                norm_w: AppData.crop_norm_w;
+                                norm_h: AppData.crop_norm_h;
+                                crop_px_w: AppData.crop_width;
+                                crop_px_h: AppData.crop_height;
+                                crop_px_x: AppData.crop_x;
+                                crop_px_y: AppData.crop_y;
+                                focus_requested => {
+                                    root.request_focus();
+                                }
+                            }
+
+                            // Loading indicator
+                            if AppData.preview_frame_loading : Rectangle {
+                                background: #00000099;
+                                Text {
+                                    text: "Seeking frame...";
+                                    font-size: 12px;
+                                    color: #a1a1aa;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // Audio Waveform Studio (for audio files)
+                        if !AppData.selected_is_video : audio_studio := AudioWaveformStudio {
+                            zoom_level <=> AppData.timeline_zoom;
+                            duration: AppData.player_duration;
+                            current_time: AppData.player_current_time;
+                            in_point_norm: AppData.in_point_normalized;
+                            out_point_norm: AppData.out_point_normalized;
+                            in_point_sec: AppData.in_point_seconds;
+                            out_point_sec: AppData.out_point_seconds;
+                            has_trim: AppData.has_active_trim;
+                            seek(val) => {
+                                AppLogic.player_seek(val);
+                            }
+                            in_point_dragged(val) => {
+                                AppLogic.set_in_point_from_timeline(val);
+                            }
+                            out_point_dragged(val) => {
+                                AppLogic.set_out_point_from_timeline(val);
+                            }
                         }
                     }
 
-                    // Interactive Drag & Drop Visual Crop Overlay Box
-                    if AppData.crop_enabled : CropOverlayView {
-                        x: video_screen.active_vid_x;
-                        y: video_screen.active_vid_y;
-                        width: video_screen.active_vid_w;
-                        height: video_screen.active_vid_h;
-                        norm_x: AppData.crop_norm_x;
-                        norm_y: AppData.crop_norm_y;
-                        norm_w: AppData.crop_norm_w;
-                        norm_h: AppData.crop_norm_h;
-                        crop_px_w: AppData.crop_width;
-                        crop_px_h: AppData.crop_height;
-                        crop_px_x: AppData.crop_x;
-                        crop_px_y: AppData.crop_y;
-                        focus_requested => {
-                            root.request_focus();
+                    // Vertical Volume Meter (Toggled on right side)
+                    if AppData.show_volume_meter : Rectangle {
+                        width: 58px;
+                        clip: true;
+                        VerticalLayout {
+                            alignment: center;
+                            padding-top: 8px;
+                            padding-bottom: 8px;
+                            padding-right: 6px;
+                            padding-left: 4px;
+                            VolumeMeter {
+                                max-height: 280px;
+                                vertical-stretch: 1;
+                                level_l_db: AppData.audio_meter_l_db;
+                                level_r_db: AppData.audio_meter_r_db;
+                                peak_l_db: AppData.audio_meter_peak_l_db;
+                                peak_r_db: AppData.audio_meter_peak_r_db;
+                                is_active: AppData.player_is_playing && AppData.selected_is_audio;
+                            }
                         }
-                    }
-
-                    // Loading indicator
-                    if AppData.preview_frame_loading : Rectangle {
-                        background: #00000099;
-                        Text {
-                            text: "Seeking frame...";
-                            font-size: 12px;
-                            color: #a1a1aa;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                    }
-                }
-
-                // Audio Waveform Studio (for audio files)
-                if !AppData.selected_is_video : audio_studio := AudioWaveformStudio {
-                    zoom_level <=> AppData.timeline_zoom;
-                    duration: AppData.player_duration;
-                    current_time: AppData.player_current_time;
-                    in_point_norm: AppData.in_point_normalized;
-                    out_point_norm: AppData.out_point_normalized;
-                    in_point_sec: AppData.in_point_seconds;
-                    out_point_sec: AppData.out_point_seconds;
-                    has_trim: AppData.has_active_trim;
-                    seek(val) => {
-                        AppLogic.player_seek(val);
-                    }
-                    in_point_dragged(val) => {
-                        AppLogic.set_in_point_from_timeline(val);
-                    }
-                    out_point_dragged(val) => {
-                        AppLogic.set_out_point_from_timeline(val);
                     }
                 }
             }
@@ -365,6 +399,61 @@ export component PlayerTab inherits VerticalLayout {
                                         AppData.center_timeline_trigger += 1;
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // Volume Meter Toggle Button
+                    meter_toggle_btn := Rectangle {
+                        height: 28px;
+                        border-radius: 6px;
+                        background: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.18) : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.card_secondary_bg);
+                        border-width: 1px;
+                        border-color: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.5) : Theme.card_secondary_border;
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 5px;
+                            alignment: center;
+
+                            // Mini VU / Volume Meter Graphic (3 colored bars)
+                            HorizontalLayout {
+                                spacing: 2px;
+                                alignment: center;
+                                Rectangle {
+                                    width: 2.5px;
+                                    height: 8px;
+                                    border-radius: 1px;
+                                    background: AppData.show_volume_meter ? #22c55e : Theme.text_muted;
+                                }
+                                Rectangle {
+                                    width: 2.5px;
+                                    height: 14px;
+                                    border-radius: 1px;
+                                    background: AppData.show_volume_meter ? #eab308 : Theme.text_muted;
+                                }
+                                Rectangle {
+                                    width: 2.5px;
+                                    height: 11px;
+                                    border-radius: 1px;
+                                    background: AppData.show_volume_meter ? #ef4444 : Theme.text_muted;
+                                }
+                            }
+
+                            Text {
+                                text: "METER";
+                                font-size: 9.5px;
+                                font-weight: 700;
+                                color: AppData.show_volume_meter ? Theme.accent_cyan : Theme.text_muted;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        meter_btn_ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                AppLogic.toggle_volume_meter();
                             }
                         }
                     }

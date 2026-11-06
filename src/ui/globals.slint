@@ -83,6 +83,13 @@ export global AppData {
     in-out property <float> timeline_zoom: 1.0;
     in-out property <int> center_timeline_trigger: 0;
 
+    // Audio Volume Meter state
+    in-out property <bool> show_volume_meter: true;
+    in-out property <float> audio_meter_l_db: -60.0;
+    in-out property <float> audio_meter_r_db: -60.0;
+    in-out property <float> audio_meter_peak_l_db: -60.0;
+    in-out property <float> audio_meter_peak_r_db: -60.0;
+
     // Trimming In / Out state
     in-out property <float> in_point_seconds: -1.0;
     in-out property <float> out_point_seconds: -1.0;
@@ -248,6 +255,7 @@ export global AppLogic {
     callback toggle_audio_normalize();
     callback set_audio_normalize_preset(int);
     callback reset_audio_edits();
+    callback toggle_volume_meter();
 
     // yt-dlp Web Downloader Callbacks
     callback ytdlp_url_changed(string);

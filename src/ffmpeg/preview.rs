@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
 
@@ -363,10 +363,11 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
     Ok(child)
 }
 
-/// An active `ffplay` audio session with PTS tracked from ffplay's output.
+/// An active `ffplay` audio session with PTS tracked from ffplay's output and real-time audio meter levels.
 pub struct AudioPlaybackSession {
     pub child: std::process::Child,
     pub master_clock: Arc<AtomicU64>,
+    pub meter_levels: Arc<Mutex<(f32, f32)>>,
 }
 
 impl AudioPlaybackSession {
@@ -375,6 +376,7 @@ impl AudioPlaybackSession {
         Self {
             child,
             master_clock: Arc::new(AtomicU64::new(u64::MAX)),
+            meter_levels: Arc::new(Mutex::new((-60.0, -60.0))),
         }
     }
 
@@ -395,6 +397,15 @@ impl AudioPlaybackSession {
         }
     }
 
+    /// Current real-time stereo meter levels (L_dB, R_dB) in [-60.0, 6.0].
+    pub fn get_meter_levels(&self) -> (f32, f32) {
+        if let Ok(lock) = self.meter_levels.lock() {
+            *lock
+        } else {
+            (-60.0, -60.0)
+        }
+    }
+
     /// Checks if the process has exited.
     pub fn is_finished(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(Some(_status)))
@@ -405,6 +416,63 @@ impl Drop for AudioPlaybackSession {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+/// Parses per-channel peak level in dB from `lavfi.astats.<ch>.Peak_level=<val>` lines.
+/// Returns `Some((channel, level_db))` where `channel` is 1 (Left) or 2 (Right),
+/// and `level_db` is clamped between `-60.0` and `6.0`.
+pub fn parse_astats_level(line: &str) -> Option<(usize, f32)> {
+    let trimmed = line.trim();
+    const PREFIX: &str = "lavfi.astats.";
+    let pos = trimmed.find(PREFIX)?;
+    let rest = &trimmed[pos + PREFIX.len()..];
+    let dot_pos = rest.find('.')?;
+    let ch_str = &rest[..dot_pos];
+    let ch: usize = ch_str.parse().ok()?;
+
+    let after_dot = &rest[dot_pos + 1..];
+    const KEY: &str = "Peak_level=";
+    if !after_dot.starts_with(KEY) {
+        return None;
+    }
+    let val_str = &after_dot[KEY.len()..];
+    let val = if val_str.contains("-inf") || val_str.contains("-nan") || val_str.contains("nan") {
+        -60.0f32
+    } else if let Ok(parsed) = val_str.parse::<f32>() {
+        if parsed.is_finite() {
+            parsed.clamp(-60.0, 6.0)
+        } else {
+            -60.0
+        }
+    } else {
+        -60.0
+    };
+
+    Some((ch, val))
+}
+
+/// Reads metadata lines from `ffplay`'s stdout stream printed by `ametadata=mode=print:file=-`
+/// and continuously updates the shared atomic/mutex meter levels.
+pub fn read_ffplay_meter<R: std::io::Read>(reader: R, meter: Arc<Mutex<(f32, f32)>>) {
+    use std::io::BufRead;
+    let mut buf_reader = std::io::BufReader::with_capacity(4096, reader);
+    let mut line_buf = String::with_capacity(128);
+
+    while let Ok(n) = buf_reader.read_line(&mut line_buf) {
+        if n == 0 {
+            break;
+        }
+        if let Some((ch, lvl)) = parse_astats_level(&line_buf) {
+            if let Ok(mut lock) = meter.lock() {
+                if ch == 1 {
+                    lock.0 = lvl;
+                } else if ch == 2 {
+                    lock.1 = lvl;
+                }
+            }
+        }
+        line_buf.clear();
     }
 }
 
@@ -445,7 +513,8 @@ pub fn read_ffplay_clock<R: std::io::Read>(reader: R, clock: Arc<AtomicU64>) {
 
 /// Spawns audio playback via ffplay in headless mode (-nodisp) directly to the system default audio device.
 /// Optionally applies real-time audio filters such as volume gain in dB and loudness normalization.
-/// Returns an `AudioPlaybackSession` with atomic master clock tracking driven by ffplay's real-time audio PTS.
+/// Attaches audio level meter filter chain measuring L and R peak dB independently.
+/// Returns an `AudioPlaybackSession` with atomic master clock tracking and real-time audio meter levels.
 pub fn spawn_audio_playback<B: AsRef<Path>>(
     ffplay_bin: B,
     media_path: &str,
@@ -471,9 +540,15 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
             af_filters.push(format!("volume={:.1}dB", gain));
         }
     }
-    if !af_filters.is_empty() {
-        cmd.arg("-af").arg(af_filters.join(","));
-    }
+
+    // Force stereo layout so both L and R channels exist, window into 2048 samples (~46ms),
+    // measure peak level per channel, and stream to stdout via ametadata
+    af_filters.push("aformat=channel_layouts=stereo".to_string());
+    af_filters.push("asetnsamples=n=2048".to_string());
+    af_filters.push("astats=metadata=1:reset=1:measure_perchannel=Peak_level:measure_overall=none".to_string());
+    af_filters.push("ametadata=mode=print:file=-:direct=1".to_string());
+
+    cmd.arg("-af").arg(af_filters.join(","));
 
     let target = start_seconds.max(0.0);
     if target > 0.001 {
@@ -489,11 +564,22 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     crate::set_no_window(&mut cmd);
 
     cmd.stdin(std::process::Stdio::null());
-    cmd.stdout(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
     let mut child = cmd.spawn().context("Failed to spawn audio playback via ffplay")?;
     let master_clock = Arc::new(AtomicU64::new(u64::MAX));
+    let meter_levels = Arc::new(Mutex::new((-60.0f32, -60.0f32)));
+
+    if let Some(stdout) = child.stdout.take() {
+        let meter = meter_levels.clone();
+        std::thread::Builder::new()
+            .name("ffplay-meter-reader".to_string())
+            .spawn(move || {
+                read_ffplay_meter(stdout, meter);
+            })
+            .ok();
+    }
 
     if let Some(stderr) = child.stderr.take() {
         let clock = master_clock.clone();
@@ -508,6 +594,7 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     Ok(AudioPlaybackSession {
         child,
         master_clock,
+        meter_levels,
     })
 }
 

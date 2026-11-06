@@ -1351,6 +1351,144 @@ fn test_faststart_case_insensitivity() {
     }
 }
 
+#[test]
+fn test_parse_astats_level() {
+    use another_encoder::ffmpeg::parse_astats_level;
+
+    assert_eq!(
+        parse_astats_level("lavfi.astats.1.Peak_level=-18.063656"),
+        Some((1, -18.063656))
+    );
+    assert_eq!(
+        parse_astats_level("lavfi.astats.2.Peak_level=-24.082135"),
+        Some((2, -24.082135))
+    );
+    assert_eq!(
+        parse_astats_level("lavfi.astats.1.Peak_level=-inf"),
+        Some((1, -60.0))
+    );
+    assert_eq!(
+        parse_astats_level("lavfi.astats.2.Peak_level=-nan"),
+        Some((2, -60.0))
+    );
+    assert_eq!(
+        parse_astats_level("lavfi.astats.1.Peak_level=2.5"),
+        Some((1, 2.5))
+    );
+    // Clamping to -60.0
+    assert_eq!(
+        parse_astats_level("lavfi.astats.2.Peak_level=-85.0"),
+        Some((2, -60.0))
+    );
+    // Non-matching lines
+    assert_eq!(parse_astats_level("frame:0 pts:0 pts_time:0"), None);
+    assert_eq!(parse_astats_level("lavfi.astats.Overall.Peak_level=-18.0"), None);
+    assert_eq!(parse_astats_level("random stdout message"), None);
+}
+
+#[test]
+fn test_read_ffplay_meter_stream() {
+    use std::io::Cursor;
+    use std::sync::{Arc, Mutex};
+    use another_encoder::ffmpeg::read_ffplay_meter;
+
+    let meter = Arc::new(Mutex::new((-60.0f32, -60.0f32)));
+    let mock_stream = b"frame:0 pts:0\r\nlavfi.astats.1.Peak_level=-14.5\r\nlavfi.astats.2.Peak_level=-20.2\r\n";
+    let cursor = Cursor::new(mock_stream);
+
+    read_ffplay_meter(cursor, meter.clone());
+
+    let (l, r) = *meter.lock().unwrap();
+    assert!((l - (-14.5)).abs() < 0.01, "L channel should be -14.5 dB: got {}", l);
+    assert!((r - (-20.2)).abs() < 0.01, "R channel should be -20.2 dB: got {}", r);
+}
+
+#[test]
+fn test_live_audio_meter_playback_and_volume_isolation() {
+    use std::path::Path;
+    use another_encoder::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+
+    let binaries = FFmpegBinaries::locate().unwrap();
+    let ffplay = match binaries.ffplay.as_ref() {
+        Some(f) => f,
+        None => return,
+    };
+
+    let test_wav = Path::new("target/test_meter_stereo.wav");
+    if !test_wav.exists() {
+        // Generate a 1-second stereo test wav (1000Hz on left @ 0.5, 500Hz on right @ 0.1)
+        let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+        cmd.args([
+            "-y",
+            "-f", "lavfi", "-i", "sine=frequency=1000:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=500:duration=1",
+            "-filter_complex", "[0:a]volume=0.5[a0];[1:a]volume=0.1[a1];[a0][a1]join=inputs=2:channel_layout=stereo[out]",
+            "-map", "[out]",
+            &test_wav.to_string_lossy(),
+        ]);
+        let _ = cmd.output();
+    }
+
+    if test_wav.exists() {
+        // 1. Test live playback with normal volume (e.g. 80%)
+        let session = spawn_audio_playback(
+            ffplay,
+            &test_wav.to_string_lossy(),
+            0.0,
+            Some(0.8),
+            80,
+            None,
+            None,
+        );
+        assert!(session.is_ok(), "spawn_audio_playback with meter filters should succeed");
+        let mut session = session.unwrap();
+
+        // Wait up to 500ms for ffplay to process frames and emit meter levels
+        let start = std::time::Instant::now();
+        let mut got_levels = false;
+        while start.elapsed() < std::time::Duration::from_millis(600) {
+            let (l, r) = session.get_meter_levels();
+            if l > -55.0 && r > -55.0 {
+                got_levels = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let _ = session.kill();
+        assert!(got_levels, "Volume meter should read active stereo audio levels during playback");
+
+        // 2. Test isolation from toolbar volume: with volume=0, meter MUST still reflect render output!
+        let session_muted = spawn_audio_playback(
+            ffplay,
+            &test_wav.to_string_lossy(),
+            0.0,
+            Some(0.8),
+            0, // Muted/zero preview volume
+            None,
+            None,
+        );
+        assert!(session_muted.is_ok(), "spawn_audio_playback with volume=0 should succeed");
+        let mut session_muted = session_muted.unwrap();
+
+        let start = std::time::Instant::now();
+        let mut got_muted_levels = false;
+        while start.elapsed() < std::time::Duration::from_millis(600) {
+            let (l, r) = session_muted.get_meter_levels();
+            if l > -55.0 && r > -55.0 {
+                got_muted_levels = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let _ = session_muted.kill();
+        assert!(
+            got_muted_levels,
+            "Volume meter must continue to reflect audio render output even when player preview volume is 0 or muted"
+        );
+    }
+}
+
+
 
 
 

@@ -1,0 +1,332 @@
+export component VolumeMeter inherits Rectangle {
+    in property <float> level_l_db: -60.0;
+    in property <float> level_r_db: -60.0;
+    in property <float> peak_l_db: -60.0;
+    in property <float> peak_r_db: -60.0;
+    in property <bool> is_active: false;
+
+    width: 48px;
+    border-radius: 6px;
+    background: #14161f;
+    border-width: 1px;
+    border-color: #262936;
+    clip: true;
+
+    // Helper calculations for normalized scale [0.0, 1.0] corresponding to [-60dB, 0dB]
+    property <float> norm_l: is_active ? max(0.0, min(1.0, (level_l_db + 60.0) / 60.0)) : 0.0;
+    property <float> norm_r: is_active ? max(0.0, min(1.0, (level_r_db + 60.0) / 60.0)) : 0.0;
+    property <float> p_norm_l: is_active ? max(0.0, min(1.0, (peak_l_db + 60.0) / 60.0)) : 0.0;
+    property <float> p_norm_r: is_active ? max(0.0, min(1.0, (peak_r_db + 60.0) / 60.0)) : 0.0;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 5px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 4px;
+
+        // Bars Container (Left & Right Channels)
+        bars_container := Rectangle {
+            width: 13px;
+
+            // Channel 1 / Left (L)
+            bar_l := Rectangle {
+                x: 0px;
+                width: 5px;
+                height: 100%;
+                clip: true;
+
+                // Dark unlit background segments (stacked top to bottom)
+                VerticalLayout {
+                    spacing: 0px;
+                    padding: 0px;
+                    height: 100%;
+                    width: 100%;
+
+                    Rectangle {
+                        height: 10%;
+                        background: #3b070c;
+                    }
+                    Rectangle {
+                        height: 20%;
+                        background: #332405;
+                    }
+                    Rectangle {
+                        height: 70%;
+                        background: #062311;
+                    }
+                }
+
+                // Lit Active Level Fill (Clipped from bottom up)
+                if root.norm_l > 0.005 : Rectangle {
+                    x: 0px;
+                    y: parent.height * (1.0 - root.norm_l);
+                    width: 100%;
+                    height: parent.height * root.norm_l;
+                    clip: true;
+
+                    // Inner fixed-size container matching full bar height
+                    Rectangle {
+                        y: 0px - parent.y;
+                        width: 100%;
+                        height: bar_l.height;
+
+                        VerticalLayout {
+                            spacing: 0px;
+                            padding: 0px;
+                            height: 100%;
+                            width: 100%;
+
+                            Rectangle {
+                                height: 10%;
+                                background: #ef4444;
+                            }
+                            Rectangle {
+                                height: 20%;
+                                background: #eab308;
+                            }
+                            Rectangle {
+                                height: 70%;
+                                background: #22c55e;
+                            }
+                        }
+                    }
+                }
+
+                // Black current-level indicator line
+                if root.norm_l > 0.01 : Rectangle {
+                    x: 0px;
+                    y: max(0px, parent.height * (1.0 - root.norm_l) - 1px);
+                    width: 100%;
+                    height: 1.5px;
+                    background: #000000;
+                }
+
+                // Peak hold marker
+                if root.p_norm_l > 0.01 : Rectangle {
+                    x: 0px;
+                    y: max(0px, parent.height * (1.0 - root.p_norm_l) - 1px);
+                    width: 100%;
+                    height: 2px;
+                    background: root.p_norm_l > 0.90 ? #f87171 : (root.p_norm_l > 0.70 ? #fde047 : #4ade80);
+                }
+
+                // Bottom silence/floor indicator
+                Rectangle {
+                    x: 0px;
+                    y: parent.height - 2px;
+                    width: 100%;
+                    height: 2px;
+                    background: #ef4444bb;
+                }
+            }
+
+            // Channel 2 / Right (R)
+            bar_r := Rectangle {
+                x: 7px;
+                width: 5px;
+                height: 100%;
+                clip: true;
+
+                // Dark unlit background segments (stacked top to bottom)
+                VerticalLayout {
+                    spacing: 0px;
+                    padding: 0px;
+                    height: 100%;
+                    width: 100%;
+
+                    Rectangle {
+                        height: 10%;
+                        background: #3b070c;
+                    }
+                    Rectangle {
+                        height: 20%;
+                        background: #332405;
+                    }
+                    Rectangle {
+                        height: 70%;
+                        background: #062311;
+                    }
+                }
+
+                // Lit Active Level Fill (Clipped from bottom up)
+                if root.norm_r > 0.005 : Rectangle {
+                    x: 0px;
+                    y: parent.height * (1.0 - root.norm_r);
+                    width: 100%;
+                    height: parent.height * root.norm_r;
+                    clip: true;
+
+                    // Inner fixed-size container matching full bar height
+                    Rectangle {
+                        y: 0px - parent.y;
+                        width: 100%;
+                        height: bar_r.height;
+
+                        VerticalLayout {
+                            spacing: 0px;
+                            padding: 0px;
+                            height: 100%;
+                            width: 100%;
+
+                            Rectangle {
+                                height: 10%;
+                                background: #ef4444;
+                            }
+                            Rectangle {
+                                height: 20%;
+                                background: #eab308;
+                            }
+                            Rectangle {
+                                height: 70%;
+                                background: #22c55e;
+                            }
+                        }
+                    }
+                }
+
+                // Black current-level indicator line
+                if root.norm_r > 0.01 : Rectangle {
+                    x: 0px;
+                    y: max(0px, parent.height * (1.0 - root.norm_r) - 1px);
+                    width: 100%;
+                    height: 1.5px;
+                    background: #000000;
+                }
+
+                // Peak hold marker
+                if root.p_norm_r > 0.01 : Rectangle {
+                    x: 0px;
+                    y: max(0px, parent.height * (1.0 - root.p_norm_r) - 1px);
+                    width: 100%;
+                    height: 2px;
+                    background: root.p_norm_r > 0.90 ? #f87171 : (root.p_norm_r > 0.70 ? #fde047 : #4ade80);
+                }
+
+                // Bottom silence/floor indicator
+                Rectangle {
+                    x: 0px;
+                    y: parent.height - 2px;
+                    width: 100%;
+                    height: 2px;
+                    background: #ef4444bb;
+                }
+            }
+        }
+
+        // dB Scale Labels Column (with "-" tick marks)
+        scale_column := Rectangle {
+            horizontal-stretch: 1;
+
+            // 0 dB (100% height)
+            Text {
+                x: 0px;
+                y: 0.0 * parent.height - 5px;
+                text: "- 0";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -6 dB (90% height)
+            Text {
+                x: 0px;
+                y: 0.1 * parent.height - 5px;
+                text: "- -6";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -12 dB (80% height)
+            Text {
+                x: 0px;
+                y: 0.2 * parent.height - 5px;
+                text: "- -12";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -18 dB (70% height)
+            Text {
+                x: 0px;
+                y: 0.3 * parent.height - 5px;
+                text: "- -18";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -24 dB (60% height)
+            Text {
+                x: 0px;
+                y: 0.4 * parent.height - 5px;
+                text: "- -24";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -30 dB (50% height)
+            Text {
+                x: 0px;
+                y: 0.5 * parent.height - 5px;
+                text: "- -30";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -36 dB (40% height)
+            Text {
+                x: 0px;
+                y: 0.6 * parent.height - 5px;
+                text: "- -36";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -42 dB (30% height)
+            Text {
+                x: 0px;
+                y: 0.7 * parent.height - 5px;
+                text: "- -42";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -48 dB (20% height)
+            Text {
+                x: 0px;
+                y: 0.8 * parent.height - 5px;
+                text: "- -48";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -54 dB (10% height)
+            Text {
+                x: 0px;
+                y: 0.9 * parent.height - 5px;
+                text: "- -54";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+
+            // -60 dB (0% height / bottom)
+            Text {
+                x: 0px;
+                y: 1.0 * parent.height - 7px;
+                text: "- -60";
+                font-size: 8px;
+                font-weight: 600;
+                color: #94a3b8;
+            }
+        }
+    }
+}

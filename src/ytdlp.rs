@@ -270,14 +270,17 @@ pub fn sanitize_filename_stem(name: &str) -> String {
     }
 }
 
-/// Build the output filename template for yt-dlp.
-/// If user supplies a custom filename, it uses that sanitized stem and appends `%(ext)s`.
-/// If no custom name is supplied or is blank, it falls back to standard `%(title)s [%(id)s].%(ext)s`.
+/// Builds the output template for yt-dlp.
+/// Uses the custom filename if supplied, otherwise defaults to standard `%(title)s [%(id)s].%(ext)s`.
 pub fn build_output_template(custom_filename: Option<&str>) -> String {
     if let Some(custom) = custom_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
         if custom.contains("%(ext)s") {
             let sanitized = custom.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_");
-            return sanitized;
+            let clean = sanitized.trim_matches(|c: char| c.is_whitespace() || c == '.');
+            if clean.is_empty() {
+                return "%(title)s [%(id)s].%(ext)s".to_string();
+            }
+            return clean.to_string();
         }
         let clean = sanitize_filename_stem(custom);
         let stem = Path::new(&clean)
@@ -467,7 +470,15 @@ pub fn start_download(
 
         let exit_status = {
             if let Ok(mut lock) = child_holder_inner.lock() {
-                lock.as_mut().and_then(|c| c.wait().ok())
+                if cancel_clone.load(Ordering::SeqCst) {
+                    if let Some(mut child) = lock.take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
+                    None
+                } else {
+                    lock.as_mut().and_then(|c| c.wait().ok())
+                }
             } else {
                 None
             }

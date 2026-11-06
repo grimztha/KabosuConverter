@@ -160,7 +160,7 @@ unsafe extern "system" fn query_interface(
     riid: *const GUID,
     ppv_object: *mut *mut std::ffi::c_void,
 ) -> i32 {
-    if ppv_object.is_null() || riid.is_null() {
+    if this.is_null() || ppv_object.is_null() || riid.is_null() {
         return E_INVALIDARG;
     }
     let iid = *riid;
@@ -174,20 +174,20 @@ unsafe extern "system" fn query_interface(
     }
 }
 
-/// COM IUnknown::AddRef implementation.
-/// Thread-safe reference count increment using atomic operations.
-/// The raw pointer is valid as long as the COM object is alive.
+/// Increment COM reference count.
 unsafe extern "system" fn add_ref(this: *mut DropTargetCom) -> u32 {
-    debug_assert!(!this.is_null());
+    if this.is_null() {
+        return 0;
+    }
     (*this).ref_count.fetch_add(1, Ordering::SeqCst) + 1
 }
 
-/// COM IUnknown::Release implementation.
-/// Thread-safe reference count decrement using atomic operations.
-/// Retains the singleton DropTargetCom instance in memory so that window subclass hooks
-/// (SetWindowSubclass) and global message filters do not encounter a use-after-free.
+/// Decrement COM reference count.
+/// Keeps the drop target alive while subclass hooks remain attached.
 unsafe extern "system" fn release(this: *mut DropTargetCom) -> u32 {
-    debug_assert!(!this.is_null());
+    if this.is_null() {
+        return 0;
+    }
     let prev = (*this).ref_count.load(Ordering::SeqCst);
     if prev > 1 {
         (*this).ref_count.fetch_sub(1, Ordering::SeqCst) - 1
@@ -383,6 +383,9 @@ pub unsafe fn apply_window_rounded_corners(hwnd: *mut std::ffi::c_void) {
 }
 
 pub unsafe fn get_window_title(hwnd: *mut std::ffi::c_void) -> String {
+    if hwnd.is_null() {
+        return String::new();
+    }
     let mut buf = [0u16; 512];
     let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
     if len > 0 {
@@ -393,6 +396,9 @@ pub unsafe fn get_window_title(hwnd: *mut std::ffi::c_void) -> String {
 }
 
 pub unsafe fn get_window_class(hwnd: *mut std::ffi::c_void) -> String {
+    if hwnd.is_null() {
+        return String::new();
+    }
     let mut buf = [0u16; 512];
     let len = GetClassNameW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
     if len > 0 {

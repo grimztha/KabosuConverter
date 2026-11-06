@@ -21,7 +21,7 @@ fn progress_regexes() -> &'static (Regex, Regex, Regex, Regex) {
     static REGEXES: OnceLock<(Regex, Regex, Regex, Regex)> = OnceLock::new();
     REGEXES.get_or_init(|| {
         (
-            Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d+)").unwrap(),
+            Regex::new(r"time=(\d+):(\d{2}):(\d{2})(?:\.(\d+))?").unwrap(),
             Regex::new(r"fps=\s*([\d\.]+)").unwrap(),
             Regex::new(r"speed=\s*([\d\.]+)x").unwrap(),
             Regex::new(r"bitrate=\s*([\d\.]+)kbits/s").unwrap(),
@@ -112,9 +112,13 @@ impl FFmpegRunner {
                 let h: f64 = caps[1].parse().unwrap_or(0.0);
                 let m: f64 = caps[2].parse().unwrap_or(0.0);
                 let s: f64 = caps[3].parse().unwrap_or(0.0);
-                let frac: f64 = caps[4].parse().unwrap_or(0.0);
-                let frac_div = 10f64.powi(caps[4].len() as i32);
-                current_sec = h * 3600.0 + m * 60.0 + s + (frac / frac_div);
+                let frac = caps.get(4).map(|f| {
+                    let s_frac = f.as_str();
+                    let v: f64 = s_frac.parse().unwrap_or(0.0);
+                    let div = 10f64.powi(s_frac.len() as i32);
+                    v / div
+                }).unwrap_or(0.0);
+                current_sec = h * 3600.0 + m * 60.0 + s + frac;
                 has_time = true;
             }
 

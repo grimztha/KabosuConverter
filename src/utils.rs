@@ -141,11 +141,9 @@ pub fn reveal_in_explorer(file_path: &Path) {
     {
         use std::os::windows::process::CommandExt;
         if clean.exists() && clean.is_file() {
-            let path_str = clean.to_string_lossy();
-            // In Windows, explorer command switch /select,"PATH" must NOT enclose /select in quotes.
-            // Rust's standard .arg() wraps the whole argument in quotes if it contains spaces,
-            // which breaks explorer's command-line parser and causes it to open Documents.
-            // .raw_arg() preserves /select,"PATH" verbatim.
+            let path_str = clean.to_string_lossy().replace('"', "");
+            // On Windows, explorer requires /select,"PATH" without quoting the /select switch itself.
+            // .raw_arg() passes this verbatim so Explorer highlights the file properly.
             let spawned = std::process::Command::new("explorer")
                 .raw_arg(format!("/select,\"{}\"", path_str))
                 .spawn();

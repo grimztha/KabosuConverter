@@ -504,6 +504,9 @@ pub fn read_ffplay_meter<R: std::io::Read>(reader: R, meter: Arc<Mutex<(f32, f32
             }
         }
         line_buf.clear();
+        if line_buf.capacity() > 4096 {
+            line_buf.shrink_to(512);
+        }
     }
 }
 
@@ -533,7 +536,8 @@ pub fn read_ffplay_clock<R: std::io::Read>(reader: R, clock: Arc<AtomicU64>) {
         }
         let text = String::from_utf8_lossy(&line_buf);
         if let Some(pts) = parse_ffplay_pts(&text) {
-            clock.store((pts * 1_000_000.0) as u64, Ordering::Release);
+            let clamped_micros = (pts.max(0.0) * 1_000_000.0).min((u64::MAX - 1) as f64) as u64;
+            clock.store(clamped_micros, Ordering::Release);
         }
         line_buf.clear();
         if line_buf.capacity() > 16384 {

@@ -44,7 +44,9 @@ pub fn spawn_preview_worker(
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_w.upgrade() {
                         let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
-                        pixel_buffer.make_mut_bytes().copy_from_slice(&rgba_bytes);
+                        let bytes = pixel_buffer.make_mut_bytes();
+                        let len = bytes.len().min(rgba_bytes.len());
+                        bytes[..len].copy_from_slice(&rgba_bytes[..len]);
                         let img = slint::Image::from_rgba8(pixel_buffer);
                         ui.global::<crate::AppData>().set_preview_frame(img);
                         ui.global::<crate::AppData>().set_preview_frame_loading(false);
@@ -93,7 +95,9 @@ pub fn spawn_waveform_worker(
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_w.upgrade() {
                                 let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(wf_w, wf_h);
-                                pixel_buffer.make_mut_bytes().copy_from_slice(&rgba);
+                                let bytes = pixel_buffer.make_mut_bytes();
+                                let len = bytes.len().min(rgba.len());
+                                bytes[..len].copy_from_slice(&rgba[..len]);
                                 let img = slint::Image::from_rgba8(pixel_buffer);
                                 let data = ui.global::<crate::AppData>();
                                 data.set_timeline_waveform(img);

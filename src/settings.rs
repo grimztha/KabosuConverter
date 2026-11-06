@@ -19,7 +19,6 @@ pub struct AppSettings {
     pub default_audio_bitrate_kbps: u32,
     pub open_folder_on_finish: bool,
     pub play_sound_on_finish: bool,
-    pub theme_dark: bool,
 }
 
 impl Default for AppSettings {
@@ -33,7 +32,6 @@ impl Default for AppSettings {
             default_audio_bitrate_kbps: 192,
             open_folder_on_finish: true,
             play_sound_on_finish: false,
-            theme_dark: true,
         }
     }
 }
@@ -155,7 +153,6 @@ mod tests {
         assert!(!parsed.open_folder_on_finish);
         assert_eq!(parsed.default_audio_bitrate_kbps, 192);
         assert_eq!(parsed.default_video_codec, VideoCodec::H264);
-        assert!(parsed.theme_dark);
     }
 
     #[test]

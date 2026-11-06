@@ -1,5 +1,16 @@
 use std::path::Path;
+use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
+
+static DETECTED_HW: OnceLock<HwAccel> = OnceLock::new();
+
+pub fn set_detected_hardware_accel(accel: HwAccel) {
+    let _ = DETECTED_HW.set(accel);
+}
+
+pub fn get_detected_hardware_accel() -> HwAccel {
+    *DETECTED_HW.get().unwrap_or(&HwAccel::Cpu)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum EncoderFunction {
@@ -776,12 +787,12 @@ impl FFmpegCommandBuilder {
         // In & Out points (fast seek before input)
         Self::apply_trim(config, args);
 
-        // Determine effective hardware acceleration (auto-routing to VideoToolbox on macOS)
+        // Determine effective hardware acceleration (auto-routing to detected hardware or VideoToolbox on macOS)
         let effective_hw_accel = if config.hw_accel == HwAccel::Auto {
             if cfg!(target_os = "macos") {
                 HwAccel::VideoToolbox
             } else {
-                HwAccel::Auto
+                get_detected_hardware_accel()
             }
         } else {
             config.hw_accel

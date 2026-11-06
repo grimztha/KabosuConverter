@@ -127,3 +127,27 @@ pub fn open_folder_in_explorer(folder: &Path) {
             .spawn();
     }
 }
+
+/// Open a file's containing folder in Windows Explorer with the file highlighted/selected.
+pub fn reveal_in_explorer(file_path: &Path) {
+    let clean = normalize_path_for_explorer(file_path);
+    #[cfg(windows)]
+    {
+        if clean.exists() {
+            let _ = std::process::Command::new("explorer")
+                .arg(format!("/select,{}", clean.to_string_lossy()))
+                .spawn();
+            return;
+        }
+        if let Some(parent) = clean.parent() {
+            open_folder_in_explorer(parent);
+            return;
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Some(parent) = clean.parent() {
+            open_folder_in_explorer(parent);
+        }
+    }
+}

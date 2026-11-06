@@ -3,6 +3,7 @@ pub mod editor;
 pub mod encoder;
 pub mod playback;
 pub mod queue;
+pub mod settings;
 pub mod timeline;
 
 use crate::context::AppContext;
@@ -16,4 +17,5 @@ pub fn register_all(ui: &MainWindow, ctx: &AppContext) {
     queue::register(ui, ctx);
     downloader::register(ui, ctx);
     encoder::register(ui, ctx);
+    settings::register(ui, ctx);
 }

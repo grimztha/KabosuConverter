@@ -11,7 +11,8 @@ pub use probe::{probe_file, format_duration_hms, MediaMetadata, VideoStreamInfo,
 pub use builder::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
     RateControlMode, AudioCodecChoice, ResolutionPreset, DeinterlaceMode, ProResProfile,
-    VideoRotation, CropAspectRatio, CropRect, CropHandleDragSession, CropBoxDragSession
+    VideoRotation, CropAspectRatio, CropRect, CropHandleDragSession, CropBoxDragSession,
+    set_detected_hardware_accel, get_detected_hardware_accel
 };
 pub use runner::{FFmpegRunner, ProgressUpdate};
 pub use preview::{

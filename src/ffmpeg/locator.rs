@@ -110,4 +110,58 @@ impl FFmpegBinaries {
 
         ("8.1".to_string(), "FFmpeg 8.x Engine".to_string())
     }
+
+    /// Probes available hardware acceleration encoders on this machine.
+    pub fn detect_hardware_accel(&self) -> (crate::ffmpeg::HwAccel, bool, String) {
+        use std::process::{Command, Stdio};
+
+        #[cfg(target_os = "macos")]
+        {
+            return (crate::ffmpeg::HwAccel::VideoToolbox, true, "Apple VideoToolbox".to_string());
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Probe NVIDIA NVENC first
+            let mut cmd = Command::new(&self.ffmpeg);
+            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_nvenc", "-f", "null", "-"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            crate::set_no_window(&mut cmd);
+            if let Ok(status) = cmd.status() {
+                if status.success() {
+                    return (crate::ffmpeg::HwAccel::Nvenc, true, "NVIDIA NVENC".to_string());
+                }
+            }
+
+            // Probe Intel QSV
+            let mut cmd = Command::new(&self.ffmpeg);
+            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_qsv", "-f", "null", "-"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            crate::set_no_window(&mut cmd);
+            if let Ok(status) = cmd.status() {
+                if status.success() {
+                    return (crate::ffmpeg::HwAccel::Qsv, true, "Intel QuickSync".to_string());
+                }
+            }
+
+            // Probe AMD AMF
+            let mut cmd = Command::new(&self.ffmpeg);
+            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_amf", "-f", "null", "-"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            crate::set_no_window(&mut cmd);
+            if let Ok(status) = cmd.status() {
+                if status.success() {
+                    return (crate::ffmpeg::HwAccel::Amf, true, "AMD AMF".to_string());
+                }
+            }
+
+            (crate::ffmpeg::HwAccel::Cpu, false, "CPU Software".to_string())
+        }
+    }
 }

@@ -144,24 +144,6 @@ export component PlayerTab inherits VerticalLayout {
                         vertical-alignment: center;
                     }
                 }
-
-                // Right-Side Editing Panel Expand / Collapse Quick Toggle Button
-                if AppData.player_has_media : VerticalLayout {
-                    alignment: center;
-                    ActionButton {
-                        width: AppData.edit_panel_expanded ? 32px : 84px;
-                        height: 28px;
-                        title: AppData.edit_panel_expanded ? "" : "Editing";
-                        icon_source: @image-url("../icons/sliders.svg");
-                        has_icon: true;
-                        icon_size: 13px;
-                        fill_color: AppData.edit_panel_expanded ? #0284c7 : Theme.btn_neutral_bg;
-                        hover_color: AppData.edit_panel_expanded ? #0369a1 : Theme.btn_neutral_hover;
-                        text_color: AppData.edit_panel_expanded ? #ffffff : Theme.text_primary;
-                        font_size: 10.5px;
-                        clicked => { AppLogic.toggle_edit_panel(); }
-                    }
-                }
             }
 
             // Media Screen Area (Dynamic height: stretches to fill available space, reduced by 1/3 when audio queue is selected)

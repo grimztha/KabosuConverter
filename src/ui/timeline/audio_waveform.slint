@@ -228,7 +228,7 @@ export component AudioWaveformStudio inherits Rectangle {
                                 }
                             }
 
-                            // Playhead Needle & Floating Badge
+                            // Playhead Needle & Scrubber Cursor
                             Rectangle {
                                 property <float> norm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
                                 x: max(0px, min(track.width - 2px, (track.width - 2px) * self.norm));
@@ -236,36 +236,13 @@ export component AudioWaveformStudio inherits Rectangle {
                                 height: 100%;
                                 background: #22c55e;
 
-                                // Glowing playhead knob
-                                Rectangle {
+                                // Triangular playhead knob pointing down toward needle
+                                Image {
                                     x: -6px;
                                     y: 0px;
                                     width: 14px;
-                                    height: 14px;
-                                    border-radius: 7px;
-                                    background: #22c55e;
-                                    border-width: 2px;
-                                    border-color: #ffffff;
-                                }
-
-                                // Floating time bubble badge
-                                Rectangle {
-                                    x: -30px;
-                                    y: 16px;
-                                    width: 62px;
-                                    height: 18px;
-                                    border-radius: 4px;
-                                    background: #000000dd;
-                                    border-width: 1px;
-                                    border-color: #22c55eaa;
-                                    Text {
-                                        text: AppData.player_time_text;
-                                        font-size: 9.5px;
-                                        font-weight: 800;
-                                        color: #22c55e;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                    }
+                                    height: 12px;
+                                    source: @image-url("../icons/playhead-triangle.svg");
                                 }
                             }
 

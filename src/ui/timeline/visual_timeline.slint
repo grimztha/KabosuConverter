@@ -156,16 +156,13 @@ export component VisualTimeline inherits Rectangle {
                     height: 100%;
                     background: #22c55e;
 
-                    // Playhead Knob Cap
-                    Rectangle {
-                        x: -5px;
+                    // Triangular playhead knob pointing down toward needle
+                    Image {
+                        x: -6px;
                         y: 0px;
-                        width: 12px;
+                        width: 14px;
                         height: 12px;
-                        border-radius: 6px;
-                        background: #22c55e;
-                        border-width: 2px;
-                        border-color: #ffffff;
+                        source: @image-url("../icons/playhead-triangle.svg");
                     }
                 }
 

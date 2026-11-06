@@ -44,9 +44,6 @@ pub enum BinaryError {
         details: String,
     },
 
-    #[error("Binary '{0}' not found on system")]
-    NotFound(String),
-
     #[error("{0}")]
     Other(String),
 }

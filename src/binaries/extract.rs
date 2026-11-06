@@ -8,6 +8,19 @@ use super::platform::{ArchiveFormat, PlatformInfo};
 pub struct BinaryExtractor;
 
 impl BinaryExtractor {
+    /// Safely replaces `dst` with `src`. Attempts an atomic rename first,
+    /// falling back to copy-and-delete if crossing filesystem boundaries.
+    fn atomic_replace_file(src: &Path, dst: &Path) -> Result<(), BinaryError> {
+        if dst.exists() {
+            let _ = fs::remove_file(dst);
+        }
+        if fs::rename(src, dst).is_err() {
+            fs::copy(src, dst)?;
+            let _ = fs::remove_file(src);
+        }
+        Ok(())
+    }
+
     /// Extracts or installs downloaded binary assets into `bin_dir`.
     pub fn extract(
         archive_path: &Path,
@@ -22,12 +35,7 @@ impl BinaryExtractor {
                 let dest_filename = platform.ytdlp_filename();
                 let dest_path = bin_dir.join(dest_filename);
 
-                // Atomic replacement on same filesystem
-                if dest_path.exists() {
-                    let _ = fs::remove_file(&dest_path);
-                }
-                fs::rename(archive_path, &dest_path)?;
-
+                Self::atomic_replace_file(archive_path, &dest_path)?;
                 Self::apply_permissions_and_attributes(&dest_path)?;
             }
             ArchiveFormat::Zip => {
@@ -84,10 +92,7 @@ impl BinaryExtractor {
                 outfile.flush()?;
                 drop(outfile);
 
-                if out_path.exists() {
-                    let _ = fs::remove_file(&out_path);
-                }
-                fs::rename(&tmp_out_path, &out_path)?;
+                Self::atomic_replace_file(&tmp_out_path, &out_path)?;
                 Self::apply_permissions_and_attributes(&out_path)?;
             }
         }
@@ -163,10 +168,7 @@ impl BinaryExtractor {
                 outfile.flush()?;
                 drop(outfile);
 
-                if out_path.exists() {
-                    let _ = fs::remove_file(&out_path);
-                }
-                fs::rename(&tmp_out_path, &out_path)?;
+                Self::atomic_replace_file(&tmp_out_path, &out_path)?;
                 Self::apply_permissions_and_attributes(&out_path)?;
             }
         }

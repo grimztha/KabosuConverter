@@ -64,13 +64,12 @@ impl DependencyManager {
         self.is_standalone
     }
 
-    /// Checks if required binaries (ffmpeg, ffprobe, yt-dlp) exist and are executable
-    /// without making any network calls.
+    /// Checks whether required binaries (ffmpeg, ffprobe, yt-dlp) are already present
+    /// and runnable locally, without performing any downloads or network requests.
     ///
     /// Resolution order:
-    /// 1. App-Local Folder (%LOCALAPPDATA%\<app_name>\bin or standalone `<exe_dir>/bin`)
+    /// 1. App-local folder (%LOCALAPPDATA%\<app_name>\bin or portable `<exe_dir>/bin`)
     /// 2. Project root / executable directory
-    /// 3. System $PATH (Optional fallback for power users)
     pub async fn check_existing(&self) -> Result<Option<BinaryPaths>, BinaryError> {
         let ffmpeg = self.resolve_binary(self.platform.ffmpeg_filename(), "-version").await;
         let ffprobe = self.resolve_binary(self.platform.ffprobe_filename(), "-version").await;
@@ -228,18 +227,17 @@ impl DependencyManager {
         })
     }
 
-    /// Resolves an individual binary across the 3 designated locations in priority order:
-    /// 1. App-Local Folder (%LOCALAPPDATA%\<app_name>\bin or standalone `<exe_dir>/bin`)
+    /// Resolves an individual binary across designated locations in priority order:
+    /// 1. App-local folder (%LOCALAPPDATA%\<app_name>\bin or portable `<exe_dir>/bin`)
     /// 2. Project root / executable directory
-    /// 3. System $PATH (Optional fallback)
     pub async fn resolve_binary(&self, filename: &str, test_arg: &str) -> Option<PathBuf> {
-        // Priority 1: Check App-Local bin directory
+        // First check the app-local bin directory
         let local_path = self.bin_dir.join(filename);
         if local_path.is_file() && Self::verify_binary_executable(&local_path, test_arg).await.is_ok() {
             return Some(local_path.canonicalize().unwrap_or(local_path));
         }
 
-        // Priority 1b: Check application root / executable directory
+        // Next check the application executable directory and workspace root
         let exe_dir = env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -260,19 +258,6 @@ impl DependencyManager {
             }
         }
 
-        None
-    }
-
-    /// Checks if binary is available in the user's system $PATH.
-    pub fn find_in_system_path(filename: &str) -> Option<PathBuf> {
-        if let Some(paths) = env::var_os("PATH") {
-            for dir in env::split_paths(&paths) {
-                let candidate = dir.join(filename);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
         None
     }
 

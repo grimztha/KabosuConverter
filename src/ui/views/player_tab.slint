@@ -254,7 +254,7 @@ export component PlayerTab inherits VerticalLayout {
                         animate width { duration: 250ms; easing: ease-out; }
 
                         VerticalLayout {
-                            alignment: center;
+                            alignment: end;
                             padding-top: 8px;
                             padding-bottom: 8px;
                             padding-right: 8px;
@@ -322,6 +322,8 @@ export component PlayerTab inherits VerticalLayout {
                         border-width: 1px;
                         border-color: Theme.card_secondary_border;
                         HorizontalLayout {
+                            padding-top: 4px;
+                            padding-bottom: 4px;
                             padding-left: 6px;
                             padding-right: 6px;
                             spacing: 3px;
@@ -332,7 +334,7 @@ export component PlayerTab inherits VerticalLayout {
                             Rectangle {
                                 width: 20px;
                                 height: 20px;
-                                border-radius: 3px;
+                                border-radius: 4px;
                                 background: vzm_ta.has-hover ? Theme.control_hover : transparent;
                                 Text { text: "−"; font-size: 13px; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzm_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5); } }
@@ -340,8 +342,8 @@ export component PlayerTab inherits VerticalLayout {
 
                             Rectangle {
                                 width: 24px;
-                                height: 18px;
-                                border-radius: 3px;
+                                height: 20px;
+                                border-radius: 4px;
                                 background: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan.with-alpha(0.18) : (vz1_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: AppData.timeline_zoom <= 1.05 ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
@@ -351,8 +353,8 @@ export component PlayerTab inherits VerticalLayout {
 
                             Rectangle {
                                 width: 24px;
-                                height: 18px;
-                                border-radius: 3px;
+                                height: 20px;
+                                border-radius: 4px;
                                 background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz2_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
@@ -362,8 +364,8 @@ export component PlayerTab inherits VerticalLayout {
 
                             Rectangle {
                                 width: 24px;
-                                height: 18px;
-                                border-radius: 3px;
+                                height: 20px;
+                                border-radius: 4px;
                                 background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz4_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
@@ -373,30 +375,30 @@ export component PlayerTab inherits VerticalLayout {
 
                             Rectangle {
                                 width: 24px;
-                                height: 18px;
-                                border-radius: 3px;
-                                background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? #38bdf822 : (vz8_ta.has-hover ? #2a2a30 : transparent);
+                                height: 20px;
+                                border-radius: 4px;
+                                background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz8_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? 1px : 0px;
-                                border-color: #38bdf866;
-                                Text { text: "8x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_cyan.with-alpha(0.5);
+                                Text { text: "8x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz8_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 8.0; } }
                             }
 
                             Rectangle {
                                 width: 20px;
                                 height: 20px;
-                                border-radius: 3px;
-                                background: vzp_ta.has-hover ? #2a2a30 : transparent;
-                                Text { text: "+"; font-size: 13px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                border-radius: 4px;
+                                background: vzp_ta.has-hover ? Theme.control_hover : transparent;
+                                Text { text: "+"; font-size: 13px; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzp_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5); } }
                             }
 
                             Rectangle {
                                 width: 22px;
                                 height: 20px;
-                                border-radius: 3px;
-                                background: vzc_ta.has-hover ? #2a2a30 : transparent;
-                                Text { text: "⊙"; font-size: 12px; font-weight: 800; color: #38bdf8; horizontal-alignment: center; vertical-alignment: center; }
+                                border-radius: 4px;
+                                background: vzc_ta.has-hover ? Theme.control_hover : transparent;
+                                Text { text: "⊙"; font-size: 12px; font-weight: 800; color: Theme.accent_cyan; horizontal-alignment: center; vertical-alignment: center; }
                                 vzc_ta := TouchArea {
                                     mouse-cursor: pointer;
                                     clicked => {
@@ -419,30 +421,44 @@ export component PlayerTab inherits VerticalLayout {
                         animate border-color { duration: 150ms; }
 
                         HorizontalLayout {
+                            padding-top: 4px;
+                            padding-bottom: 4px;
                             padding-left: 8px;
                             padding-right: 8px;
                             spacing: 5px;
                             alignment: center;
 
-                            // Mini VU / Volume Meter Graphic (3 colored bars)
-                            HorizontalLayout {
-                                spacing: 2px;
-                                alignment: center;
+                            // Mini VU / Volume Meter Graphic (3 colored bars rising from bottom baseline)
+                            vu_icon_box := Rectangle {
+                                width: 12px;
+                                height: 14px;
+
+                                // Green Bar (lowest, left)
                                 Rectangle {
+                                    x: 0px;
+                                    y: parent.height - self.height;
                                     width: 2.5px;
-                                    height: 8px;
+                                    height: 7px;
                                     border-radius: 1px;
                                     background: AppData.show_volume_meter ? #22c55e : Theme.text_muted;
                                 }
+
+                                // Yellow Bar (middle, center)
                                 Rectangle {
+                                    x: 4.5px;
+                                    y: parent.height - self.height;
                                     width: 2.5px;
-                                    height: 14px;
+                                    height: 10.5px;
                                     border-radius: 1px;
                                     background: AppData.show_volume_meter ? #eab308 : Theme.text_muted;
                                 }
+
+                                // Red Bar (tallest, right)
                                 Rectangle {
+                                    x: 9px;
+                                    y: parent.height - self.height;
                                     width: 2.5px;
-                                    height: 11px;
+                                    height: 14px;
                                     border-radius: 1px;
                                     background: AppData.show_volume_meter ? #ef4444 : Theme.text_muted;
                                 }
@@ -450,7 +466,7 @@ export component PlayerTab inherits VerticalLayout {
 
                             Text {
                                 text: "METER";
-                                font-size: 9.5px;
+                                font-size: 10px;
                                 font-weight: 700;
                                 color: AppData.show_volume_meter ? Theme.accent_cyan : Theme.text_muted;
                                 vertical-alignment: center;

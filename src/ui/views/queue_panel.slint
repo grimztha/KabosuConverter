@@ -5,6 +5,7 @@ import { IconButton } from "../components/icon_button.slint";
 import { ActionButton } from "../components/action_button.slint";
 
 export component QueuePanel inherits Rectangle {
+    callback request_focus();
     background: Theme.panel_bg;
     min-width: 300px;
     max-width: 300px;
@@ -39,6 +40,10 @@ export component QueuePanel inherits Rectangle {
                         background: Theme.card_bg;
                         border-width: 1px;
                         border-color: Theme.card_border;
+
+                        TouchArea {
+                            clicked => { root.request_focus(); }
+                        }
 
                         VerticalLayout {
                             padding: 8px;
@@ -84,7 +89,10 @@ export component QueuePanel inherits Rectangle {
 
                                         card_ta := TouchArea {
                                             mouse-cursor: pointer;
-                                            clicked => { AppLogic.select_file(idx); }
+                                            clicked => {
+                                                AppLogic.select_file(idx);
+                                                root.request_focus();
+                                            }
                                         }
 
                                         // Selection Accent Bar on left edge
@@ -147,7 +155,10 @@ export component QueuePanel inherits Rectangle {
                                                     btn_width: 20px;
                                                     btn_height: 20px;
                                                     hover_bg: #ef444433;
-                                                    clicked => { AppLogic.remove_file(idx); }
+                                                    clicked => {
+                                                        AppLogic.remove_file(idx);
+                                                        root.request_focus();
+                                                    }
                                                 }
                                             }
                                         }
@@ -171,7 +182,10 @@ export component QueuePanel inherits Rectangle {
                                     fill_color: #0284c7;
                                     hover_color: #0369a1;
                                     font_size: 11.5px;
-                                    clicked => { AppLogic.add_files(); }
+                                    clicked => {
+                                        AppLogic.add_files();
+                                        root.request_focus();
+                                    }
                                 }
 
                                 ActionButton {
@@ -187,7 +201,10 @@ export component QueuePanel inherits Rectangle {
                                     text_color: Theme.btn_neutral_text;
                                     font_size: 11px;
                                     is_disabled: AppData.queue.length == 0;
-                                    clicked => { AppLogic.clear_queue(); }
+                                    clicked => {
+                                        AppLogic.clear_queue();
+                                        root.request_focus();
+                                    }
                                 }
                             }
                         }
@@ -200,6 +217,10 @@ export component QueuePanel inherits Rectangle {
                         background: Theme.card_bg;
                         border-width: 1px;
                         border-color: #38bdf866;
+
+                        TouchArea {
+                            clicked => { root.request_focus(); }
+                        }
 
                         VerticalLayout {
                             padding-left: 10px;

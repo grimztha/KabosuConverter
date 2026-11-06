@@ -40,6 +40,12 @@ export component MainWindow inherits Window {
 
         fs := FocusScope {
         key-pressed(event) => {
+            if event.text == Key.Delete || event.text == "\u{7f}" {
+                if AppData.selected_file_index >= 0 && AppData.selected_file_index < AppData.queue.length {
+                    AppLogic.remove_file(AppData.selected_file_index);
+                    return accept;
+                }
+            }
             if event.text == " " {
                 if AppData.active_tab == 1 && AppData.player_has_media {
                     AppLogic.player_play_pause();
@@ -321,6 +327,7 @@ export component MainWindow inherits Window {
                 min-width: root.queue_panel_width;
                 max-width: root.queue_panel_width;
                 horizontal-stretch: 0;
+                request_focus => { fs.focus(); }
             }
 
             // Vertical Split Divider

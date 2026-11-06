@@ -386,3 +386,138 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slint::ComponentHandle;
+    use slint::platform::{Key, WindowEvent};
+
+    #[test]
+    fn test_del_key_removes_selected_file_from_queue() {
+        let ui = MainWindow::new().expect("MainWindow should instantiate successfully");
+        ui.show().unwrap();
+        let app_data = ui.global::<AppData>();
+
+        // Set up dummy queue with 3 files
+        let f1 = QueueFile {
+            id: 0,
+            file_name: "file1.mp4".into(),
+            file_path: "/path/file1.mp4".into(),
+            file_size_formatted: "10 MB".into(),
+            resolution: "1920x1080".into(),
+            duration: "01:00".into(),
+            codecs: "h264/aac".into(),
+            status: "Ready".into(),
+            progress: 0.0,
+            duration_seconds: 60.0,
+            is_video: true,
+            is_audio: true,
+            video_width: 1920,
+            video_height: 1080,
+        };
+        let f2 = QueueFile {
+            id: 1,
+            file_name: "file2.mp4".into(),
+            file_path: "/path/file2.mp4".into(),
+            file_size_formatted: "20 MB".into(),
+            resolution: "1920x1080".into(),
+            duration: "02:00".into(),
+            codecs: "h264/aac".into(),
+            status: "Ready".into(),
+            progress: 0.0,
+            duration_seconds: 120.0,
+            is_video: true,
+            is_audio: true,
+            video_width: 1920,
+            video_height: 1080,
+        };
+        let f3 = QueueFile {
+            id: 2,
+            file_name: "file3.mp4".into(),
+            file_path: "/path/file3.mp4".into(),
+            file_size_formatted: "30 MB".into(),
+            resolution: "1920x1080".into(),
+            duration: "03:00".into(),
+            codecs: "h264/aac".into(),
+            status: "Ready".into(),
+            progress: 0.0,
+            duration_seconds: 180.0,
+            is_video: true,
+            is_audio: true,
+            video_width: 1920,
+            video_height: 1080,
+        };
+
+        app_data.set_queue(ModelRc::new(VecModel::from(vec![f1, f2, f3])));
+        app_data.set_selected_file_index(1); // Select f2
+
+        // Register dummy on_remove_file that removes the index
+        let ui_weak = ui.as_weak();
+        ui.global::<AppLogic>().on_remove_file(move |index| {
+            if let Some(ui) = ui_weak.upgrade() {
+                let data = ui.global::<AppData>();
+                let mut list: Vec<QueueFile> = data.get_queue().iter().collect();
+                if index >= 0 && (index as usize) < list.len() {
+                    list.remove(index as usize);
+                    for (i, item) in list.iter_mut().enumerate() {
+                        item.id = i as i32;
+                    }
+                    data.set_queue(ModelRc::new(VecModel::from(list.clone())));
+                    if list.is_empty() {
+                        data.set_selected_file_index(-1);
+                    } else {
+                        let new_sel = (index as usize).min(list.len() - 1) as i32;
+                        data.set_selected_file_index(new_sel);
+                    }
+                }
+            }
+        });
+
+        // Dispatch DEL key event to MainWindow
+        ui.window().dispatch_event(WindowEvent::KeyPressed {
+            text: Key::Delete.into(),
+        });
+        ui.window().dispatch_event(WindowEvent::KeyReleased {
+            text: Key::Delete.into(),
+        });
+
+        // Verify f2 (index 1) was removed, leaving 2 files (f1 and f3)
+        let q: Vec<QueueFile> = app_data.get_queue().iter().collect();
+        assert_eq!(q.len(), 2);
+        assert_eq!(q[0].file_name.as_str(), "file1.mp4");
+        assert_eq!(q[1].file_name.as_str(), "file3.mp4");
+        assert_eq!(app_data.get_selected_file_index(), 1); // f3 is now at index 1 and selected
+
+        // Press DEL again - should remove f3
+        ui.window().dispatch_event(WindowEvent::KeyPressed {
+            text: Key::Delete.into(),
+        });
+        ui.window().dispatch_event(WindowEvent::KeyReleased {
+            text: Key::Delete.into(),
+        });
+
+        let q2: Vec<QueueFile> = app_data.get_queue().iter().collect();
+        assert_eq!(q2.len(), 1);
+        assert_eq!(q2[0].file_name.as_str(), "file1.mp4");
+        assert_eq!(app_data.get_selected_file_index(), 0);
+
+        // Press DEL again - should remove f1
+        ui.window().dispatch_event(WindowEvent::KeyPressed {
+            text: Key::Delete.into(),
+        });
+        ui.window().dispatch_event(WindowEvent::KeyReleased {
+            text: Key::Delete.into(),
+        });
+
+        let q3: Vec<QueueFile> = app_data.get_queue().iter().collect();
+        assert_eq!(q3.len(), 0);
+        assert_eq!(app_data.get_selected_file_index(), -1);
+
+        // Press DEL again when empty - should be a safe no-op
+        ui.window().dispatch_event(WindowEvent::KeyPressed {
+            text: Key::Delete.into(),
+        });
+        assert_eq!(app_data.get_selected_file_index(), -1);
+    }
+}

@@ -1,4 +1,4 @@
-import { AppData, AppLogic } from "../globals.slint";
+import { AppData, AppLogic, Theme } from "../globals.slint";
 
 export component WindowControls inherits HorizontalLayout {
     spacing: 0px;
@@ -19,7 +19,7 @@ export component WindowControls inherits HorizontalLayout {
                 Rectangle {
                     width: 10px;
                     height: 1px;
-                    background: min_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                    background: min_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
                 }
             }
         }
@@ -57,7 +57,7 @@ export component WindowControls inherits HorizontalLayout {
                         width: 8px;
                         height: 8px;
                         border-width: 1px;
-                        border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
                         background: #00000000;
                     }
 
@@ -68,8 +68,8 @@ export component WindowControls inherits HorizontalLayout {
                         width: 8px;
                         height: 8px;
                         border-width: 1px;
-                        border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
-                        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : #111114);
+                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
+                        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : Theme.header_bg);
                     }
                 }
 
@@ -78,7 +78,7 @@ export component WindowControls inherits HorizontalLayout {
                     width: 10px;
                     height: 10px;
                     border-width: 1px;
-                    border-color: max_ta.has-hover ? #f4f4f5 : #a1a1aa;
+                    border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
                     background: #00000000;
                     border-radius: 1px;
                 }
@@ -109,7 +109,7 @@ export component WindowControls inherits HorizontalLayout {
                     source: @image-url("../icons/x.svg");
                     width: 10px;
                     height: 10px;
-                    colorize: close_ta.has-hover ? #ffffff : #a1a1aa;
+                    colorize: close_ta.has-hover ? #ffffff : Theme.text_secondary;
                 }
             }
         }

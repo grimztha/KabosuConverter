@@ -1,10 +1,12 @@
+import { Theme } from "../globals.slint";
+
 export component IconButton inherits Rectangle {
     in property <string> text: "";
     in property <image> icon_source;
     in property <bool> has_icon: false;
     in property <length> icon_size: 14px;
-    in property <color> text_color: #a1a1aa;
-    in property <color> hover_bg: #26262e;
+    in property <color> text_color: Theme.text_secondary;
+    in property <color> hover_bg: Theme.control_hover;
     in property <length> btn_width: 28px;
     in property <length> btn_height: 28px;
     in property <length> font_size: 13px;
@@ -29,7 +31,7 @@ export component IconButton inherits Rectangle {
                 source: root.icon_source;
                 width: root.icon_size;
                 height: root.icon_size;
-                colorize: ta.has-hover ? #f4f4f5 : root.text_color;
+                colorize: ta.has-hover ? Theme.text_primary : root.text_color;
             }
         }
 
@@ -37,7 +39,7 @@ export component IconButton inherits Rectangle {
             alignment: center;
             Text {
                 text: root.text;
-                color: ta.has-hover ? #f4f4f5 : root.text_color;
+                color: ta.has-hover ? Theme.text_primary : root.text_color;
                 font-size: root.font_size;
                 font-weight: 600;
             }

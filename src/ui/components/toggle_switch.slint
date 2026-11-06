@@ -1,0 +1,37 @@
+import { Theme } from "../globals.slint";
+
+export component ToggleSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> is_disabled: false;
+    callback toggled(bool);
+
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: root.is_disabled ? #27272a : (root.checked ? Theme.accent_cyan : #3f3f46);
+
+    animate background { duration: 160ms; easing: ease-out; }
+
+    knob := Rectangle {
+        x: root.checked ? (parent.width - self.width - 3px) : 3px;
+        y: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: root.is_disabled ? #52525b : #ffffff;
+        drop-shadow-blur: 4px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #00000033;
+
+        animate x { duration: 160ms; easing: ease-out; }
+    }
+
+    TouchArea {
+        enabled: !root.is_disabled;
+        mouse-cursor: root.is_disabled ? default : pointer;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}

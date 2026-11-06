@@ -1,3 +1,5 @@
+import { Theme } from "../globals.slint";
+
 export component ActionButton inherits Rectangle {
     in property <string> title: "Button";
     in property <image> icon_source;
@@ -28,7 +30,7 @@ export component ActionButton inherits Rectangle {
                 source: root.icon_source;
                 width: root.icon_size;
                 height: root.icon_size;
-                colorize: root.is_disabled ? #71717a : root.text_color;
+                colorize: root.is_disabled ? Theme.text_muted : root.text_color;
             }
         }
 
@@ -36,7 +38,7 @@ export component ActionButton inherits Rectangle {
             alignment: center;
             Text {
                 text: root.title;
-                color: root.is_disabled ? #71717a : root.text_color;
+                color: root.is_disabled ? Theme.text_muted : root.text_color;
                 font-size: root.font_size;
                 font-weight: 600;
             }

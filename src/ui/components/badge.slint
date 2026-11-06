@@ -1,7 +1,9 @@
+import { Theme } from "../globals.slint";
+
 export component Badge inherits Rectangle {
     in property <string> label: "";
-    in property <color> bg_color: #1c1c22;
-    in property <color> fg_color: #a1a1aa;
+    in property <color> bg_color: Theme.card_secondary_bg;
+    in property <color> fg_color: Theme.text_secondary;
 
     height: 22px;
     border-radius: 4px;

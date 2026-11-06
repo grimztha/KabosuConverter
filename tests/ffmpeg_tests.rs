@@ -496,6 +496,65 @@ fn test_av_sync_master_clock_playback() {
 }
 
 #[test]
+fn test_trimmed_playback_stream_with_duration() {
+    use another_encoder::ffmpeg::{spawn_playback_stream_transformed_with_duration, VideoRotation, FFmpegBinaries};
+    use std::io::Read;
+
+    if let Ok(binaries) = FFmpegBinaries::locate() {
+        let test_media = Path::new("target/test_trimmed_playback_media.mp4");
+        let mut cmd = std::process::Command::new(&binaries.ffmpeg);
+        cmd.args([
+            "-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=24",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-y",
+        ]).arg(test_media);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        if let Ok(status) = cmd.status() {
+            if status.success() {
+                let media_str = test_media.to_string_lossy().to_string();
+                let start_sec = 0.5;
+                let trimmed_duration = 0.5; // 0.5s at 24fps = 12 frames
+
+                // Spawn video decode stream bounded to trimmed duration
+                let mut video_child = spawn_playback_stream_transformed_with_duration(
+                    &binaries.ffmpeg,
+                    &media_str,
+                    start_sec,
+                    Some(trimmed_duration),
+                    VideoRotation::None,
+                    false,
+                    false,
+                ).expect("Video stream should spawn with duration");
+
+                let mut stdout = video_child.stdout.take().expect("Should have stdout pipe");
+                let mut frame_buf = vec![0u8; 640 * 360 * 4];
+                let mut frame_count = 0;
+
+                while stdout.read_exact(&mut frame_buf).is_ok() {
+                    frame_count += 1;
+                }
+
+                // 0.5s at 24fps should yield ~12 frames and then stop via EOF
+                assert!(
+                    (11..=13).contains(&frame_count),
+                    "Trimmed playback stream should output ~12 frames for 0.5s duration, got {}",
+                    frame_count
+                );
+
+                let wait_res = video_child.wait();
+                assert!(wait_res.is_ok(), "Video process should exit cleanly after trimmed duration");
+
+                let _ = std::fs::remove_file(test_media);
+            }
+        }
+    }
+}
+
+#[test]
 fn test_extract_frame_rgba_accurate_seeking() {
     use another_encoder::ffmpeg::{extract_frame_rgba, FFmpegBinaries};
 

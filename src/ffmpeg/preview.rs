@@ -308,6 +308,27 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
     flip_h: bool,
     flip_v: bool,
 ) -> Result<std::process::Child> {
+    spawn_playback_stream_transformed_with_duration(
+        ffmpeg_bin,
+        media_path,
+        start_seconds,
+        None,
+        rotation,
+        flip_h,
+        flip_v,
+    )
+}
+
+/// Starts an ffmpeg stream with rotation, flip, and optional duration applied.
+pub fn spawn_playback_stream_transformed_with_duration<B: AsRef<Path>>(
+    ffmpeg_bin: B,
+    media_path: &str,
+    start_seconds: f64,
+    duration: Option<f64>,
+    rotation: VideoRotation,
+    flip_h: bool,
+    flip_v: bool,
+) -> Result<std::process::Child> {
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = start_seconds.max(0.0);
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
@@ -331,8 +352,13 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
             "24",
             "-an",
             "-sn",
-            "pipe:1",
         ]);
+        if let Some(dur) = duration {
+            if dur > 0.0 {
+                cmd.arg("-t").arg(format!("{:.3}", dur));
+            }
+        }
+        cmd.arg("pipe:1");
     } else {
         cmd.args([
             "-i",
@@ -349,8 +375,13 @@ pub fn spawn_playback_stream_transformed<B: AsRef<Path>>(
             "24",
             "-an",
             "-sn",
-            "pipe:1",
         ]);
+        if let Some(dur) = duration {
+            if dur > 0.0 {
+                cmd.arg("-t").arg(format!("{:.3}", dur));
+            }
+        }
+        cmd.arg("pipe:1");
     }
 
     crate::set_no_window(&mut cmd);

@@ -5,8 +5,8 @@ use std::thread;
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer, SharedString};
 
 use another_encoder::ffmpeg::{
-    format_duration_hms, spawn_audio_playback, spawn_ffplay, spawn_playback_stream_transformed,
-    AudioPlaybackSession,
+    format_duration_hms, spawn_audio_playback, spawn_ffplay,
+    spawn_playback_stream_transformed_with_duration, AudioPlaybackSession,
 };
 use crate::context::AppContext;
 use crate::handlers::editor::{request_current_preview_frame, rotation_from_index};
@@ -81,7 +81,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                     let cur = app_data.get_player_current_time();
                     let dur = app_data.get_player_duration();
-                    let start_at = if cur >= dur {
+                    let out_sec_val = app_data.get_out_point_seconds();
+                    let start_at = if cur >= dur || (out_sec_val >= 0.0 && cur >= (out_sec_val - 0.05)) {
                         let in_pos = app_data.get_in_point_seconds().max(0.0);
                         app_data.set_player_current_time(in_pos);
                         app_data.set_player_time_text(SharedString::from(format_duration_hms(in_pos as f64)));
@@ -109,15 +110,16 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let audio_expected = app_data.get_selected_is_audio() && ctx.binaries.ffplay.is_some();
                         let mut initial_audio_clock: Option<Arc<std::sync::atomic::AtomicU64>> = None;
 
+                        let dur_opt = if out_sec > start_sec {
+                            Some(out_sec - start_sec)
+                        } else {
+                            None
+                        };
+
                         // Launch audio playback in parallel via ffplay in headless mode (-nodisp)
                         // Runs even if muted or volume=0 so the render output audio meter continues measuring!
                         if app_data.get_selected_is_audio() {
                             if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                                let dur_opt = if out_sec > start_sec {
-                                    Some(out_sec - start_sec)
-                                } else {
-                                    None
-                                };
                                 let edit_gain_db = app_data.get_audio_gain_db();
                                 let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
                                     Some(edit_gain_db)
@@ -149,7 +151,15 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let flip_h = app_data.get_video_flip_horizontal();
                         let flip_v = app_data.get_video_flip_vertical();
 
-                        match spawn_playback_stream_transformed(&ffmpeg_bin, &path, start_sec, rot, flip_h, flip_v) {
+                        match spawn_playback_stream_transformed_with_duration(
+                            &ffmpeg_bin,
+                            &path,
+                            start_sec,
+                            dur_opt,
+                            rot,
+                            flip_h,
+                            flip_v,
+                        ) {
                             Ok(mut child) => {
                                 let my_session = ctx.playback_session_id.fetch_add(1, Ordering::SeqCst) + 1;
                                 let session_check = ctx.playback_session_id.clone();
@@ -172,7 +182,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     let mut buf = vec![0u8; expected];
                                     let mut frame_index: u64 = 0;
                                     let frame_dur = 1.0 / 24.0;
-                                    let mut playback_wall_start: Option<std::time::Instant> = None;
+                                    let mut playback_start_instant = std::time::Instant::now();
                                     let mut cached_audio_clock = initial_audio_clock;
                                     let mut audio_wait_done = false;
 
@@ -181,70 +191,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                             break;
                                         }
 
+                                        let final_time = if out_sec >= 0.0 {
+                                            out_sec.min(dur_sec)
+                                        } else {
+                                            dur_sec
+                                        };
+
                                         if stdout.read_exact(&mut buf).is_err() {
-                                            let ui_w2 = ui_w.clone();
-                                            let _ = slint::invoke_from_event_loop(move || {
-                                                if let Some(ui) = ui_w2.upgrade() {
-                                                    ui.global::<AppData>().set_player_is_playing(false);
-                                                }
-                                            });
-                                            break;
-                                        }
-
-                                        let mut get_pts = || -> Option<f64> {
-                                            if let Some(ref clk) = cached_audio_clock {
-                                                let val = clk.load(Ordering::Acquire);
-                                                if val != u64::MAX {
-                                                    return Some((val as f64) / 1_000_000.0);
-                                                }
-                                            }
-                                            if let Ok(lock) = ffplay_child_ref.try_lock() {
-                                                if let Some(ref session) = *lock {
-                                                    let clk = session.master_clock.clone();
-                                                    let val = clk.load(Ordering::Acquire);
-                                                    cached_audio_clock = Some(clk);
-                                                    if val != u64::MAX {
-                                                        return Some((val as f64) / 1_000_000.0);
-                                                    }
-                                                }
-                                            }
-                                            None
-                                        };
-
-                                        // On the initial frame, if audio is playing, wait up to 350ms
-                                        // for ffplay to initialize so video and audio start simultaneously.
-                                        if !audio_wait_done && audio_expected {
-                                            audio_wait_done = true;
-                                            let wait_start = std::time::Instant::now();
-                                            while get_pts().is_none() && wait_start.elapsed().as_millis() < 350 {
-                                                if session_check.load(Ordering::SeqCst) != my_session {
-                                                    break;
-                                                }
-                                                thread::sleep(std::time::Duration::from_millis(5));
-                                            }
-                                        }
-
-                                        let current_master_time = match get_pts() {
-                                            Some(pts) => pts,
-                                            None => {
-                                                let inst = match playback_wall_start {
-                                                    Some(i) => i,
-                                                    None => {
-                                                        let i = std::time::Instant::now();
-                                                        playback_wall_start = Some(i);
-                                                        i
-                                                    }
-                                                };
-                                                start_sec + inst.elapsed().as_secs_f64()
-                                            }
-                                        };
-
-                                        if (out_sec >= 0.0 && current_master_time >= out_sec) || current_master_time >= dur_sec {
-                                            let final_time = if out_sec >= 0.0 && current_master_time >= out_sec {
-                                                out_sec
-                                            } else {
-                                                dur_sec
-                                            };
                                             let ui_w2 = ui_w.clone();
                                             let _ = slint::invoke_from_event_loop(move || {
                                                 if let Some(ui) = ui_w2.upgrade() {
@@ -257,7 +210,85 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                             break;
                                         }
 
+                                        let mut audio_finished = false;
+                                        if let Ok(mut lock) = ffplay_child_ref.try_lock() {
+                                            if let Some(ref mut session) = *lock {
+                                                if session.is_finished() {
+                                                    audio_finished = true;
+                                                    cached_audio_clock = None;
+                                                } else {
+                                                    cached_audio_clock = Some(session.master_clock.clone());
+                                                }
+                                            } else {
+                                                cached_audio_clock = None;
+                                            }
+                                        }
+
+                                        let get_pts = |clock: &Option<Arc<std::sync::atomic::AtomicU64>>| -> Option<f64> {
+                                            if let Some(ref clk) = *clock {
+                                                let val = clk.load(Ordering::Acquire);
+                                                if val != u64::MAX {
+                                                    return Some((val as f64) / 1_000_000.0);
+                                                }
+                                            }
+                                            None
+                                        };
+
+                                        // On the initial frame, if audio is playing, wait up to 350ms
+                                        // for ffplay to initialize so video and audio start simultaneously.
+                                        if !audio_wait_done && audio_expected {
+                                            audio_wait_done = true;
+                                            let wait_start = std::time::Instant::now();
+                                            while get_pts(&cached_audio_clock).is_none() && wait_start.elapsed().as_millis() < 350 {
+                                                if session_check.load(Ordering::SeqCst) != my_session {
+                                                    break;
+                                                }
+                                                if let Ok(mut lock) = ffplay_child_ref.try_lock() {
+                                                    if let Some(ref mut session) = *lock {
+                                                        if !session.is_finished() {
+                                                            cached_audio_clock = Some(session.master_clock.clone());
+                                                        }
+                                                    }
+                                                }
+                                                thread::sleep(std::time::Duration::from_millis(5));
+                                            }
+                                            playback_start_instant = std::time::Instant::now();
+                                        }
+
+                                        let current_master_time = match get_pts(&cached_audio_clock) {
+                                            Some(pts) => pts,
+                                            None => {
+                                                start_sec + playback_start_instant.elapsed().as_secs_f64()
+                                            }
+                                        };
+
                                         let frame_target_sec = start_sec + (frame_index as f64) * frame_dur;
+
+                                        let has_reached_out = out_sec >= 0.0 && (
+                                            current_master_time >= out_sec
+                                            || frame_target_sec >= out_sec
+                                            || (audio_finished && audio_wait_done)
+                                        );
+                                        let has_reached_end = current_master_time >= dur_sec || frame_target_sec >= dur_sec;
+
+                                        if has_reached_out || has_reached_end {
+                                            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
+                                            pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
+
+                                            let ui_w2 = ui_w.clone();
+                                            let _ = slint::invoke_from_event_loop(move || {
+                                                if let Some(ui) = ui_w2.upgrade() {
+                                                    let app_data = ui.global::<AppData>();
+                                                    let img = slint::Image::from_rgba8(pixel_buffer);
+                                                    app_data.set_preview_frame(img);
+                                                    app_data.set_player_is_playing(false);
+                                                    app_data.set_player_current_time(final_time as f32);
+                                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
+                                                }
+                                            });
+                                            break;
+                                        }
+
                                         let diff = frame_target_sec - current_master_time;
 
                                         frame_index += 1;

@@ -168,6 +168,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         ui.global::<AppLogic>().on_jump_to_in_point(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    ctx.stop_active_playback(&app_data);
+                }
                 let in_sec = app_data.get_in_point_seconds();
                 if in_sec >= 0.0 {
                     app_data.set_player_current_time(in_sec);
@@ -187,6 +190,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         ui.global::<AppLogic>().on_jump_to_out_point(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
+                if app_data.get_player_is_playing() {
+                    ctx.stop_active_playback(&app_data);
+                }
                 let out_sec = app_data.get_out_point_seconds();
                 if out_sec >= 0.0 {
                     app_data.set_player_current_time(out_sec);

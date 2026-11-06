@@ -60,11 +60,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 if let Some(ui) = ui_handle.upgrade() {
                     let folder_str = folder.to_string_lossy().to_string();
-                    ui.global::<AppData>()
-                        .set_ytdlp_output_dir(SharedString::from(&folder_str));
-                    let mut s = another_encoder::settings::load_settings();
-                    s.default_output_dir = Some(folder_str);
-                    let _ = another_encoder::settings::save_settings(&s);
+                    let data = ui.global::<AppData>();
+                    data.set_ytdlp_output_dir(SharedString::from(&folder_str));
+                    crate::handlers::settings::save_settings_from_app_data(&data);
                 }
             }
         });

@@ -11,27 +11,82 @@ pub const APP_NAME: &str = "AnotherEncoder";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
+    // Directories
     pub default_output_dir: Option<String>,
+    pub default_ytdlp_output_dir: Option<String>,
+
+    // Video & Transcoder Options
     pub default_video_codec: VideoCodec,
+    pub default_function_index: i32,
     pub default_hw_accel: HwAccel,
+    pub default_hw_accel_index: i32,
+    pub default_rate_control_index: i32,
     pub default_crf: u32,
+    pub default_video_bitrate_index: i32,
+    pub default_preset_index: i32,
+    pub default_resolution_index: i32,
+    pub default_fps_index: i32,
+    pub default_deinterlace_index: i32,
+    pub default_faststart: bool,
+    pub default_container_index: i32,
+
+    // Audio Options
     pub default_audio_codec: AudioCodecChoice,
+    pub default_audio_codec_index: i32,
     pub default_audio_bitrate_kbps: u32,
+    pub default_audio_bitrate_index: i32,
+    pub default_audio_sample_rate_index: i32,
+    pub default_normalize_index: i32,
+
+    // General Preferences
     pub open_folder_on_finish: bool,
     pub play_sound_on_finish: bool,
+
+    // UI & Workspace State
+    pub show_volume_meter: bool,
+    pub player_volume: f32,
+    pub edit_panel_expanded: bool,
+    pub crop_arrow_keys_enabled: bool,
+    pub crop_nudge_step: i32,
+    pub ytdlp_selected_format_index: i32,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             default_output_dir: None,
+            default_ytdlp_output_dir: None,
+
             default_video_codec: VideoCodec::H264,
+            default_function_index: 0,
             default_hw_accel: HwAccel::Auto,
+            default_hw_accel_index: 0,
+            default_rate_control_index: 0,
             default_crf: 23,
+            default_video_bitrate_index: 2, // 6000 kbps
+            default_preset_index: 3,        // medium
+            default_resolution_index: 0,    // original source
+            default_fps_index: 0,           // original source
+            default_deinterlace_index: 0,   // none
+            default_faststart: true,
+            default_container_index: 0,     // .mp4
+
             default_audio_codec: AudioCodecChoice::AAC,
+            default_audio_codec_index: 0,   // AAC
             default_audio_bitrate_kbps: 192,
+            default_audio_bitrate_index: 2, // 192 kbps
+            default_audio_sample_rate_index: 0, // keep source
+            default_normalize_index: 0,     // disabled
+
             open_folder_on_finish: true,
             play_sound_on_finish: false,
+
+            show_volume_meter: true,
+            player_volume: 1.0,
+            edit_panel_expanded: true,
+            crop_arrow_keys_enabled: true,
+            crop_nudge_step: 10,
+            ytdlp_selected_format_index: 0,
         }
     }
 }
@@ -108,7 +163,7 @@ pub fn load_settings() -> AppSettings {
     AppSettings::default()
 }
 
-/// Saves persistent application settings atomically via temporary file replacement.
+/// Saves application settings safely via a temporary file before replacing the target.
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let path = get_settings_path()?;
     if let Some(parent) = path.parent() {
@@ -118,12 +173,12 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, &content)?;
 
-    // Replace the settings file atomically using a temporary file.
+    // On Windows, rename fails if destination already exists, so remove first.
+    // If rename still encounters a lock, fall back to writing directly.
     if path.exists() {
         let _ = fs::remove_file(&path);
     }
-    if let Err(_e) = fs::rename(&tmp_path, &path) {
-        // If rename fails (e.g. temporary file lock), write directly as fallback.
+    if fs::rename(&tmp_path, &path).is_err() {
         let _ = fs::remove_file(&tmp_path);
         fs::write(&path, content)?;
     }
@@ -152,6 +207,80 @@ mod tests {
         assert!(!parsed.open_folder_on_finish);
         assert_eq!(parsed.default_audio_bitrate_kbps, 192);
         assert_eq!(parsed.default_video_codec, VideoCodec::H264);
+        assert_eq!(parsed.default_function_index, 0);
+        assert_eq!(parsed.default_preset_index, 3);
+        assert_eq!(parsed.default_container_index, 0);
+        assert_eq!(parsed.player_volume, 1.0);
+        assert!(parsed.show_volume_meter);
+        assert!(parsed.edit_panel_expanded);
+    }
+
+    #[test]
+    fn test_full_settings_serialization_roundtrip() {
+        let settings = AppSettings {
+            default_output_dir: Some("D:/Exports".to_string()),
+            default_ytdlp_output_dir: Some("D:/Downloads".to_string()),
+            default_video_codec: VideoCodec::H265,
+            default_function_index: 1,
+            default_hw_accel: HwAccel::Nvenc,
+            default_hw_accel_index: 1,
+            default_rate_control_index: 1,
+            default_crf: 18,
+            default_video_bitrate_index: 0,
+            default_preset_index: 4,
+            default_resolution_index: 1,
+            default_fps_index: 8,
+            default_deinterlace_index: 1,
+            default_faststart: false,
+            default_container_index: 1,
+            default_audio_codec: AudioCodecChoice::Opus,
+            default_audio_codec_index: 2,
+            default_audio_bitrate_kbps: 256,
+            default_audio_bitrate_index: 1,
+            default_audio_sample_rate_index: 1,
+            default_normalize_index: 2,
+            open_folder_on_finish: false,
+            play_sound_on_finish: true,
+            show_volume_meter: false,
+            player_volume: 0.75,
+            edit_panel_expanded: false,
+            crop_arrow_keys_enabled: false,
+            crop_nudge_step: 25,
+            ytdlp_selected_format_index: 3,
+        };
+
+        let json = serde_json::to_string_pretty(&settings).expect("Must serialize cleanly");
+        let reloaded: AppSettings = serde_json::from_str(&json).expect("Must deserialize cleanly");
+
+        assert_eq!(reloaded.default_output_dir.as_deref(), Some("D:/Exports"));
+        assert_eq!(reloaded.default_ytdlp_output_dir.as_deref(), Some("D:/Downloads"));
+        assert_eq!(reloaded.default_video_codec, VideoCodec::H265);
+        assert_eq!(reloaded.default_function_index, 1);
+        assert_eq!(reloaded.default_hw_accel, HwAccel::Nvenc);
+        assert_eq!(reloaded.default_hw_accel_index, 1);
+        assert_eq!(reloaded.default_rate_control_index, 1);
+        assert_eq!(reloaded.default_crf, 18);
+        assert_eq!(reloaded.default_video_bitrate_index, 0);
+        assert_eq!(reloaded.default_preset_index, 4);
+        assert_eq!(reloaded.default_resolution_index, 1);
+        assert_eq!(reloaded.default_fps_index, 8);
+        assert_eq!(reloaded.default_deinterlace_index, 1);
+        assert!(!reloaded.default_faststart);
+        assert_eq!(reloaded.default_container_index, 1);
+        assert_eq!(reloaded.default_audio_codec, AudioCodecChoice::Opus);
+        assert_eq!(reloaded.default_audio_codec_index, 2);
+        assert_eq!(reloaded.default_audio_bitrate_kbps, 256);
+        assert_eq!(reloaded.default_audio_bitrate_index, 1);
+        assert_eq!(reloaded.default_audio_sample_rate_index, 1);
+        assert_eq!(reloaded.default_normalize_index, 2);
+        assert!(!reloaded.open_folder_on_finish);
+        assert!(reloaded.play_sound_on_finish);
+        assert!(!reloaded.show_volume_meter);
+        assert!((reloaded.player_volume - 0.75).abs() < f32::EPSILON);
+        assert!(!reloaded.edit_panel_expanded);
+        assert!(!reloaded.crop_arrow_keys_enabled);
+        assert_eq!(reloaded.crop_nudge_step, 25);
+        assert_eq!(reloaded.ytdlp_selected_format_index, 3);
     }
 
     #[test]

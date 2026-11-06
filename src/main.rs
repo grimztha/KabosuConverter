@@ -9,12 +9,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 
-use another_encoder::ffmpeg::{
-    AudioCodecChoice, AudioPlaybackSession, FFmpegBinaries, HwAccel, VideoCodec,
-};
-use another_encoder::settings::{self, AppSettings};
+use another_encoder::ffmpeg::{AudioPlaybackSession, FFmpegBinaries};
+use another_encoder::settings;
 use another_encoder::ytdlp;
 
 mod context;
@@ -54,7 +52,7 @@ fn main() -> Result<()> {
 
     let ui = MainWindow::new().map_err(|e| anyhow::anyhow!("Failed to create window: {:?}", e))?;
     let app_settings = settings::load_settings();
-    apply_settings_to_ui(&ui, &app_settings);
+    handlers::settings::apply_settings_to_app_data(&ui.global::<AppData>(), &app_settings);
 
     // Dynamic engine version badge
     let (_full_ver, badge_text) = binaries.detect_version();
@@ -160,13 +158,6 @@ fn main() -> Result<()> {
         });
     }
 
-    if app_settings.default_output_dir.is_none() {
-        let default_dl_dir = dirs::download_dir()
-            .or_else(dirs::video_dir)
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        ui.global::<AppData>().set_ytdlp_output_dir(SharedString::from(default_dl_dir.to_string_lossy().as_ref()));
-    }
-
     let ytdlp_discovered_options = Arc::new(Mutex::new(Vec::new()));
     let active_ytdlp_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
     let active_ytdlp_cancel = Arc::new(AtomicBool::new(false));
@@ -233,9 +224,18 @@ fn main() -> Result<()> {
 
     ui.global::<AppLogic>().on_window_close(move || {
         if let Some(ui) = ui_close.upgrade() {
+            handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
             let _ = ui.window().hide();
         }
         let _ = slint::quit_event_loop();
+    });
+
+    let ui_close_req = ui.as_weak();
+    ui.window().on_close_requested(move || {
+        if let Some(ui) = ui_close_req.upgrade() {
+            handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
+        }
+        slint::CloseRequestResponse::HideWindow
     });
 
     ui.show()
@@ -277,7 +277,7 @@ fn main() -> Result<()> {
             );
         });
 
-        // Poll during early window lifecycle to attach to the real application HWND as soon as it appears
+        // Ensure the timer stops once attached or after reaching the attempt limit
         let check_timer = Rc::new(RefCell::new(slint::Timer::default()));
         let check_timer_clone = check_timer.clone();
         let mut attempts = 0;
@@ -287,73 +287,17 @@ fn main() -> Result<()> {
             move || {
                 attempts += 1;
                 win_drag_drop::reapply_drop_target();
-                if win_drag_drop::is_attached() && attempts >= 15 {
+                if (win_drag_drop::is_attached() && attempts >= 5) || attempts >= 20 {
                     check_timer_clone.borrow().stop();
                 }
             },
         );
     }
 
-    ui.run()
-        .map_err(|e| anyhow::anyhow!("Platform error: {:?}", e))
-}
+    let run_res = ui.run()
+        .map_err(|e| anyhow::anyhow!("Platform error: {:?}", e));
 
-fn apply_settings_to_ui(ui: &MainWindow, settings: &AppSettings) {
-    let data = ui.global::<AppData>();
+    handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
 
-    data.set_open_folder_on_finish(settings.open_folder_on_finish);
-    data.set_play_sound_on_finish(settings.play_sound_on_finish);
-
-    if let Some(ref dir) = settings.default_output_dir {
-        if !dir.is_empty() && dir != "Same as source" {
-            data.set_output_directory(SharedString::from(dir));
-            data.set_ytdlp_output_dir(SharedString::from(dir));
-        }
-    }
-
-    let func_idx = match settings.default_video_codec {
-        VideoCodec::H264 => 0,
-        VideoCodec::H265 => 1,
-        VideoCodec::AV1 => 2,
-        VideoCodec::AppleProRes => 3,
-        VideoCodec::AvidDNxHD => 4,
-        VideoCodec::VP9 => 5,
-        VideoCodec::Copy => 6,
-        _ => 0,
-    };
-    data.set_function_index(func_idx);
-
-    let hw_idx = match settings.default_hw_accel {
-        HwAccel::Auto => 0,
-        HwAccel::Nvenc => 1,
-        HwAccel::Qsv => 2,
-        HwAccel::Amf => 3,
-        HwAccel::VideoToolbox => 4,
-        HwAccel::Cpu => 5,
-    };
-    data.set_hw_accel_index(hw_idx);
-
-    data.set_crf_value(settings.default_crf as f32);
-
-    let audio_codec_idx = match settings.default_audio_codec {
-        AudioCodecChoice::AAC => 0,
-        AudioCodecChoice::MP3 => 1,
-        AudioCodecChoice::Opus => 2,
-        AudioCodecChoice::FLAC => 3,
-        AudioCodecChoice::WavPCM24 => 4,
-        AudioCodecChoice::WavPCM16 => 5,
-        AudioCodecChoice::AC3 => 6,
-        AudioCodecChoice::Copy => 7,
-    };
-    data.set_audio_codec_index(audio_codec_idx);
-
-    let audio_br_idx = match settings.default_audio_bitrate_kbps {
-        320 => 0,
-        256 => 1,
-        192 => 2,
-        128 => 3,
-        96 => 4,
-        _ => 5,
-    };
-    data.set_audio_bitrate_index(audio_br_idx);
+    run_res
 }

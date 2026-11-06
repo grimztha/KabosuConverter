@@ -26,15 +26,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             {
                 if let Some(ui) = ui_handle.upgrade() {
                     let folder_str = folder.to_string_lossy().to_string();
-                    ui.global::<AppData>().set_output_directory(SharedString::from(
-                        &folder_str,
-                    ));
-                    ui.global::<AppData>().set_ytdlp_output_dir(SharedString::from(
-                        &folder_str,
-                    ));
-                    let mut s = another_encoder::settings::load_settings();
-                    s.default_output_dir = Some(folder_str);
-                    let _ = another_encoder::settings::save_settings(&s);
+                    let data = ui.global::<AppData>();
+                    data.set_output_directory(SharedString::from(&folder_str));
+                    data.set_ytdlp_output_dir(SharedString::from(&folder_str));
+                    crate::handlers::settings::save_settings_from_app_data(&data);
                 }
             }
         });
@@ -187,52 +182,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let selected_idx = ui.global::<AppData>().get_selected_file_index();
 
                 // Persist user encoder choices to settings.json
-                let chosen_video_codec = match func_idx {
-                    0 => VideoCodec::H264,
-                    1 => VideoCodec::H265,
-                    2 => VideoCodec::AV1,
-                    3 => VideoCodec::AppleProRes,
-                    4 => VideoCodec::AvidDNxHD,
-                    5 => VideoCodec::VP9,
-                    6 => VideoCodec::Copy,
-                    _ => VideoCodec::H264,
-                };
-                let chosen_hw_accel = match hw_accel_idx {
-                    1 => HwAccel::Nvenc,
-                    2 => HwAccel::Qsv,
-                    3 => HwAccel::Amf,
-                    4 => HwAccel::VideoToolbox,
-                    5 => HwAccel::Cpu,
-                    _ => HwAccel::Auto,
-                };
-                let chosen_audio_codec = match audio_codec_idx {
-                    1 => AudioCodecChoice::MP3,
-                    2 => AudioCodecChoice::Opus,
-                    3 => AudioCodecChoice::FLAC,
-                    4 => AudioCodecChoice::WavPCM24,
-                    5 => AudioCodecChoice::WavPCM16,
-                    6 => AudioCodecChoice::AC3,
-                    7 => AudioCodecChoice::Copy,
-                    _ => AudioCodecChoice::AAC,
-                };
-                let chosen_audio_bitrate = match audio_br_idx {
-                    0 => 320,
-                    1 => 256,
-                    2 => 192,
-                    3 => 128,
-                    4 => 96,
-                    _ => 64,
-                };
-                let mut current_settings = another_encoder::settings::load_settings();
-                current_settings.default_video_codec = chosen_video_codec;
-                current_settings.default_hw_accel = chosen_hw_accel;
-                current_settings.default_crf = crf;
-                current_settings.default_audio_codec = chosen_audio_codec;
-                current_settings.default_audio_bitrate_kbps = chosen_audio_bitrate;
-                if out_dir_str != "Same as source" && !out_dir_str.is_empty() {
-                    current_settings.default_output_dir = Some(out_dir_str.clone());
-                }
-                let _ = another_encoder::settings::save_settings(&current_settings);
+                crate::handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
 
                 let ui_weak = ui_handle.clone();
                 let bins = binaries.clone();
@@ -727,6 +677,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         let mut split_idx = cur.len() - 3000;
                                         while split_idx < cur.len() && !cur.is_char_boundary(split_idx) {
                                             split_idx += 1;
+                                        }
+                                        if let Some(nl) = cur[split_idx..].find('\n') {
+                                            split_idx += nl + 1;
                                         }
                                         cur = cur[split_idx..].to_string();
                                     }

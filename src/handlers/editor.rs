@@ -132,6 +132,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 app_data.set_edit_panel_expanded(!app_data.get_edit_panel_expanded());
+                crate::handlers::settings::save_settings_from_app_data(&app_data);
             }
         });
     }

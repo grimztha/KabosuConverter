@@ -304,6 +304,7 @@ export component TranscoderTab inherits ScrollView {
                                         "Extract Subtitle Stream (.srt)"
                                     ];
                                     current-index <=> AppData.function_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -363,6 +364,7 @@ export component TranscoderTab inherits ScrollView {
                                         "CPU Software Only"
                                     ];
                                     current-index <=> AppData.hw_accel_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -415,6 +417,7 @@ export component TranscoderTab inherits ScrollView {
                                     height: 32px;
                                     model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
                                     current-index <=> AppData.rate_control_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -472,6 +475,7 @@ export component TranscoderTab inherits ScrollView {
                                         minimum: 0;
                                         maximum: 51;
                                         value <=> AppData.crf_value;
+                                        changed(_) => { AppLogic.save_settings(); }
                                     }
                                     Rectangle {
                                         width: 54px;
@@ -505,6 +509,7 @@ export component TranscoderTab inherits ScrollView {
                                         "1500 kbps (Mobile)"
                                     ];
                                     current-index <=> AppData.video_bitrate_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -557,6 +562,7 @@ export component TranscoderTab inherits ScrollView {
                                     height: 32px;
                                     model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
                                     current-index <=> AppData.preset_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -616,6 +622,7 @@ export component TranscoderTab inherits ScrollView {
                                         "480p SD (854x480)"
                                     ];
                                     current-index <=> AppData.resolution_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -678,6 +685,7 @@ export component TranscoderTab inherits ScrollView {
                                         "60.0 fps (Smooth)"
                                     ];
                                     current-index <=> AppData.fps_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -734,6 +742,7 @@ export component TranscoderTab inherits ScrollView {
                                         "BBDenoise + Deinterlace"
                                     ];
                                     current-index <=> AppData.deinterlace_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -783,6 +792,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ToggleSwitch {
                                     checked <=> AppData.faststart;
+                                    toggled(v) => { AppLogic.set_faststart(v); }
                                 }
                             }
                         }
@@ -842,6 +852,7 @@ export component TranscoderTab inherits ScrollView {
                                         ".ts (MPEG-TS Transport)"
                                     ];
                                     current-index <=> AppData.container_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -924,6 +935,7 @@ export component TranscoderTab inherits ScrollView {
                                         "Passthrough Copy (Original Stream)"
                                     ];
                                     current-index <=> AppData.audio_codec_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -982,6 +994,7 @@ export component TranscoderTab inherits ScrollView {
                                         "96 kbps (Speech Optimized)"
                                     ];
                                     current-index <=> AppData.audio_bitrate_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -1039,6 +1052,7 @@ export component TranscoderTab inherits ScrollView {
                                         "96.0 kHz (Hi-Res Audio Studio)"
                                     ];
                                     current-index <=> AppData.audio_sample_rate_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }
@@ -1097,6 +1111,7 @@ export component TranscoderTab inherits ScrollView {
                                         "Apple Music Standard (-16 LUFS)"
                                     ];
                                     current-index <=> AppData.normalize_index;
+                                    selected(_) => { AppLogic.save_settings(); }
                                 }
                             }
                         }

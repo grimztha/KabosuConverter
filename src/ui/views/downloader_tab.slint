@@ -527,6 +527,7 @@ export component DownloaderTab inherits ScrollView {
                                 height: 32px;
                                 model: AppData.ytdlp_format_options;
                                 current-index <=> AppData.ytdlp_selected_format_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
 
                             Text {

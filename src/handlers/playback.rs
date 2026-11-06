@@ -710,6 +710,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 app_data.set_show_volume_meter(!app_data.get_show_volume_meter());
+                crate::handlers::settings::save_settings_from_app_data(&app_data);
             }
         });
     }
@@ -736,6 +737,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     let app_data = ui.global::<AppData>();
                     let is_playing = app_data.get_player_is_playing();
                     let is_audio = app_data.get_selected_is_audio();
+
+                    // If playback is stopped and meters have decayed to silent floor,
+                    // skip setting properties to allow the UI thread and event loop to rest.
+                    if !(is_playing && is_audio)
+                        && disp_l <= -59.5
+                        && disp_r <= -59.5
+                        && peak_l <= -59.5
+                        && peak_r <= -59.5
+                    {
+                        return;
+                    }
 
                     let (target_l, target_r) = if is_playing && is_audio {
                         if let Ok(lock) = ctx.active_player_child.try_lock() {

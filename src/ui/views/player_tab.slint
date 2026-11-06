@@ -247,24 +247,28 @@ export component PlayerTab inherits VerticalLayout {
                         }
                     }
 
-                    // Vertical Volume Meter (Toggled on right side)
-                    if AppData.show_volume_meter : Rectangle {
-                        width: 58px;
+                    // Animated Expand/Collapse Volume Meter Container & Floating Card
+                    meter_expand_container := Rectangle {
+                        width: AppData.show_volume_meter ? 66px : 0px;
                         clip: true;
+                        animate width { duration: 250ms; easing: ease-out; }
+
                         VerticalLayout {
                             alignment: center;
                             padding-top: 8px;
                             padding-bottom: 8px;
-                            padding-right: 6px;
-                            padding-left: 4px;
+                            padding-right: 8px;
+                            padding-left: 8px;
+
                             VolumeMeter {
-                                max-height: 280px;
-                                vertical-stretch: 1;
+                                width: 50px;
+                                height: 280px;
                                 level_l_db: AppData.audio_meter_l_db;
                                 level_r_db: AppData.audio_meter_r_db;
                                 peak_l_db: AppData.audio_meter_peak_l_db;
                                 peak_r_db: AppData.audio_meter_peak_r_db;
-                                is_active: AppData.player_is_playing && AppData.selected_is_audio;
+                                opacity: AppData.show_volume_meter ? 1.0 : 0.0;
+                                animate opacity { duration: 200ms; easing: ease-out; }
                             }
                         }
                     }
@@ -410,6 +414,9 @@ export component PlayerTab inherits VerticalLayout {
                         background: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.18) : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.card_secondary_bg);
                         border-width: 1px;
                         border-color: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.5) : Theme.card_secondary_border;
+
+                        animate background { duration: 150ms; }
+                        animate border-color { duration: 150ms; }
 
                         HorizontalLayout {
                             padding-left: 8px;

@@ -694,12 +694,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         let mut peak_hold_time_l = std::time::Instant::now();
         let mut peak_hold_time_r = std::time::Instant::now();
 
-        let meter_timer = std::rc::Rc::new(std::cell::RefCell::new(slint::Timer::default()));
+        let timer_clone = ctx.meter_timer.clone();
 
-        meter_timer.borrow().start(
+        ctx.meter_timer.borrow_mut().start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(30),
             move || {
+                let _keep_alive = &timer_clone;
                 if let Some(ui) = ui_handle.upgrade() {
                     let app_data = ui.global::<AppData>();
                     let is_playing = app_data.get_player_is_playing();

@@ -51,6 +51,7 @@ pub struct AppContext {
     pub active_ytdlp_child: Arc<Mutex<Option<std::process::Child>>>,
     pub active_ytdlp_cancel: Arc<AtomicBool>,
     pub playback_timer: Rc<RefCell<slint::Timer>>,
+    pub meter_timer: Rc<RefCell<slint::Timer>>,
     pub last_audio_restart: Arc<Mutex<std::time::Instant>>,
 }
 

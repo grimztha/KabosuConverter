@@ -3,20 +3,20 @@ export component VolumeMeter inherits Rectangle {
     in property <float> level_r_db: -60.0;
     in property <float> peak_l_db: -60.0;
     in property <float> peak_r_db: -60.0;
-    in property <bool> is_active: false;
 
-    width: 48px;
-    border-radius: 6px;
-    background: #14161f;
+    width: 50px;
+    height: 280px;
+    border-radius: 8px;
+    background: #12141e;
     border-width: 1px;
-    border-color: #262936;
+    border-color: #2b2f44;
     clip: true;
 
     // Helper calculations for normalized scale [0.0, 1.0] corresponding to [-60dB, 0dB]
-    property <float> norm_l: is_active ? max(0.0, min(1.0, (level_l_db + 60.0) / 60.0)) : 0.0;
-    property <float> norm_r: is_active ? max(0.0, min(1.0, (level_r_db + 60.0) / 60.0)) : 0.0;
-    property <float> p_norm_l: is_active ? max(0.0, min(1.0, (peak_l_db + 60.0) / 60.0)) : 0.0;
-    property <float> p_norm_r: is_active ? max(0.0, min(1.0, (peak_r_db + 60.0) / 60.0)) : 0.0;
+    property <float> norm_l: max(0.0, min(1.0, (level_l_db + 60.0) / 60.0));
+    property <float> norm_r: max(0.0, min(1.0, (level_r_db + 60.0) / 60.0));
+    property <float> p_norm_l: max(0.0, min(1.0, (peak_l_db + 60.0) / 60.0));
+    property <float> p_norm_r: max(0.0, min(1.0, (peak_r_db + 60.0) / 60.0));
 
     HorizontalLayout {
         padding-left: 6px;
@@ -34,61 +34,55 @@ export component VolumeMeter inherits Rectangle {
                 x: 0px;
                 width: 5px;
                 height: 100%;
-                clip: true;
 
-                // Dark unlit background segments (stacked top to bottom)
                 VerticalLayout {
                     spacing: 0px;
                     padding: 0px;
-                    height: 100%;
                     width: 100%;
+                    height: 100%;
 
+                    // 1. Red Zone: 0 dB to -6 dB (top 10%)
                     Rectangle {
                         height: 10%;
                         background: #3b070c;
+
+                        if root.norm_l > 0.90 : Rectangle {
+                            x: 0px;
+                            width: 100%;
+                            property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.90) / 0.10));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #ef4444;
+                        }
                     }
+
+                    // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
                         background: #332405;
+
+                        if root.norm_l > 0.70 : Rectangle {
+                            x: 0px;
+                            width: 100%;
+                            property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.70) / 0.20));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #eab308;
+                        }
                     }
+
+                    // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
                         background: #062311;
-                    }
-                }
 
-                // Lit Active Level Fill (Clipped from bottom up)
-                if root.norm_l > 0.005 : Rectangle {
-                    x: 0px;
-                    y: parent.height * (1.0 - root.norm_l);
-                    width: 100%;
-                    height: parent.height * root.norm_l;
-                    clip: true;
-
-                    // Inner fixed-size container matching full bar height
-                    Rectangle {
-                        y: 0px - parent.y;
-                        width: 100%;
-                        height: bar_l.height;
-
-                        VerticalLayout {
-                            spacing: 0px;
-                            padding: 0px;
-                            height: 100%;
+                        if root.norm_l > 0.001 : Rectangle {
+                            x: 0px;
                             width: 100%;
-
-                            Rectangle {
-                                height: 10%;
-                                background: #ef4444;
-                            }
-                            Rectangle {
-                                height: 20%;
-                                background: #eab308;
-                            }
-                            Rectangle {
-                                height: 70%;
-                                background: #22c55e;
-                            }
+                            property <float> fill: min(1.0, max(0.0, root.norm_l / 0.70));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #22c55e;
                         }
                     }
                 }
@@ -117,7 +111,7 @@ export component VolumeMeter inherits Rectangle {
                     y: parent.height - 2px;
                     width: 100%;
                     height: 2px;
-                    background: #ef4444bb;
+                    background: #ef4444;
                 }
             }
 
@@ -126,61 +120,55 @@ export component VolumeMeter inherits Rectangle {
                 x: 7px;
                 width: 5px;
                 height: 100%;
-                clip: true;
 
-                // Dark unlit background segments (stacked top to bottom)
                 VerticalLayout {
                     spacing: 0px;
                     padding: 0px;
-                    height: 100%;
                     width: 100%;
+                    height: 100%;
 
+                    // 1. Red Zone: 0 dB to -6 dB (top 10%)
                     Rectangle {
                         height: 10%;
                         background: #3b070c;
+
+                        if root.norm_r > 0.90 : Rectangle {
+                            x: 0px;
+                            width: 100%;
+                            property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.90) / 0.10));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #ef4444;
+                        }
                     }
+
+                    // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
                         background: #332405;
+
+                        if root.norm_r > 0.70 : Rectangle {
+                            x: 0px;
+                            width: 100%;
+                            property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.70) / 0.20));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #eab308;
+                        }
                     }
+
+                    // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
                         background: #062311;
-                    }
-                }
 
-                // Lit Active Level Fill (Clipped from bottom up)
-                if root.norm_r > 0.005 : Rectangle {
-                    x: 0px;
-                    y: parent.height * (1.0 - root.norm_r);
-                    width: 100%;
-                    height: parent.height * root.norm_r;
-                    clip: true;
-
-                    // Inner fixed-size container matching full bar height
-                    Rectangle {
-                        y: 0px - parent.y;
-                        width: 100%;
-                        height: bar_r.height;
-
-                        VerticalLayout {
-                            spacing: 0px;
-                            padding: 0px;
-                            height: 100%;
+                        if root.norm_r > 0.001 : Rectangle {
+                            x: 0px;
                             width: 100%;
-
-                            Rectangle {
-                                height: 10%;
-                                background: #ef4444;
-                            }
-                            Rectangle {
-                                height: 20%;
-                                background: #eab308;
-                            }
-                            Rectangle {
-                                height: 70%;
-                                background: #22c55e;
-                            }
+                            property <float> fill: min(1.0, max(0.0, root.norm_r / 0.70));
+                            y: parent.height * (1.0 - fill);
+                            height: parent.height * fill;
+                            background: #22c55e;
                         }
                     }
                 }
@@ -209,124 +197,27 @@ export component VolumeMeter inherits Rectangle {
                     y: parent.height - 2px;
                     width: 100%;
                     height: 2px;
-                    background: #ef4444bb;
+                    background: #ef4444;
                 }
             }
         }
 
         // dB Scale Labels Column (with "-" tick marks)
-        scale_column := Rectangle {
+        scale_column := VerticalLayout {
             horizontal-stretch: 1;
+            alignment: space-between;
 
-            // 0 dB (100% height)
-            Text {
-                x: 0px;
-                y: 0.0 * parent.height - 5px;
-                text: "- 0";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -6 dB (90% height)
-            Text {
-                x: 0px;
-                y: 0.1 * parent.height - 5px;
-                text: "- -6";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -12 dB (80% height)
-            Text {
-                x: 0px;
-                y: 0.2 * parent.height - 5px;
-                text: "- -12";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -18 dB (70% height)
-            Text {
-                x: 0px;
-                y: 0.3 * parent.height - 5px;
-                text: "- -18";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -24 dB (60% height)
-            Text {
-                x: 0px;
-                y: 0.4 * parent.height - 5px;
-                text: "- -24";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -30 dB (50% height)
-            Text {
-                x: 0px;
-                y: 0.5 * parent.height - 5px;
-                text: "- -30";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -36 dB (40% height)
-            Text {
-                x: 0px;
-                y: 0.6 * parent.height - 5px;
-                text: "- -36";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -42 dB (30% height)
-            Text {
-                x: 0px;
-                y: 0.7 * parent.height - 5px;
-                text: "- -42";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -48 dB (20% height)
-            Text {
-                x: 0px;
-                y: 0.8 * parent.height - 5px;
-                text: "- -48";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -54 dB (10% height)
-            Text {
-                x: 0px;
-                y: 0.9 * parent.height - 5px;
-                text: "- -54";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
-
-            // -60 dB (0% height / bottom)
-            Text {
-                x: 0px;
-                y: 1.0 * parent.height - 7px;
-                text: "- -60";
-                font-size: 8px;
-                font-weight: 600;
-                color: #94a3b8;
-            }
+            Text { text: "- 0"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -6"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -12"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -18"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -24"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -30"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -36"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -42"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -48"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -54"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- -60"; font-size: 8px; font-weight: 700; color: #94a3b8; }
         }
     }
 }

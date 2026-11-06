@@ -436,7 +436,7 @@ pub fn parse_astats_level(line: &str) -> Option<(usize, f32)> {
     if !after_dot.starts_with(KEY) {
         return None;
     }
-    let val_str = &after_dot[KEY.len()..];
+    let val_str = after_dot[KEY.len()..].trim();
     let val = if val_str.contains("-inf") || val_str.contains("-nan") || val_str.contains("nan") {
         -60.0f32
     } else if let Ok(parsed) = val_str.parse::<f32>() {

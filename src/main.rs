@@ -171,6 +171,7 @@ fn main() -> Result<()> {
     let active_ytdlp_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
     let active_ytdlp_cancel = Arc::new(AtomicBool::new(false));
     let playback_timer = Rc::new(RefCell::new(slint::Timer::default()));
+    let meter_timer = Rc::new(RefCell::new(slint::Timer::default()));
     let last_audio_restart = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
 
     // Spawn preview frame background worker
@@ -204,6 +205,7 @@ fn main() -> Result<()> {
         active_ytdlp_child,
         active_ytdlp_cancel,
         playback_timer,
+        meter_timer,
         last_audio_restart,
     };
 

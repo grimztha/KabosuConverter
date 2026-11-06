@@ -88,7 +88,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ToggleSwitch {
                                     checked <=> AppData.open_folder_on_finish;
-                                    toggled(v) => { AppLogic.toggle_open_folder_on_finish(); }
+                                    toggled(v) => { AppLogic.set_open_folder_on_finish(v); }
                                 }
                             }
                         }
@@ -138,7 +138,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ToggleSwitch {
                                     checked <=> AppData.play_sound_on_finish;
-                                    toggled(v) => { AppLogic.toggle_play_sound_on_finish(); }
+                                    toggled(v) => { AppLogic.set_play_sound_on_finish(v); }
                                 }
                             }
                         }

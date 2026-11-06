@@ -150,3 +150,30 @@ pub fn reveal_in_explorer(file_path: &Path) {
         }
     }
 }
+
+/// Plays an audible system notification chime when an export or download task finishes.
+pub fn play_notification_sound() {
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        extern "system" {
+            fn MessageBeep(uType: u32) -> i32;
+        }
+        unsafe {
+            // 0x00000040 = MB_ICONASTERISK (Windows notification chime)
+            MessageBeep(0x00000040);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("afplay")
+            .arg("/System/Library/Sounds/Glass.aiff")
+            .spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("paplay")
+            .arg("/usr/share/sounds/freedesktop/stereo/complete.oga")
+            .spawn();
+    }
+}

@@ -360,6 +360,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         &path_str,
                                     ));
 
+                                    // Trigger notification sound and open folder if enabled in Settings
+                                    if data.get_play_sound_on_finish() {
+                                        crate::utils::play_notification_sound();
+                                    }
+                                    if data.get_open_folder_on_finish() {
+                                        crate::utils::reveal_in_explorer(&clean_file_path);
+                                    }
+
                                     // Record into current open session download history
                                     let fname = clean_file_path
                                         .file_name()

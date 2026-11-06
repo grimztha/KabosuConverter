@@ -159,4 +159,20 @@ mod tests {
         let app_dir = get_app_dir();
         assert!(!app_dir.as_os_str().is_empty());
     }
+
+    #[test]
+    fn test_settings_toggle_switches_serialization_roundtrip() {
+        let mut settings = AppSettings::default();
+        assert!(settings.open_folder_on_finish);
+        assert!(!settings.play_sound_on_finish);
+
+        settings.open_folder_on_finish = false;
+        settings.play_sound_on_finish = true;
+
+        let json = serde_json::to_string(&settings).expect("Must serialize");
+        let reloaded: AppSettings = serde_json::from_str(&json).expect("Must deserialize");
+
+        assert!(!reloaded.open_folder_on_finish);
+        assert!(reloaded.play_sound_on_finish);
+    }
 }

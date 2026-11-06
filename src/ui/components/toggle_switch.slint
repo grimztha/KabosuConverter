@@ -8,12 +8,12 @@ export component ToggleSwitch inherits Rectangle {
     width: 44px;
     height: 24px;
     border-radius: 12px;
-    background: root.is_disabled ? #27272a : (root.checked ? Theme.accent_cyan : #3f3f46);
+    background: root.is_disabled ? #27272a : (root.checked ? (ta.has-hover ? #0284c7 : Theme.accent_cyan) : (ta.has-hover ? #4b4b55 : #3f3f46));
 
     animate background { duration: 160ms; easing: ease-out; }
 
     knob := Rectangle {
-        x: root.checked ? (parent.width - self.width - 3px) : 3px;
+        x: root.checked ? (root.width - self.width - 3px) : 3px;
         y: 3px;
         width: 18px;
         height: 18px;
@@ -26,7 +26,9 @@ export component ToggleSwitch inherits Rectangle {
         animate x { duration: 160ms; easing: ease-out; }
     }
 
-    TouchArea {
+    ta := TouchArea {
+        width: 100%;
+        height: 100%;
         enabled: !root.is_disabled;
         mouse-cursor: root.is_disabled ? default : pointer;
         clicked => {

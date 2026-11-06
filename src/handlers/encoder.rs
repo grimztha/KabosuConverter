@@ -239,6 +239,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 thread::spawn(move || {
                     let total_items = items.len();
                     let mut any_errors = false;
+                    let mut last_completed_path: Option<PathBuf> = None;
 
                     for (item_idx, item) in items.iter().enumerate() {
                         if cancel.load(Ordering::SeqCst) {
@@ -757,6 +758,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let is_ok = result.is_ok();
                         if !is_ok {
                             any_errors = true;
+                        } else if output_path.exists() {
+                            last_completed_path = Some(output_path.clone());
                         }
 
                         // Clean up output file only if this specific processing job failed or was cancelled in-flight
@@ -793,10 +796,28 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     "Finished with errors / skipped files",
                                 ));
                             } else {
-                                ui.global::<AppData>().set_progress_percent(1.0);
-                                ui.global::<AppData>().set_progress_text(SharedString::from(
+                                let app_data = ui.global::<AppData>();
+                                app_data.set_progress_percent(1.0);
+                                app_data.set_progress_text(SharedString::from(
                                     "All tasks finished successfully!",
                                 ));
+
+                                // Play notification sound if enabled in Settings
+                                if app_data.get_play_sound_on_finish() {
+                                    crate::utils::play_notification_sound();
+                                }
+
+                                // Open destination folder if enabled in Settings
+                                if app_data.get_open_folder_on_finish() {
+                                    if let Some(ref path) = last_completed_path {
+                                        crate::utils::reveal_in_explorer(path);
+                                    } else {
+                                        let out_dir = app_data.get_output_directory().to_string();
+                                        if !out_dir.is_empty() && out_dir != "Same as source" {
+                                            crate::utils::open_folder_in_explorer(Path::new(&out_dir));
+                                        }
+                                    }
+                                }
                             }
                         }
                     });

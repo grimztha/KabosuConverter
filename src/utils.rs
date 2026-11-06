@@ -141,7 +141,6 @@ pub fn reveal_in_explorer(file_path: &Path) {
         }
         if let Some(parent) = clean.parent() {
             open_folder_in_explorer(parent);
-            return;
         }
     }
     #[cfg(not(windows))]

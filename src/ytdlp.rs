@@ -9,10 +9,8 @@ use std::thread;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
-/// Locate yt-dlp binary following the priority order:
-/// 1. App-Local Folder (%LOCALAPPDATA%\<app_name>\bin or macOS ~/Library/Application Support/<app_name>/bin)
-/// 2. Standalone / portable directory or project root
-/// 3. System $PATH fallback (for power users maintaining their own builds)
+/// Finds the bundled or local yt-dlp binary.
+/// Checks the app's local data directory, the current working directory, and the project root.
 pub fn find_ytdlp_binary() -> Option<PathBuf> {
     let exe_name = if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" };
 

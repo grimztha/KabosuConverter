@@ -118,15 +118,14 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, &content)?;
 
-    // Atomic replace on Windows/POSIX
+    // Replace the settings file atomically using a temporary file.
     if path.exists() {
         let _ = fs::remove_file(&path);
     }
-    if let Err(e) = fs::rename(&tmp_path, &path) {
-        // Fallback direct write if filesystem rename fails
+    if let Err(_e) = fs::rename(&tmp_path, &path) {
+        // If rename fails (e.g. temporary file lock), write directly as fallback.
         let _ = fs::remove_file(&tmp_path);
         fs::write(&path, content)?;
-        return Err(e.into());
     }
     Ok(())
 }

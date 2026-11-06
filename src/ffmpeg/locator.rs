@@ -25,10 +25,8 @@ pub struct FFmpegBinaries {
 }
 
 impl FFmpegBinaries {
-    /// Locates ffmpeg, ffprobe, and ffplay binaries following the priority order:
-    /// 1. App-Local Folder (%LOCALAPPDATA%\<app_name>\bin or macOS ~/Library/Application Support/<app_name>/bin)
-    /// 2. Standalone / portable directory or project root
-    /// 3. System $PATH fallback (for power users maintaining their own builds)
+    /// Locates the local FFmpeg suite binaries (ffmpeg, ffprobe, ffplay).
+    /// Searches local application storage, the working directory, and the project root.
     pub fn locate() -> anyhow::Result<Self> {
         let exe_ext = if cfg!(windows) { ".exe" } else { "" };
         let ffmpeg_name = format!("ffmpeg{}", exe_ext);

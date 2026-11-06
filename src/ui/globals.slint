@@ -1,4 +1,6 @@
-import { QueueFile } from "types.slint";
+import { QueueFile, DownloadHistoryItem } from "types.slint";
+import { Theme } from "theme.slint";
+export { Theme }
 
 export global AppData {
     in-out property <[QueueFile]> queue;
@@ -16,8 +18,10 @@ export global AppData {
     in-out property <string> ffmpeg_version_badge: "FFmpeg 8.x Engine";
     in-out property <string> ytdlp_version_badge: "yt-dlp 2026.10.26 (Local Engine)";
     in-out property <bool> is_window_maximized: false;
+    in-out property <bool> open_folder_on_finish: true;
+    in-out property <bool> play_sound_on_finish: false;
 
-    // Navigation tab: 0 = Player & Trimmer, 1 = Downloader, 2 = Transcoder Settings
+    // Navigation tab: 0 = Downloader, 1 = View & Edit, 2 = Settings
     in-out property <int> active_tab: 0;
 
     // yt-dlp Web Downloader state
@@ -55,6 +59,7 @@ export global AppData {
     in-out property <bool> ytdlp_has_error: false;
     in-out property <string> ytdlp_last_downloaded_file: "";
     in-out property <bool> ytdlp_download_finished: false;
+    in-out property <[DownloadHistoryItem]> ytdlp_history: [];
 
     // Player and Media Preview state
     in-out property <bool> player_has_media: false;
@@ -92,6 +97,10 @@ export global AppData {
     // Controls state
     in-out property <int> function_index: 0;
     in-out property <int> hw_accel_index: 0;
+    in-out property <bool> has_gpu_hardware: true;
+    in-out property <string> detected_gpu_name: "";
+    in-out property <bool> is_gpu_accelerated: (root.hw_accel_index != 5) && (root.hw_accel_index != 0 || root.has_gpu_hardware);
+    in-out property <string> gpu_status_text: root.is_gpu_accelerated ? "GPU Accelerated" : "CPU (Software)";
     in-out property <int> rate_control_index: 0;
     in-out property <float> crf_value: 23.0;
     in-out property <int> video_bitrate_index: 2; // 6000 kbps
@@ -253,4 +262,11 @@ export global AppLogic {
     callback ytdlp_cancel_download();
     callback ytdlp_load_in_player();
     callback ytdlp_send_to_queue();
+    callback ytdlp_open_history_item(int);
+    callback ytdlp_remove_history_item(int);
+    callback ytdlp_clear_history();
+
+    // General Settings Callbacks
+    callback toggle_open_folder_on_finish();
+    callback toggle_play_sound_on_finish();
 }

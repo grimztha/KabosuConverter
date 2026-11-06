@@ -1,5 +1,5 @@
 import { LineEdit } from "std-widgets.slint";
-import { AppData, AppLogic } from "../globals.slint";
+import { AppData, AppLogic, Theme } from "../globals.slint";
 import { IconButton } from "../components/icon_button.slint";
 import { ActionButton } from "../components/action_button.slint";
 import { Badge } from "../components/badge.slint";
@@ -22,9 +22,9 @@ export component PlayerTab inherits VerticalLayout {
         vertical-stretch: 1;
         min-height: 240px;
         border-radius: 12px;
-        background: #141417;
+        background: Theme.card_bg;
         border-width: 1px;
-        border-color: #1c1c22;
+        border-color: Theme.card_border;
 
         VerticalLayout {
             padding: 36px;
@@ -56,13 +56,13 @@ export component PlayerTab inherits VerticalLayout {
                     text: "View & Edit";
                     font-size: 18px;
                     font-weight: 700;
-                    color: #f4f4f5;
+                    color: Theme.text_primary;
                     horizontal-alignment: center;
                 }
                 Text {
                     text: "Load any audio or video file to preview frame-by-frame, scrub the interactive timeline, and trim.";
                     font-size: 13px;
-                    color: #a1a1aa;
+                    color: Theme.text_secondary;
                     horizontal-alignment: center;
                 }
             }
@@ -86,14 +86,14 @@ export component PlayerTab inherits VerticalLayout {
             HorizontalLayout {
                 alignment: center;
                 spacing: 8px;
-                Badge { label: "MP4"; bg_color: #141418; fg_color: #38bdf8; }
-                Badge { label: "MKV"; bg_color: #141418; fg_color: #38bdf8; }
-                Badge { label: "MOV"; bg_color: #141418; fg_color: #38bdf8; }
-                Badge { label: "WEBM"; bg_color: #141418; fg_color: #38bdf8; }
-                Badge { label: "MP3"; bg_color: #141418; fg_color: #a78bfa; }
-                Badge { label: "WAV"; bg_color: #141418; fg_color: #a78bfa; }
-                Badge { label: "FLAC"; bg_color: #141418; fg_color: #a78bfa; }
-                Badge { label: "AAC"; bg_color: #141418; fg_color: #a78bfa; }
+                Badge { label: "MP4"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
+                Badge { label: "MKV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
+                Badge { label: "MOV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
+                Badge { label: "WEBM"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
+                Badge { label: "MP3"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
+                Badge { label: "WAV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
+                Badge { label: "FLAC"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
+                Badge { label: "AAC"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
             }
         }
     }
@@ -101,9 +101,9 @@ export component PlayerTab inherits VerticalLayout {
     if AppData.player_has_media : Rectangle {
         vertical-stretch: 1;
         border-radius: 10px;
-        background: #141417;
+        background: Theme.card_bg;
         border-width: 1px;
-        border-color: AppData.has_active_trim ? #f59e0b : #1c1c22;
+        border-color: AppData.has_active_trim ? #f59e0b : Theme.card_border;
 
         VerticalLayout {
             padding-left: 12px;
@@ -139,7 +139,7 @@ export component PlayerTab inherits VerticalLayout {
                         text: AppData.selected_file_name;
                         font-size: 13.5px;
                         font-weight: 700;
-                        color: #f4f4f5;
+                        color: Theme.text_primary;
                         overflow: elide;
                         vertical-alignment: center;
                     }
@@ -155,9 +155,9 @@ export component PlayerTab inherits VerticalLayout {
                         icon_source: @image-url("../icons/sliders.svg");
                         has_icon: true;
                         icon_size: 13px;
-                        fill_color: AppData.edit_panel_expanded ? #0284c7 : #1c1c22;
-                        hover_color: AppData.edit_panel_expanded ? #0369a1 : #2a2a30;
-                        text_color: #ffffff;
+                        fill_color: AppData.edit_panel_expanded ? #0284c7 : Theme.btn_neutral_bg;
+                        hover_color: AppData.edit_panel_expanded ? #0369a1 : Theme.btn_neutral_hover;
+                        text_color: AppData.edit_panel_expanded ? #ffffff : Theme.text_primary;
                         font_size: 10.5px;
                         clicked => { AppLogic.toggle_edit_panel(); }
                     }
@@ -171,7 +171,7 @@ export component PlayerTab inherits VerticalLayout {
                 border-radius: 8px;
                 background: #000000;
                 border-width: 1px;
-                border-color: #1c1c22;
+                border-color: Theme.card_border;
                 clip: true;
 
                 // Video Canvas
@@ -268,15 +268,17 @@ export component PlayerTab inherits VerticalLayout {
                     Rectangle {
                         height: 28px;
                         border-radius: 6px;
-                        background: #1c1c22;
+                        background: Theme.card_secondary_bg;
+                        border-width: 1px;
+                        border-color: Theme.card_secondary_border;
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
                             spacing: 5px;
                             alignment: center;
-                            Text { text: AppData.player_time_text; font-size: 12px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
-                            Text { text: "/"; font-size: 11px; font-weight: 600; color: #71717a; vertical-alignment: center; }
-                            Text { text: AppData.player_duration_text; font-size: 11.5px; font-weight: 700; color: #d4d4d8; vertical-alignment: center; }
+                            Text { text: AppData.player_time_text; font-size: 12px; font-weight: 800; color: Theme.accent_cyan; vertical-alignment: center; }
+                            Text { text: "/"; font-size: 11px; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
+                            Text { text: AppData.player_duration_text; font-size: 11.5px; font-weight: 700; color: Theme.text_primary; vertical-alignment: center; }
                         }
                     }
 
@@ -296,21 +298,23 @@ export component PlayerTab inherits VerticalLayout {
                     Rectangle {
                         height: 28px;
                         border-radius: 6px;
-                        background: #1c1c22;
+                        background: Theme.card_secondary_bg;
+                        border-width: 1px;
+                        border-color: Theme.card_secondary_border;
                         HorizontalLayout {
                             padding-left: 6px;
                             padding-right: 6px;
                             spacing: 3px;
                             alignment: center;
 
-                            Text { text: "ZOOM:"; font-size: 10px; font-weight: 700; color: #71717a; vertical-alignment: center; }
+                            Text { text: "ZOOM:"; font-size: 10px; font-weight: 700; color: Theme.text_muted; vertical-alignment: center; }
 
                             Rectangle {
                                 width: 20px;
                                 height: 20px;
                                 border-radius: 3px;
-                                background: vzm_ta.has-hover ? #2a2a30 : transparent;
-                                Text { text: "−"; font-size: 13px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                background: vzm_ta.has-hover ? Theme.control_hover : transparent;
+                                Text { text: "−"; font-size: 13px; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzm_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5); } }
                             }
 
@@ -318,10 +322,10 @@ export component PlayerTab inherits VerticalLayout {
                                 width: 24px;
                                 height: 18px;
                                 border-radius: 3px;
-                                background: AppData.timeline_zoom <= 1.05 ? #38bdf822 : (vz1_ta.has-hover ? #2a2a30 : transparent);
+                                background: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan.with-alpha(0.18) : (vz1_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: AppData.timeline_zoom <= 1.05 ? 1px : 0px;
-                                border-color: #38bdf866;
-                                Text { text: "1x"; font-size: 9.5px; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_cyan.with-alpha(0.5);
+                                Text { text: "1x"; font-size: 9.5px; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz1_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 1.0; } }
                             }
 
@@ -329,10 +333,10 @@ export component PlayerTab inherits VerticalLayout {
                                 width: 24px;
                                 height: 18px;
                                 border-radius: 3px;
-                                background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? #38bdf822 : (vz2_ta.has-hover ? #2a2a30 : transparent);
+                                background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz2_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? 1px : 0px;
-                                border-color: #38bdf866;
-                                Text { text: "2x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_cyan.with-alpha(0.5);
+                                Text { text: "2x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz2_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 2.0; } }
                             }
 
@@ -340,10 +344,10 @@ export component PlayerTab inherits VerticalLayout {
                                 width: 24px;
                                 height: 18px;
                                 border-radius: 3px;
-                                background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? #38bdf822 : (vz4_ta.has-hover ? #2a2a30 : transparent);
+                                background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz4_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? 1px : 0px;
-                                border-color: #38bdf866;
-                                Text { text: "4x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? #38bdf8 : #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_cyan.with-alpha(0.5);
+                                Text { text: "4x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz4_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 4.0; } }
                             }
 
@@ -653,9 +657,9 @@ export component PlayerTab inherits VerticalLayout {
                     icon_source: @image-url("../icons/settings.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: #1c1c22;
-                    hover_color: #2a2a32;
-                    text_color: #38bdf8;
+                    fill_color: Theme.btn_neutral_bg;
+                    hover_color: Theme.btn_neutral_hover;
+                    text_color: Theme.accent_cyan;
                     font_size: 10.5px;
                     clicked => { AppLogic.switch_tab(2); }
                 }

@@ -1,10 +1,10 @@
 import { ScrollView } from "std-widgets.slint";
 
-import { QueueFile } from "types.slint";
-export { QueueFile }
+import { QueueFile, DownloadHistoryItem } from "types.slint";
+export { QueueFile, DownloadHistoryItem }
 
-import { AppData, AppLogic } from "globals.slint";
-export { AppData, AppLogic }
+import { AppData, AppLogic, Theme } from "globals.slint";
+export { AppData, AppLogic, Theme }
 
 import { IconButton } from "components/icon_button.slint";
 import { WindowControls } from "components/window_controls.slint";
@@ -34,19 +34,19 @@ export component MainWindow inherits Window {
     Rectangle {
         border-radius: AppData.is_window_maximized ? 0px : 12px;
         border-width: AppData.is_window_maximized ? 0px : 1px;
-        border-color: #23232a;
-        background: #09090b;
+        border-color: Theme.window_border;
+        background: Theme.app_bg;
         clip: true;
 
         fs := FocusScope {
         key-pressed(event) => {
             if event.text == " " {
-                if AppData.active_tab == 0 && AppData.player_has_media {
+                if AppData.active_tab == 1 && AppData.player_has_media {
                     AppLogic.player_play_pause();
                     return accept;
                 }
             }
-            if AppData.active_tab == 0 && AppData.player_has_media && AppData.selected_is_video && AppData.crop_enabled && AppData.crop_arrow_keys_enabled {
+            if AppData.active_tab == 1 && AppData.player_has_media && AppData.selected_is_video && AppData.crop_enabled && AppData.crop_arrow_keys_enabled {
                 if event.text == Key.LeftArrow {
                     AppLogic.crop_nudge(event.modifiers.shift ? -AppData.crop_nudge_step * 4 : -AppData.crop_nudge_step, 0);
                     return accept;
@@ -73,7 +73,7 @@ export component MainWindow inherits Window {
             // UNIFIED TOP HEADER BAR (Integrated Title Bar + Workspace Tabs + Window Controls)
             Rectangle {
                 height: 42px;
-                background: #101013;
+                background: Theme.header_bg;
 
                 WindowMoveArea {
                     width: 100%;
@@ -105,7 +105,7 @@ export component MainWindow inherits Window {
                                     font-size: 12px;
                                     font-weight: 700;
                                     letter-spacing: 0.5px;
-                                    color: #f4f4f5;
+                                    color: Theme.text_primary;
                                 }
                             }
                         }
@@ -118,13 +118,14 @@ export component MainWindow inherits Window {
                         // Center: Workspace Navigation Tabs (Segmented Control Pill)
                         VerticalLayout {
                             alignment: center;
+                            horizontal-stretch: 0;
 
                             Rectangle {
                                 height: 32px;
                                 border-radius: 8px;
-                                background: #141418;
+                                background: Theme.tab_container_bg;
                                 border-width: 1px;
-                                border-color: #24242c;
+                                border-color: Theme.tab_container_border;
 
                                 HorizontalLayout {
                                     padding-left: 3px;
@@ -133,65 +134,12 @@ export component MainWindow inherits Window {
                                     padding-bottom: 3px;
                                     spacing: 3px;
 
-                                    // Tab 0: View & Edit
+                                    // Tab 0: Downloader
                                     t0 := Rectangle {
                                         border-radius: 6px;
-                                        background: AppData.active_tab == 0 ? #1f1f27 : (t0_ta.has-hover ? #181820 : #00000000);
+                                        background: AppData.active_tab == 0 ? Theme.tab_active_bg : (t0_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
                                         border-width: 1px;
-                                        border-color: AppData.active_tab == 0 ? #38bdf8 : #00000000;
-
-                                        animate background { duration: 120ms; }
-                                        animate border-color { duration: 120ms; }
-
-                                        HorizontalLayout {
-                                            padding-left: 10px;
-                                            padding-right: 10px;
-                                            spacing: 6px;
-                                            alignment: center;
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Image {
-                                                    source: @image-url("icons/film.svg");
-                                                    width: 13px;
-                                                    height: 13px;
-                                                    colorize: AppData.active_tab == 0 ? #38bdf8 : (t0_ta.has-hover ? #e4e4e7 : #9ca3af);
-                                                }
-                                            }
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Text {
-                                                    text: "View & Edit";
-                                                    font-size: 12px;
-                                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
-                                                    color: AppData.active_tab == 0 ? #38bdf8 : (t0_ta.has-hover ? #ffffff : #9ca3af);
-                                                }
-                                            }
-
-                                            if AppData.has_active_trim : VerticalLayout {
-                                                alignment: center;
-                                                Rectangle {
-                                                    width: 6px;
-                                                    height: 6px;
-                                                    border-radius: 3px;
-                                                    background: #f59e0b;
-                                                }
-                                            }
-                                        }
-
-                                        t0_ta := TouchArea {
-                                            mouse-cursor: pointer;
-                                            clicked => { AppLogic.switch_tab(0); }
-                                        }
-                                    }
-
-                                    // Tab 1: Downloader
-                                    t1 := Rectangle {
-                                        border-radius: 6px;
-                                        background: AppData.active_tab == 1 ? #1f1f27 : (t1_ta.has-hover ? #181820 : #00000000);
-                                        border-width: 1px;
-                                        border-color: AppData.active_tab == 1 ? #38bdf8 : #00000000;
+                                        border-color: AppData.active_tab == 0 ? Theme.tab_active_border : #00000000;
 
                                         animate background { duration: 120ms; }
                                         animate border-color { duration: 120ms; }
@@ -208,7 +156,7 @@ export component MainWindow inherits Window {
                                                     source: @image-url("icons/download.svg");
                                                     width: 13px;
                                                     height: 13px;
-                                                    colorize: AppData.active_tab == 1 ? #38bdf8 : (t1_ta.has-hover ? #e4e4e7 : #9ca3af);
+                                                    colorize: AppData.active_tab == 0 ? Theme.tab_active_text : (t0_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
 
@@ -217,8 +165,8 @@ export component MainWindow inherits Window {
                                                 Text {
                                                     text: "Downloader";
                                                     font-size: 12px;
-                                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
-                                                    color: AppData.active_tab == 1 ? #38bdf8 : (t1_ta.has-hover ? #ffffff : #9ca3af);
+                                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
+                                                    color: AppData.active_tab == 0 ? Theme.tab_active_text : (t0_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
 
@@ -233,6 +181,59 @@ export component MainWindow inherits Window {
                                             }
                                         }
 
+                                        t0_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.switch_tab(0); }
+                                        }
+                                    }
+
+                                    // Tab 1: View & Edit
+                                    t1 := Rectangle {
+                                        border-radius: 6px;
+                                        background: AppData.active_tab == 1 ? Theme.tab_active_bg : (t1_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
+                                        border-width: 1px;
+                                        border-color: AppData.active_tab == 1 ? Theme.tab_active_border : #00000000;
+
+                                        animate background { duration: 120ms; }
+                                        animate border-color { duration: 120ms; }
+
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            padding-right: 10px;
+                                            spacing: 6px;
+                                            alignment: center;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Image {
+                                                    source: @image-url("icons/film.svg");
+                                                    width: 13px;
+                                                    height: 13px;
+                                                    colorize: AppData.active_tab == 1 ? Theme.tab_active_text : (t1_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
+                                                }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Text {
+                                                    text: "View & Edit";
+                                                    font-size: 12px;
+                                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
+                                                    color: AppData.active_tab == 1 ? Theme.tab_active_text : (t1_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
+                                                }
+                                            }
+
+                                            if AppData.has_active_trim : VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 6px;
+                                                    height: 6px;
+                                                    border-radius: 3px;
+                                                    background: #f59e0b;
+                                                }
+                                            }
+                                        }
+
                                         t1_ta := TouchArea {
                                             mouse-cursor: pointer;
                                             clicked => { AppLogic.switch_tab(1); }
@@ -242,9 +243,9 @@ export component MainWindow inherits Window {
                                     // Tab 2: Transcoder Settings
                                     t2 := Rectangle {
                                         border-radius: 6px;
-                                        background: AppData.active_tab == 2 ? #1f1f27 : (t2_ta.has-hover ? #181820 : #00000000);
+                                        background: AppData.active_tab == 2 ? Theme.tab_active_bg : (t2_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
                                         border-width: 1px;
-                                        border-color: AppData.active_tab == 2 ? #38bdf8 : #00000000;
+                                        border-color: AppData.active_tab == 2 ? Theme.tab_active_border : #00000000;
 
                                         animate background { duration: 120ms; }
                                         animate border-color { duration: 120ms; }
@@ -261,17 +262,17 @@ export component MainWindow inherits Window {
                                                     source: @image-url("icons/settings.svg");
                                                     width: 13px;
                                                     height: 13px;
-                                                    colorize: AppData.active_tab == 2 ? #38bdf8 : (t2_ta.has-hover ? #e4e4e7 : #9ca3af);
+                                                    colorize: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
 
                                             VerticalLayout {
                                                 alignment: center;
                                                 Text {
-                                                    text: "Transcoder Settings";
+                                                    text: "Settings";
                                                     font-size: 12px;
                                                     font-weight: AppData.active_tab == 2 ? 700 : 500;
-                                                    color: AppData.active_tab == 2 ? #38bdf8 : (t2_ta.has-hover ? #ffffff : #9ca3af);
+                                                    color: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
                                         }
@@ -299,7 +300,7 @@ export component MainWindow inherits Window {
             }
 
             // Header Subtle Divider
-            Rectangle { height: 1px; background: #1f1f26; }
+            Rectangle { height: 1px; background: Theme.header_border; }
 
         // MAIN BODY (Split Left: Queue, Right: Inspector)
         HorizontalLayout {
@@ -314,24 +315,24 @@ export component MainWindow inherits Window {
             }
 
             // Vertical Split Divider
-            Rectangle { width: 1px; background: #18181c; }
+            Rectangle { width: 1px; background: Theme.panel_border; }
 
             // RIGHT PANEL: FUNCTION & PARAMETERS (Stretch)
             Rectangle {
                 min-width: 0px;
                 horizontal-stretch: 1;
-                background: #0c0c0e;
+                background: Theme.app_bg;
                 clip: true;
 
-                if AppData.active_tab == 0 : PlayerTab {
+                if AppData.active_tab == 0 : DownloaderTab {}
+                if AppData.active_tab == 1 : PlayerTab {
                     request_focus => { fs.focus(); }
                 }
-                if AppData.active_tab == 1 : DownloaderTab {}
                 if AppData.active_tab == 2 : TranscoderTab {}
             }
 
             // RIGHT-SIDE EXPANDABLE / COLLAPSIBLE EDITING COLUMN (Shown when in player tab and media is loaded)
-            if AppData.active_tab == 0 && AppData.player_has_media : EditPanel {
+            if AppData.active_tab == 1 && AppData.player_has_media : EditPanel {
                 request_focus => { fs.focus(); }
             }
         }
@@ -339,14 +340,14 @@ export component MainWindow inherits Window {
         // LOG DRAWER (Collapsible)
         if AppData.show_logs : Rectangle {
             height: 120px;
-            background: #09090b;
+            background: Theme.header_bg;
 
             VerticalLayout {
                 padding: 10px;
                 spacing: 6px;
 
                 HorizontalLayout {
-                    Text { text: "Live FFmpeg Command & Stderr Stream"; font-size: 11px; font-weight: 600; color: #71717a; }
+                    Text { text: "Live FFmpeg Command & Stderr Stream"; font-size: 11px; font-weight: 600; color: Theme.text_muted; }
                     Rectangle { horizontal-stretch: 1; }
                     IconButton {
                         icon_source: @image-url("icons/x.svg");
@@ -371,12 +372,12 @@ export component MainWindow inherits Window {
         }
 
         // Bottom Divider
-        Rectangle { height: 1px; background: #2a2a30; }
+        Rectangle { height: 1px; background: Theme.status_bar_border; }
 
         // BOTTOM STATUS BAR
         Rectangle {
             height: 42px;
-            background: #121215;
+            background: Theme.status_bar_bg;
 
             HorizontalLayout {
                 padding-left: 16px;
@@ -396,7 +397,7 @@ export component MainWindow inherits Window {
                             width: 8px;
                             height: 8px;
                             border-radius: 4px;
-                            background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : #71717a);
+                            background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : Theme.text_muted);
                         }
                     }
 
@@ -404,7 +405,7 @@ export component MainWindow inherits Window {
                         text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
                         font-size: 11px;
                         font-weight: 600;
-                        color: AppData.is_processing ? #fbbf24 : #d4d4d8;
+                        color: AppData.is_processing ? #fbbf24 : Theme.text_primary;
                         vertical-alignment: center;
                     }
 
@@ -414,7 +415,7 @@ export component MainWindow inherits Window {
                             width: 90px;
                             height: 6px;
                             border-radius: 3px;
-                            background: #141418;
+                            background: Theme.control_bg;
                             clip: true;
 
                             Rectangle {
@@ -440,49 +441,23 @@ export component MainWindow inherits Window {
                         text: "High Performance Rust Transcoder & Video Downloader by SThao";
                         font-size: 10.5px;
                         font-weight: 500;
-                        color: #71717a;
+                        color: Theme.text_muted;
                         overflow: elide;
                     }
                 }
 
-                // Bottom-Right Corner: FFmpeg Engine, GPU Acceleration, and Show Logs Toggle
+                // Bottom-Right Corner: GPU Acceleration Status and Show Logs Toggle
                 HorizontalLayout {
                     spacing: 8px;
                     alignment: center;
 
-                    // FFmpeg Engine Badge
+                    // GPU Acceleration Status Pill
                     Rectangle {
                         height: 28px;
                         border-radius: 4px;
-                        background: #141418;
+                        background: Theme.control_bg;
                         border-width: 1px;
-                        border-color: #38bdf8.with-alpha(0.3);
-
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: AppData.ffmpeg_version_badge;
-                                    font-size: 11px;
-                                    color: #38bdf8;
-                                    font-weight: 600;
-                                }
-                            }
-                        }
-                    }
-
-                    // GPU Acceleration Pill
-                    Rectangle {
-                        height: 28px;
-                        border-radius: 4px;
-                        background: #141418;
-                        border-width: 1px;
-                        border-color: #34d399.with-alpha(0.3);
+                        border-color: AppData.is_gpu_accelerated ? Theme.accent_green.with-alpha(0.3) : Theme.border_color;
 
                         HorizontalLayout {
                             padding-left: 8px;
@@ -498,15 +473,15 @@ export component MainWindow inherits Window {
                                     source: @image-url("icons/zap.svg");
                                     width: 12px;
                                     height: 12px;
-                                    colorize: #34d399;
+                                    colorize: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
                                 }
                             }
                             VerticalLayout {
                                 alignment: center;
                                 Text {
-                                    text: "GPU Accelerated";
+                                    text: AppData.gpu_status_text;
                                     font-size: 11px;
-                                    color: #34d399;
+                                    color: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
                                     font-weight: 600;
                                 }
                             }
@@ -517,9 +492,9 @@ export component MainWindow inherits Window {
                     Rectangle {
                         height: 28px;
                         border-radius: 4px;
-                        background: AppData.show_logs ? #2a2a30 : #141418;
+                        background: AppData.show_logs ? #2a2a30 : Theme.control_bg;
                         border-width: 1px;
-                        border-color: AppData.show_logs ? #38bdf8 : #2a2a30;
+                        border-color: AppData.show_logs ? Theme.accent_cyan : Theme.border_color;
 
                         HorizontalLayout {
                             padding-left: 8px;
@@ -535,7 +510,7 @@ export component MainWindow inherits Window {
                                     source: @image-url("icons/logs.svg");
                                     width: 12px;
                                     height: 12px;
-                                    colorize: AppData.show_logs ? #38bdf8 : #a1a1aa;
+                                    colorize: AppData.show_logs ? Theme.accent_cyan : Theme.text_secondary;
                                 }
                             }
                             VerticalLayout {
@@ -544,7 +519,7 @@ export component MainWindow inherits Window {
                                     text: AppData.show_logs ? "Hide Logs" : "Show Logs";
                                     font-size: 11px;
                                     font-weight: 600;
-                                    color: AppData.show_logs ? #f4f4f5 : #a1a1aa;
+                                    color: AppData.show_logs ? Theme.text_primary : Theme.text_secondary;
                                 }
                             }
                         }

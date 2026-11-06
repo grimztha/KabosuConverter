@@ -60,6 +60,11 @@ fn main() -> Result<()> {
     let (_full_ver, badge_text) = binaries.detect_version();
     ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
 
+    let (hw_accel, has_gpu, gpu_name) = binaries.detect_hardware_accel();
+    another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+    ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
+    ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
+
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
 
@@ -139,6 +144,10 @@ fn main() -> Result<()> {
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_cb.upgrade() {
                                     ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
+                                    let (hw_accel, has_gpu, gpu_name) = loc.detect_hardware_accel();
+                                    another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+                                    ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
+                                    ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
                                     let (_y_ver, y_badge) = ytdlp::detect_version(&paths.yt_dlp);
                                     ui.global::<AppData>().set_ytdlp_version_badge(y_badge.into());
                                     ui.global::<AppData>().set_status_summary("Dependencies installed and verified.".into());
@@ -289,6 +298,9 @@ fn main() -> Result<()> {
 
 fn apply_settings_to_ui(ui: &MainWindow, settings: &AppSettings) {
     let data = ui.global::<AppData>();
+
+    data.set_open_folder_on_finish(settings.open_folder_on_finish);
+    data.set_play_sound_on_finish(settings.play_sound_on_finish);
 
     if let Some(ref dir) = settings.default_output_dir {
         if !dir.is_empty() && dir != "Same as source" {

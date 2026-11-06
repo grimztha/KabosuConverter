@@ -28,7 +28,7 @@ pub fn load_selected_file(app_data: &AppData, item: &QueueFile, ctx: &TaskContex
     app_data.set_player_time_text(SharedString::from("00:00.000"));
     app_data.set_player_is_playing(false);
     app_data.set_player_has_media(true);
-    app_data.set_active_tab(0);
+    app_data.set_active_tab(1);
 
     // Reset trim points for newly selected file
     app_data.set_in_point(SharedString::from(""));

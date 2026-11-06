@@ -1,5 +1,5 @@
 import { ComboBox, LineEdit, ScrollView, Slider } from "std-widgets.slint";
-import { AppData, AppLogic } from "../globals.slint";
+import { AppData, AppLogic, Theme } from "../globals.slint";
 import { NumInput } from "../components/num_input.slint";
 import { IconButton } from "../components/icon_button.slint";
 import { ActionButton } from "../components/action_button.slint";
@@ -10,12 +10,12 @@ export component EditPanel inherits HorizontalLayout {
                 spacing: 0px;
 
                 // Vertical Divider
-                Rectangle { width: 1px; background: #18181c; }
+                Rectangle { width: 1px; background: Theme.panel_border; }
 
                 // Collapse / Expand Toggle Strip Bar + Panel Content
                 Rectangle {
                     width: AppData.edit_panel_expanded ? 320px : 34px;
-                    background: #0f0f12;
+                    background: Theme.panel_bg;
                     clip: true;
 
                     animate width { duration: 160ms; }
@@ -77,7 +77,7 @@ export component EditPanel inherits HorizontalLayout {
                                     text: "Editing";
                                     font-size: 13px;
                                     font-weight: 700;
-                                    color: #f4f4f5;
+                                    color: Theme.text_primary;
                                 }
                             }
 
@@ -89,8 +89,8 @@ export component EditPanel inherits HorizontalLayout {
                                     width: 58px;
                                     height: 22px;
                                     title: "Reset All";
-                                    fill_color: #1c1c22;
-                                    hover_color: #2a2a32;
+                                    fill_color: Theme.btn_neutral_bg;
+                                    hover_color: Theme.btn_neutral_hover;
                                     text_color: #f87171;
                                     font_size: 9.5px;
                                     clicked => { AppLogic.reset_all_edits(); }
@@ -103,12 +103,12 @@ export component EditPanel inherits HorizontalLayout {
                                 icon_source: @image-url("../icons/chevron-right.svg");
                                 has_icon: true;
                                 icon_size: 13px;
-                                hover_bg: #26262e;
+                                hover_bg: Theme.control_hover;
                                 clicked => { AppLogic.toggle_edit_panel(); }
                             }
                         }
 
-                        Rectangle { height: 1px; background: #1c1c22; }
+                        Rectangle { height: 1px; background: Theme.card_border; }
 
                         ScrollView {
                             vertical-stretch: 1;
@@ -120,9 +120,9 @@ export component EditPanel inherits HorizontalLayout {
                                 // SECTION 1: ROTATION (0, 90, -90, 180 DEGREES)
                                 if AppData.selected_is_video : Rectangle {
                                     border-radius: 7px;
-                                    background: #141417;
+                                    background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.video_rotation_index != 0 ? #38bdf866 : #1c1c22;
+                                    border-color: AppData.video_rotation_index != 0 ? #38bdf866 : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -133,7 +133,7 @@ export component EditPanel inherits HorizontalLayout {
                                                 text: "Rotate Video";
                                                 font-size: 11.5px;
                                                 font-weight: 700;
-                                                color: #e2e8f0;
+                                                color: Theme.text_primary;
                                             }
                                             Rectangle { horizontal-stretch: 1; }
                                             Text {
@@ -142,7 +142,7 @@ export component EditPanel inherits HorizontalLayout {
                                                       (AppData.video_rotation_index == 2 ? "-90° CCW" : "180° Upside Down"));
                                                 font-size: 10px;
                                                 font-weight: 700;
-                                                color: AppData.video_rotation_index != 0 ? #38bdf8 : #71717a;
+                                                color: AppData.video_rotation_index != 0 ? #38bdf8 : Theme.text_muted;
                                             }
                                         }
 
@@ -153,9 +153,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "0°";
-                                                fill_color: AppData.video_rotation_index == 0 ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_rotation_index == 0 ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_rotation_index == 0 ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_rotation_index == 0 ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 0 ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_rotation_index == 0 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(0); }
                                             }
@@ -164,9 +164,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "90°";
-                                                fill_color: AppData.video_rotation_index == 1 ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_rotation_index == 1 ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_rotation_index == 1 ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_rotation_index == 1 ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 1 ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_rotation_index == 1 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(1); }
                                             }
@@ -175,9 +175,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "-90°";
-                                                fill_color: AppData.video_rotation_index == 2 ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_rotation_index == 2 ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_rotation_index == 2 ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_rotation_index == 2 ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 2 ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_rotation_index == 2 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(2); }
                                             }
@@ -186,9 +186,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "180°";
-                                                fill_color: AppData.video_rotation_index == 3 ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_rotation_index == 3 ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_rotation_index == 3 ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_rotation_index == 3 ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 3 ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_rotation_index == 3 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(3); }
                                             }
@@ -199,9 +199,9 @@ export component EditPanel inherits HorizontalLayout {
                                 // SECTION 2: MIRROR / FLIP (HORIZONTAL & VERTICAL)
                                 if AppData.selected_is_video : Rectangle {
                                     border-radius: 7px;
-                                    background: #141417;
+                                    background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf866 : #1c1c22;
+                                    border-color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf866 : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -212,7 +212,7 @@ export component EditPanel inherits HorizontalLayout {
                                                 text: "Mirror & Flip";
                                                 font-size: 11.5px;
                                                 font-weight: 700;
-                                                color: #e2e8f0;
+                                                color: Theme.text_primary;
                                             }
                                             Rectangle { horizontal-stretch: 1; }
                                             Text {
@@ -221,7 +221,7 @@ export component EditPanel inherits HorizontalLayout {
                                                       (AppData.video_flip_vertical ? "Vertical Flip" : "Normal"));
                                                 font-size: 10px;
                                                 font-weight: 700;
-                                                color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf8 : #71717a;
+                                                color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf8 : Theme.text_muted;
                                             }
                                         }
 
@@ -232,9 +232,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "Flip Horizontal";
-                                                fill_color: AppData.video_flip_horizontal ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_flip_horizontal ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_flip_horizontal ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_flip_horizontal ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_flip_horizontal ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_flip_horizontal ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 10.5px;
                                                 clicked => { AppLogic.toggle_flip_horizontal(); }
                                             }
@@ -243,9 +243,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "Flip Vertical";
-                                                fill_color: AppData.video_flip_vertical ? #0284c7 : #1c1c22;
-                                                hover_color: AppData.video_flip_vertical ? #0369a1 : #2a2a30;
-                                                text_color: AppData.video_flip_vertical ? #ffffff : #d4d4d8;
+                                                fill_color: AppData.video_flip_vertical ? #0284c7 : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_flip_vertical ? #0369a1 : Theme.btn_neutral_hover;
+                                                text_color: AppData.video_flip_vertical ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 10.5px;
                                                 clicked => { AppLogic.toggle_flip_vertical(); }
                                             }
@@ -256,9 +256,9 @@ export component EditPanel inherits HorizontalLayout {
                                 // SECTION 3: VISUAL CROP OVERLAY & ASPECT RATIO LOCK
                                 if AppData.selected_is_video : Rectangle {
                                     border-radius: 7px;
-                                    background: #141417;
+                                    background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.crop_enabled ? #38bdf8 : #1c1c22;
+                                    border-color: AppData.crop_enabled ? #38bdf8 : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -616,9 +616,9 @@ export component EditPanel inherits HorizontalLayout {
                                 // SECTION 4: AUDIO EDIT (Volume Gain in dB & Loudness Normalization)
                                 Rectangle {
                                     border-radius: 7px;
-                                    background: #141417;
+                                    background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.has_active_audio_edits ? #38bdf866 : #1c1c22;
+                                    border-color: AppData.has_active_audio_edits ? #38bdf866 : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -642,7 +642,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     text: "Audio Edit";
                                                     font-size: 11.5px;
                                                     font-weight: 700;
-                                                    color: #e2e8f0;
+                                                    color: Theme.text_primary;
                                                 }
                                             }
                                             Rectangle { horizontal-stretch: 1; }
@@ -650,8 +650,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 width: 48px;
                                                 height: 20px;
                                                 title: "Reset";
-                                                fill_color: #1c1c22;
-                                                hover_color: #2a2a32;
+                                                fill_color: Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
                                                 text_color: #fbbf24;
                                                 font_size: 9px;
                                                 clicked => { AppLogic.reset_audio_edits(); }
@@ -797,7 +797,7 @@ export component EditPanel inherits HorizontalLayout {
                                             }
                                         }
 
-                                        Rectangle { height: 1px; background: #1c1c22; }
+                                        Rectangle { height: 1px; background: Theme.card_border; }
 
                                         // Sub-section B: Loudness Normalization
                                         VerticalLayout {
@@ -807,9 +807,9 @@ export component EditPanel inherits HorizontalLayout {
                                             Rectangle {
                                                 height: 32px;
                                                 border-radius: 5px;
-                                                background: AppData.audio_normalize_enabled ? #0284c722 : #141418;
+                                                background: AppData.audio_normalize_enabled ? #0284c722 : Theme.card_secondary_bg;
                                                 border-width: 1px;
-                                                border-color: AppData.audio_normalize_enabled ? #0284c766 : #1c1c22;
+                                                border-color: AppData.audio_normalize_enabled ? #0284c766 : Theme.card_border;
 
                                                 TouchArea {
                                                     mouse-cursor: pointer;
@@ -828,9 +828,9 @@ export component EditPanel inherits HorizontalLayout {
                                                             width: 16px;
                                                             height: 16px;
                                                             border-radius: 4px;
-                                                            background: AppData.audio_normalize_enabled ? #0284c7 : #1c1c22;
+                                                            background: AppData.audio_normalize_enabled ? #0284c7 : Theme.control_bg;
                                                             border-width: 1px;
-                                                            border-color: AppData.audio_normalize_enabled ? #38bdf8 : #383840;
+                                                            border-color: AppData.audio_normalize_enabled ? #38bdf8 : Theme.border_color;
 
                                                             if AppData.audio_normalize_enabled : Text {
                                                                 text: "✓";

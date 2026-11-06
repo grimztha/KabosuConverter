@@ -35,7 +35,7 @@ export component TimelineScrollBar inherits Rectangle {
         background: #f59e0b33;
     }
 
-    // Current Playhead Position Indicator (subtle vertical cyan needle)
+    // Current Playhead Position Indicator (subtle vertical green needle)
     Rectangle {
         property <float> pnorm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
         x: max(0px, min(root.width - 2px, (root.width - 2px) * self.pnorm));
@@ -43,7 +43,7 @@ export component TimelineScrollBar inherits Rectangle {
         width: 2px;
         height: root.height - 2px;
         border-radius: 1px;
-        background: #38bdf888;
+        background: #22c55e88;
     }
 
     // Draggable Thumb Handle representing the current viewport

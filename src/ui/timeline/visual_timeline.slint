@@ -154,7 +154,7 @@ export component VisualTimeline inherits Rectangle {
                     x: max(0px, min(track.width - 2px, (track.width - 2px) * self.norm));
                     width: 2px;
                     height: 100%;
-                    background: #38bdf8;
+                    background: #22c55e;
 
                     // Playhead Knob Cap
                     Rectangle {
@@ -163,7 +163,7 @@ export component VisualTimeline inherits Rectangle {
                         width: 12px;
                         height: 12px;
                         border-radius: 6px;
-                        background: #38bdf8;
+                        background: #22c55e;
                         border-width: 2px;
                         border-color: #ffffff;
                     }
@@ -172,8 +172,8 @@ export component VisualTimeline inherits Rectangle {
                 // In-Point Flag Marker & Drag Handle
                 Rectangle {
                     property <float> norm: root.in_point_sec >= 0.0 ? root.in_point_norm : 0.0;
-                    x: max(0px, min(track.width - 32px, track.width * self.norm - (root.in_point_sec >= 0.0 ? 16px : 0px)));
-                    y: 2px;
+                    x: max(0px, min(track.width - self.width, track.width * self.norm));
+                    y: (track.height - self.height) / 2;
                     width: root.in_point_sec >= 0.0 ? 32px : 18px;
                     height: 22px;
                     border-radius: 3px;
@@ -192,9 +192,18 @@ export component VisualTimeline inherits Rectangle {
 
                     in_ta := TouchArea {
                         mouse-cursor: ew-resize;
+                        property <length> drag_offset: 0px;
+
+                        pointer-event(event) => {
+                            if event.kind == PointerEventKind.down {
+                                self.drag_offset = self.mouse-x;
+                            }
+                        }
+
                         moved => {
                             if self.pressed && track.width > 0px && root.duration > 0.0 {
-                                root.in_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                                let cur_track_x = self.absolute-position.x + self.mouse-x - self.drag_offset - track.absolute-position.x;
+                                root.in_point_dragged((cur_track_x / track.width).clamp(0.0, 1.0) * root.duration);
                             }
                         }
                     }
@@ -203,8 +212,8 @@ export component VisualTimeline inherits Rectangle {
                 // Out-Point Flag Marker & Drag Handle
                 Rectangle {
                     property <float> norm: root.out_point_sec >= 0.0 ? root.out_point_norm : 1.0;
-                    x: max(0px, min(track.width - (root.out_point_sec >= 0.0 ? 36px : 18px), track.width * self.norm - (root.out_point_sec >= 0.0 ? 18px : 18px)));
-                    y: 2px;
+                    x: max(0px, min(track.width - self.width, track.width * self.norm - self.width));
+                    y: (track.height - self.height) / 2;
                     width: root.out_point_sec >= 0.0 ? 36px : 18px;
                     height: 22px;
                     border-radius: 3px;
@@ -223,9 +232,18 @@ export component VisualTimeline inherits Rectangle {
 
                     out_ta := TouchArea {
                         mouse-cursor: ew-resize;
+                        property <length> drag_offset: 0px;
+
+                        pointer-event(event) => {
+                            if event.kind == PointerEventKind.down {
+                                self.drag_offset = self.mouse-x;
+                            }
+                        }
+
                         moved => {
                             if self.pressed && track.width > 0px && root.duration > 0.0 {
-                                root.out_point_dragged(((self.absolute-position.x + self.mouse-x - track.absolute-position.x) / track.width).clamp(0.0, 1.0) * root.duration);
+                                let cur_track_x = self.absolute-position.x + self.mouse-x - self.drag_offset + self.width - track.absolute-position.x;
+                                root.out_point_dragged((cur_track_x / track.width).clamp(0.0, 1.0) * root.duration);
                             }
                         }
                     }

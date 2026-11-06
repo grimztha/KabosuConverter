@@ -618,9 +618,9 @@ export component DownloaderTab inherits ScrollView {
             Rectangle {
                 vertical-stretch: 0;
                 border-radius: 8px;
-                background: Theme.card_bg;
+                background: AppData.ytdlp_download_finished ? #05966910 : Theme.card_bg;
                 border-width: 1px;
-                border-color: Theme.card_border;
+                border-color: AppData.ytdlp_download_finished ? #10b98166 : Theme.card_border;
 
                 VerticalLayout {
                     padding-left: 14px;
@@ -636,13 +636,28 @@ export component DownloaderTab inherits ScrollView {
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
-                            Text {
-                                text: AppData.ytdlp_status_message;
-                                font-size: 11.5px;
-                                font-weight: 600;
-                                color: AppData.ytdlp_is_downloading ? Theme.accent_cyan : Theme.text_secondary;
-                                vertical-alignment: center;
-                                overflow: elide;
+
+                            HorizontalLayout {
+                                spacing: 6px;
+
+                                if AppData.ytdlp_download_finished : VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("../icons/check.svg");
+                                        width: 14px;
+                                        height: 14px;
+                                        colorize: #34d399;
+                                    }
+                                }
+
+                                Text {
+                                    text: AppData.ytdlp_status_message;
+                                    font-size: 11.5px;
+                                    font-weight: 600;
+                                    color: AppData.ytdlp_download_finished ? #34d399 : (AppData.ytdlp_is_downloading ? Theme.accent_cyan : Theme.text_secondary);
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
                             }
                         }
 
@@ -708,98 +723,48 @@ export component DownloaderTab inherits ScrollView {
                             background: @linear-gradient(90deg, #0284c7 0%, #10b981 100%);
                         }
                     }
-                }
-            }
-        }
 
-        // CARD 5: POST-DOWNLOAD QUICK ACTIONS (Celebration Banner)
-        if AppData.ytdlp_download_finished : Rectangle {
-            vertical-stretch: 0;
-            border-radius: 8px;
-            background: #05966915;
-            border-width: 1px;
-            border-color: #10b98188;
+                    // Merged Completion Details & Actions (Saved file path + Add to Transcoder Queue + Open Folder)
+                    if AppData.ytdlp_download_finished : Rectangle {
+                        height: 1px;
+                        background: #10b98133;
+                    }
 
-            VerticalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-                padding-top: 12px;
-                padding-bottom: 12px;
-                spacing: 10px;
+                    if AppData.ytdlp_download_finished : HorizontalLayout {
+                        spacing: 12px;
 
-                HorizontalLayout {
-                    spacing: 8px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
 
-                    VerticalLayout {
-                        alignment: center;
-                        Image {
-                            source: @image-url("../icons/check.svg");
-                            width: 16px;
-                            height: 16px;
-                            colorize: #34d399;
+                            Text {
+                                text: AppData.ytdlp_last_downloaded_file != "" ? "Saved: " + AppData.ytdlp_last_downloaded_file : "";
+                                font-size: 11px;
+                                color: #d4d4d8;
+                                horizontal-alignment: left;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
                         }
-                    }
 
-                    Text {
-                        text: "Download Completed Successfully!";
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: #34d399;
-                        vertical-alignment: center;
-                    }
+                        HorizontalLayout {
+                            horizontal-stretch: 0;
+                            spacing: 8px;
+                            alignment: end;
 
-                    if AppData.ytdlp_last_downloaded_file != "" : Text {
-                        horizontal-stretch: 1;
-                        text: "— Saved: " + AppData.ytdlp_last_downloaded_file;
-                        font-size: 11px;
-                        color: #d4d4d8;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                }
-
-                // Quick Action Integration Buttons
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: start;
-
-                    ActionButton {
-                        height: 32px;
-                        title: "Load in View & Edit";
-                        icon_source: @image-url("../icons/film.svg");
-                        has_icon: true;
-                        icon_size: 12px;
-                        fill_color: #0284c7;
-                        hover_color: #0369a1;
-                        text_color: #ffffff;
-                        font_size: 11.5px;
-                        clicked => { AppLogic.ytdlp_load_in_player(); }
-                    }
-
-                    ActionButton {
-                        height: 32px;
-                        title: "Add to Transcoder Queue";
-                        icon_source: @image-url("../icons/plus.svg");
-                        has_icon: true;
-                        icon_size: 12px;
-                        fill_color: Theme.btn_neutral_bg;
-                        hover_color: Theme.btn_neutral_hover;
-                        text_color: Theme.accent_cyan;
-                        font_size: 11.5px;
-                        clicked => { AppLogic.ytdlp_send_to_queue(); }
-                    }
-
-                    ActionButton {
-                        height: 32px;
-                        title: "Open Folder";
-                        icon_source: @image-url("../icons/folder-open.svg");
-                        has_icon: true;
-                        icon_size: 12px;
-                        fill_color: Theme.btn_neutral_bg;
-                        hover_color: Theme.btn_neutral_hover;
-                        text_color: Theme.text_secondary;
-                        font_size: 11.5px;
-                        clicked => { AppLogic.ytdlp_open_output_dir(); }
+                            ActionButton {
+                                height: 30px;
+                                title: "Add to Transcoder Queue";
+                                icon_source: @image-url("../icons/plus.svg");
+                                has_icon: true;
+                                icon_size: 12px;
+                                fill_color: Theme.btn_neutral_bg;
+                                hover_color: Theme.btn_neutral_hover;
+                                text_color: Theme.accent_cyan;
+                                font_size: 11px;
+                                clicked => { AppLogic.ytdlp_send_to_queue(); }
+                            }
+                        }
                     }
                 }
             }

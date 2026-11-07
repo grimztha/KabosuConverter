@@ -105,6 +105,8 @@ pub fn process_incoming_paths(
             return;
         }
 
+        crate::dialogs::set_last_opened_dir(&expanded[0]);
+
         // Create queue placeholders immediately before probing
         let mut initial_items = Vec::with_capacity(expanded.len());
         for path in expanded {
@@ -236,28 +238,23 @@ pub fn process_incoming_paths(
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w_row.upgrade() {
                             let app_data = ui.global::<AppData>();
-                            let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
-                            let mut matched = false;
-                            for (r, item) in list.iter_mut().enumerate() {
-                                if item.file_path == updated.file_path && item.status == "Probing..." {
-                                    updated.id = r as i32;
-                                    *item = updated.clone();
-                                    matched = true;
-                                    break;
-                                }
-                            }
-                            if !matched {
-                                for (r, item) in list.iter_mut().enumerate() {
-                                    if item.file_path == updated.file_path {
-                                        updated.id = r as i32;
-                                        *item = updated.clone();
-                                        matched = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if matched {
-                                app_data.set_queue(ModelRc::new(VecModel::from(list)));
+                            let model = app_data.get_queue();
+                            let row_count = model.row_count();
+                            let matched_row = (0..row_count)
+                                .find(|&r| {
+                                    model.row_data(r).is_some_and(|item| {
+                                        item.file_path == updated.file_path && item.status == "Probing..."
+                                    })
+                                })
+                                .or_else(|| {
+                                    (0..row_count).find(|&r| {
+                                        model.row_data(r).is_some_and(|item| item.file_path == updated.file_path)
+                                    })
+                                });
+
+                            if let Some(r) = matched_row {
+                                updated.id = r as i32;
+                                model.set_row_data(r, updated.clone());
                                 if app_data.get_selected_file_path() == updated.file_path {
                                     load_selected_file(&app_data, &updated, &ctx_row);
                                 }

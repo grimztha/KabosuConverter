@@ -91,9 +91,8 @@ impl Default for AppSettings {
     }
 }
 
-/// Checks if the application is running in standalone (portable) mode.
-/// Standalone mode is triggered when a `portable` or `.standalone` marker exists
-/// in the executable directory, or if `settings.json` is located next to the executable.
+/// Returns `true` when the app is running in portable/standalone mode.
+/// This is enabled if `portable`, `.standalone`, or `settings.json` sits next to the executable.
 pub fn is_standalone_mode() -> bool {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
@@ -108,12 +107,8 @@ pub fn is_standalone_mode() -> bool {
     false
 }
 
-/// Returns the primary application directory:
-/// - Standalone / portable: executable's parent directory
-/// - Standard installation: OS-designated local app data folder
-///   - Windows: `%LOCALAPPDATA%\AnotherEncoder`
-///   - macOS: `~/Library/Application Support/AnotherEncoder`
-///   - Linux: `~/.local/share/AnotherEncoder`
+/// Returns the root folder for app data and binaries.
+/// Uses the executable folder in standalone mode, or the OS local app data folder otherwise.
 pub fn get_app_dir() -> PathBuf {
     if is_standalone_mode() {
         if let Ok(exe_path) = env::current_exe() {
@@ -132,13 +127,11 @@ pub fn get_app_dir() -> PathBuf {
         })
 }
 
-/// Resolves path to settings.json.
-/// Uses the OS-designated app data folder, migrating from legacy config directory if present.
+/// Returns the path to `settings.json`, falling back to the legacy config folder if present.
 pub fn get_settings_path() -> Result<PathBuf> {
     let app_dir = get_app_dir();
     let local_settings = app_dir.join("settings.json");
 
-    // If local settings don't exist yet, check legacy Roaming config directory for seamless migration
     if !local_settings.exists() && !is_standalone_mode() {
         if let Some(config_dir) = dirs::config_dir() {
             let legacy_path = config_dir.join(APP_NAME).join("settings.json");
@@ -151,7 +144,7 @@ pub fn get_settings_path() -> Result<PathBuf> {
     Ok(local_settings)
 }
 
-/// Loads persistent application settings.
+/// Loads saved settings from disk, or returns defaults if the file is missing or unreadable.
 pub fn load_settings() -> AppSettings {
     if let Ok(path) = get_settings_path() {
         if let Ok(content) = fs::read_to_string(&path) {
@@ -163,7 +156,7 @@ pub fn load_settings() -> AppSettings {
     AppSettings::default()
 }
 
-/// Saves application settings safely via a temporary file before replacing the target.
+/// Writes settings to a temp file first, then swaps it into place to avoid half-written files.
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let path = get_settings_path()?;
     if let Some(parent) = path.parent() {
@@ -173,24 +166,13 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, &content)?;
 
-    // On Windows, rename fails if destination already exists, so remove first.
-    // If rename still encounters a lock, fall back to writing directly.
+    // Windows rename fails if the target already exists, so remove it first.
     if path.exists() {
         let _ = fs::remove_file(&path);
     }
     if fs::rename(&tmp_path, &path).is_err() {
         let _ = fs::remove_file(&tmp_path);
         fs::write(&path, content)?;
-    }
-    Ok(())
-}
-
-/// Uninstaller helper: cleanly wipes the application data directory (%LOCALAPPDATA%\AnotherEncoder).
-/// Leaving the host machine completely clean.
-pub fn wipe_app_data() -> std::io::Result<()> {
-    let app_dir = get_app_dir();
-    if app_dir.exists() && !is_standalone_mode() {
-        fs::remove_dir_all(app_dir)?;
     }
     Ok(())
 }

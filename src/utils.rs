@@ -51,26 +51,16 @@ pub fn get_clipboard_string() -> Option<String> {
     None
 }
 
-/// Format a byte count into a human-readable size string (e.g. "12.34 MB", "1.50 GB").
+/// Formats a byte count into a human-readable size string (or `"Unknown size"` when 0).
 pub fn format_bytes_fast(bytes: u64) -> String {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-    let b = bytes as f64;
-    if b >= GB {
-        format!("{:.2} GB", b / GB)
-    } else if b >= MB {
-        format!("{:.1} MB", b / MB)
-    } else if b >= KB {
-        format!("{:.0} KB", b / KB)
-    } else if bytes > 0 {
-        format!("{} B", bytes)
+    if bytes > 0 {
+        another_encoder::ffmpeg::format_bytes(bytes)
     } else {
         "Unknown size".to_string()
     }
 }
 
-/// Recursively collect media files from a directory up to a max depth.
+/// Recursively collects media files from a directory up to depth 4.
 pub fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>, exts: &[&str]) {
     if depth > 4 {
         return;
@@ -91,7 +81,7 @@ pub fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<Path
     }
 }
 
-/// Normalize and clean a path for Windows Explorer / system openers.
+/// Normalizes a path for Windows Explorer (strips extended-length `\\?\` prefixes and trailing slashes).
 pub fn normalize_path_for_explorer(path: &Path) -> PathBuf {
     let abs = if path.is_absolute() {
         path.to_path_buf()
@@ -116,7 +106,7 @@ pub fn normalize_path_for_explorer(path: &Path) -> PathBuf {
     PathBuf::from(clean)
 }
 
-/// Open a directory in Windows Explorer (or xdg-open on Linux).
+/// Opens a folder in the OS file manager.
 pub fn open_folder_in_explorer(folder: &Path) {
     let _ = std::fs::create_dir_all(folder);
     let clean_dir = normalize_path_for_explorer(folder);
@@ -134,7 +124,7 @@ pub fn open_folder_in_explorer(folder: &Path) {
     }
 }
 
-/// Open a file's containing folder in Windows Explorer with the file highlighted/selected.
+/// Opens a file's folder in the OS file manager and selects the file if supported.
 pub fn reveal_in_explorer(file_path: &Path) {
     let clean = normalize_path_for_explorer(file_path);
     #[cfg(windows)]
@@ -142,8 +132,7 @@ pub fn reveal_in_explorer(file_path: &Path) {
         use std::os::windows::process::CommandExt;
         if clean.exists() && clean.is_file() {
             let path_str = clean.to_string_lossy().replace('"', "");
-            // On Windows, explorer requires /select,"PATH" without quoting the /select switch itself.
-            // .raw_arg() passes this verbatim so Explorer highlights the file properly.
+            // Explorer expects `/select,"PATH"` without quoting the `/select` switch itself.
             let spawned = std::process::Command::new("explorer")
                 .raw_arg(format!("/select,\"{}\"", path_str))
                 .spawn();
@@ -151,29 +140,18 @@ pub fn reveal_in_explorer(file_path: &Path) {
                 return;
             }
         }
-        let target_dir = if clean.is_dir() {
-            clean.clone()
-        } else if let Some(parent) = clean.parent() {
-            parent.to_path_buf()
-        } else {
-            clean.clone()
-        };
-        open_folder_in_explorer(&target_dir);
     }
-    #[cfg(not(windows))]
-    {
-        let target_dir = if clean.is_dir() {
-            clean.clone()
-        } else if let Some(parent) = clean.parent() {
-            parent.to_path_buf()
-        } else {
-            clean.clone()
-        };
-        open_folder_in_explorer(&target_dir);
-    }
+    let target_dir = if clean.is_dir() {
+        clean
+    } else if let Some(parent) = clean.parent() {
+        parent.to_path_buf()
+    } else {
+        clean
+    };
+    open_folder_in_explorer(&target_dir);
 }
 
-/// Plays an audible system notification chime when an export or download task finishes.
+/// Plays a short system chime when an export or download task finishes.
 pub fn play_notification_sound() {
     #[cfg(windows)]
     {

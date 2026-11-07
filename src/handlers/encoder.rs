@@ -293,12 +293,28 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             (VideoRotation::None, false, false, None)
                         };
 
-                        let has_audio_edits =
-                            (edit_gain_opt.is_some() || edit_norm_enabled) && item.is_audio;
+                        let normalize_lufs = match normalize_idx {
+                            1 => Some(-23.0),
+                            2 => Some(-14.0),
+                            3 => Some(-16.0),
+                            4 => Some(-12.0),
+                            _ => {
+                                if func_idx == 10 {
+                                    Some(-23.0)
+                                } else {
+                                    None
+                                }
+                            }
+                        };
+
+                        let has_audio_edits = (edit_gain_opt.is_some()
+                            || edit_norm_enabled
+                            || normalize_lufs.is_some())
+                            && item.is_audio;
                         let has_video_edits =
                             rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
 
-                        // Determine function (upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active)
+                        // Upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active
                         let function = match func_idx {
                             0..=5 => EncoderFunction::Transcode,
                             6 | 7 if has_video_edits || has_audio_edits => EncoderFunction::Transcode,
@@ -313,30 +329,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         };
 
                         let video_codec = match func_idx {
-                            0 => VideoCodec::H264,
-                            1 => VideoCodec::H265,
-                            2 => VideoCodec::AV1,
-                            3 => VideoCodec::AppleProRes,
-                            4 => VideoCodec::AvidDNxHD,
-                            5 => VideoCodec::VP9,
-                            11 => VideoCodec::Copy,
-                            _ => VideoCodec::H264,
+                            6 | 7 => VideoCodec::H264,
+                            _ => VideoCodec::from_function_index(func_idx),
                         };
-
-                        let hw_accel = match hw_accel_idx {
-                            1 => HwAccel::Nvenc,
-                            2 => HwAccel::Qsv,
-                            3 => HwAccel::Amf,
-                            4 => HwAccel::VideoToolbox,
-                            5 => HwAccel::Cpu,
-                            _ => HwAccel::Auto,
-                        };
-
-                        let rate_control = match rate_ctrl_idx {
-                            1 => RateControlMode::CBR,
-                            2 => RateControlMode::VBR,
-                            _ => RateControlMode::CRF,
-                        };
+                        let hw_accel = HwAccel::from_index(hw_accel_idx);
+                        let rate_control = RateControlMode::from_index(rate_ctrl_idx);
 
                         let video_bitrate_kbps = match video_br_idx {
                             0 => 15000,
@@ -358,14 +355,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         }
                         .to_string();
 
-                        let resolution = match res_idx {
-                            1 => ResolutionPreset::UHD4K,
-                            2 => ResolutionPreset::QHD1440p,
-                            3 => ResolutionPreset::FHD1080p,
-                            4 => ResolutionPreset::HD720p,
-                            5 => ResolutionPreset::SD480p,
-                            _ => ResolutionPreset::Original,
-                        };
+                        let resolution = ResolutionPreset::from_index(res_idx);
 
                         let fps = match fps_idx {
                             1 => Some(23.976),
@@ -379,11 +369,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             _ => None,
                         };
 
-                        let deinterlace = match deinterlace_idx {
-                            1 => DeinterlaceMode::Yadif,
-                            2 => DeinterlaceMode::Bwdif,
-                            _ => DeinterlaceMode::None,
-                        };
+                        let deinterlace = DeinterlaceMode::from_index(deinterlace_idx);
 
                         let prores_profile = match prores_idx {
                             0 => ProResProfile::Proxy,
@@ -395,45 +381,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             _ => ProResProfile::Standard,
                         };
 
-                        let audio_codec = match audio_codec_idx {
-                            1 => AudioCodecChoice::MP3,
-                            2 => AudioCodecChoice::Opus,
-                            3 => AudioCodecChoice::FLAC,
-                            4 => AudioCodecChoice::WavPCM24,
-                            5 => AudioCodecChoice::WavPCM16,
-                            6 => AudioCodecChoice::AC3,
-                            7 => AudioCodecChoice::Copy,
-                            _ => AudioCodecChoice::AAC,
-                        };
-
-                        let audio_bitrate_kbps = match audio_br_idx {
-                            0 => 320,
-                            1 => 256,
-                            2 => 192,
-                            3 => 128,
-                            4 => 96,
-                            _ => 64,
-                        };
+                        let audio_codec = AudioCodecChoice::from_index(audio_codec_idx);
+                        let audio_bitrate_kbps = AudioCodecChoice::bitrate_from_index(audio_br_idx);
 
                         let audio_sample_rate = match audio_sr_idx {
                             1 => Some(48000),
                             2 => Some(44100),
                             3 => Some(96000),
                             _ => None,
-                        };
-
-                        let normalize_lufs = match normalize_idx {
-                            1 => Some(-23.0),
-                            2 => Some(-14.0),
-                            3 => Some(-16.0),
-                            4 => Some(-12.0),
-                            _ => {
-                                if func_idx == 10 {
-                                    Some(-23.0)
-                                } else {
-                                    None
-                                }
-                            }
                         };
 
                         let in_point = if is_selected_or_single && !in_point_str.trim().is_empty() {
@@ -548,7 +503,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let config = EncodeJobConfig {
                             function,
                             input_path: input_path.clone(),
-                            secondary_input_path: None,
                             output_path: output_path.to_string_lossy().to_string(),
 
                             video_codec,
@@ -789,14 +743,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         }
                     });
                 });
-            }
-        });
-
-        // Backward compatibility callback forwarding
-        let ui_handle_fwd = ui.as_weak();
-        ui.global::<AppLogic>().on_start_processing(move || {
-            if let Some(ui) = ui_handle_fwd.upgrade() {
-                ui.global::<AppLogic>().invoke_run_task();
             }
         });
     }

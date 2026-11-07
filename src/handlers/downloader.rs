@@ -341,14 +341,23 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     let ui_w = ui_log.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w.upgrade() {
-                            let cur = ui.global::<AppData>().get_log_preview().to_string();
-                            let mut lines: Vec<&str> = cur.lines().collect();
-                            if lines.len() > 100 {
-                                lines.remove(0);
+                            let app_data = ui.global::<AppData>();
+                            let mut cur = app_data.get_log_preview().to_string();
+                            if !cur.is_empty() {
+                                cur.push('\n');
                             }
-                            lines.push(&log_line);
-                            ui.global::<AppData>()
-                                .set_log_preview(SharedString::from(lines.join("\n")));
+                            cur.push_str(&log_line);
+                            if cur.len() > 8000 {
+                                let mut start = cur.len() - 6000;
+                                while start < cur.len() && !cur.is_char_boundary(start) {
+                                    start += 1;
+                                }
+                                if let Some(newline_offset) = cur[start..].find('\n') {
+                                    start += newline_offset + 1;
+                                }
+                                cur = cur[start..].to_string();
+                            }
+                            app_data.set_log_preview(SharedString::from(cur));
                         }
                     });
                 },

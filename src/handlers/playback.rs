@@ -567,7 +567,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
-        let last_restart = Arc::new(std::sync::Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
 
         ui.global::<AppLogic>().on_player_volume_changed(move |val| {
             if let Some(ui) = ui_handle.upgrade() {
@@ -582,38 +581,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 }
 
                 if app_data.get_player_is_playing() {
-                    let mut lr = last_restart.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut lr = ctx.last_audio_restart.lock().unwrap_or_else(|e| e.into_inner());
                     let now = std::time::Instant::now();
                     if now.duration_since(*lr) >= std::time::Duration::from_millis(120) {
                         *lr = now;
-                        let vol_int = if app_data.get_player_is_muted() {
-                            0
-                        } else {
-                            (clamped * 100.0).round().clamp(0.0, 100.0) as i32
-                        };
-
-                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut old) = lock.take() {
-                            let _ = old.kill();
-                        }
-                        if app_data.get_selected_is_audio() {
-                            if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                                let cur_time = app_data.get_player_current_time() as f64;
-                                let out_sec = app_data.get_out_point_seconds() as f64;
-                                let dur_opt = if out_sec > cur_time {
-                                    Some(out_sec - cur_time)
-                                } else {
-                                    None
-                                };
-                                let path = app_data.get_selected_file_path().to_string();
-                                let edit_gain_db = app_data.get_audio_gain_db();
-                                let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
-                                let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
-                                if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
-                                    *lock = Some(session);
-                                }
-                            }
-                        }
+                        drop(lr);
+                        ctx.restart_audio_preview(&app_data);
                     }
                 }
             }
@@ -629,74 +602,31 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 let is_muted = app_data.get_player_is_muted();
                 if is_muted {
-                    // Unmute
                     let mut restore_vol = app_data.get_player_pre_mute_volume();
                     if restore_vol < 0.05 {
                         restore_vol = 0.8;
                     }
                     app_data.set_player_volume(restore_vol);
                     app_data.set_player_is_muted(false);
-
-                    if app_data.get_player_is_playing() && app_data.get_selected_is_audio() {
-                        let cur_time = app_data.get_player_current_time() as f64;
-                        let out_sec = app_data.get_out_point_seconds() as f64;
-                        let dur_opt = if out_sec > cur_time {
-                            Some(out_sec - cur_time)
-                        } else {
-                            None
-                        };
-                        let path = app_data.get_selected_file_path().to_string();
-                        let vol_int = (restore_vol * 100.0).round().clamp(0.0, 100.0) as i32;
-
-                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut old) = lock.take() {
-                            let _ = old.kill();
-                        }
-                        if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                            let edit_gain_db = app_data.get_audio_gain_db();
-                            let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
-                            let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
-                            if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, vol_int, edit_gain_opt, edit_norm_opt) {
-                                *lock = Some(session);
-                            }
-                        }
-                    }
                 } else {
-                    // Mute
                     let cur_vol = app_data.get_player_volume();
                     if cur_vol > 0.01 {
                         app_data.set_player_pre_mute_volume(cur_vol);
                     }
                     app_data.set_player_is_muted(true);
+                }
 
-                    // Silence audio output to speakers, but keep ffplay running at volume=0
-                    // so render-output audio meter levels and clock synchronization continue accurately!
-                    if app_data.get_player_is_playing() && app_data.get_selected_is_audio() {
-                        let cur_time = app_data.get_player_current_time() as f64;
-                        let out_sec = app_data.get_out_point_seconds() as f64;
-                        let dur_opt = if out_sec > cur_time {
-                            Some(out_sec - cur_time)
-                        } else {
-                            None
-                        };
-                        let path = app_data.get_selected_file_path().to_string();
-                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut old) = lock.take() {
-                            let _ = old.kill();
-                        }
-                        if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                            let edit_gain_db = app_data.get_audio_gain_db();
-                            let edit_gain_opt = if edit_gain_db.abs() > 0.05 { Some(edit_gain_db) } else { None };
-                            let edit_norm_opt = if app_data.get_audio_normalize_enabled() { Some(app_data.get_audio_normalize_lufs()) } else { None };
-                            if let Ok(session) = spawn_audio_playback(ffplay_bin, &path, cur_time, dur_opt, 0, edit_gain_opt, edit_norm_opt) {
-                                *lock = Some(session);
-                            }
-                        }
-                    } else {
-                        let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut old) = lock.take() {
-                            let _ = old.kill();
-                        }
+                // Keep ffplay running at volume=0 when muted so VU meters and clock sync stay active.
+                if app_data.get_player_is_playing() {
+                    if app_data.get_selected_is_audio() {
+                        ctx.restart_audio_preview(&app_data);
+                    } else if let Some(mut old) = ctx
+                        .active_player_child
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .take()
+                    {
+                        let _ = old.kill();
                     }
                 }
             }
@@ -715,10 +645,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Meter Update & Decay Timer (30ms frequency for smooth VU meter movement & peak hold decay)
+    // VU meter smoothing and peak-hold decay timer (30ms interval)
     {
         let ui_handle = ui.as_weak();
-        let ctx = ctx.clone();
+        let active_player_child = ctx.active_player_child.clone();
         let mut disp_l = -60.0f32;
         let mut disp_r = -60.0f32;
         let mut peak_l = -60.0f32;
@@ -726,20 +656,45 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         let mut peak_hold_time_l = std::time::Instant::now();
         let mut peak_hold_time_r = std::time::Instant::now();
 
-        let timer_clone = ctx.meter_timer.clone();
+        #[inline]
+        fn smooth_channel(
+            target: f32,
+            disp: &mut f32,
+            peak: &mut f32,
+            peak_hold_time: &mut std::time::Instant,
+            now: std::time::Instant,
+        ) {
+            if target >= *disp {
+                *disp = target;
+            } else {
+                *disp = (*disp - 2.5).max(target).max(-60.0);
+            }
+
+            if *disp >= *peak {
+                *peak = *disp;
+                *peak_hold_time = now;
+            } else if now.duration_since(*peak_hold_time) > std::time::Duration::from_millis(800) {
+                *peak = (*peak - 1.5).max(*disp).max(-60.0);
+            }
+
+            if *disp < -59.5 {
+                *disp = -60.0;
+            }
+            if *peak < -59.5 {
+                *peak = -60.0;
+            }
+        }
 
         ctx.meter_timer.borrow_mut().start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(30),
             move || {
-                let _keep_alive = &timer_clone;
                 if let Some(ui) = ui_handle.upgrade() {
                     let app_data = ui.global::<AppData>();
                     let is_playing = app_data.get_player_is_playing();
                     let is_audio = app_data.get_selected_is_audio();
 
-                    // If playback is stopped and meters have decayed to silent floor,
-                    // skip setting properties to allow the UI thread and event loop to rest.
+                    // Skip UI property writes when playback is stopped and meters have reached the noise floor.
                     if !(is_playing && is_audio)
                         && disp_l <= -59.5
                         && disp_r <= -59.5
@@ -750,7 +705,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     }
 
                     let (target_l, target_r) = if is_playing && is_audio {
-                        if let Ok(lock) = ctx.active_player_child.try_lock() {
+                        if let Ok(lock) = active_player_child.try_lock() {
                             if let Some(ref session) = *lock {
                                 session.get_meter_levels()
                             } else {
@@ -764,42 +719,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     };
 
                     let now = std::time::Instant::now();
-
-                    // Left channel level smoothing (instant attack, smooth decay)
-                    if target_l >= disp_l {
-                        disp_l = target_l;
-                    } else {
-                        disp_l = (disp_l - 2.5).max(target_l).max(-60.0);
-                    }
-
-                    // Left channel peak hold (holds for 800ms, then drops)
-                    if disp_l >= peak_l {
-                        peak_l = disp_l;
-                        peak_hold_time_l = now;
-                    } else if now.duration_since(peak_hold_time_l) > std::time::Duration::from_millis(800) {
-                        peak_l = (peak_l - 1.5).max(disp_l).max(-60.0);
-                    }
-
-                    // Right channel level smoothing (instant attack, smooth decay)
-                    if target_r >= disp_r {
-                        disp_r = target_r;
-                    } else {
-                        disp_r = (disp_r - 2.5).max(target_r).max(-60.0);
-                    }
-
-                    // Right channel peak hold (holds for 800ms, then drops)
-                    if disp_r >= peak_r {
-                        peak_r = disp_r;
-                        peak_hold_time_r = now;
-                    } else if now.duration_since(peak_hold_time_r) > std::time::Duration::from_millis(800) {
-                        peak_r = (peak_r - 1.5).max(disp_r).max(-60.0);
-                    }
-
-                    // Clean floor clamping
-                    if disp_l < -59.5 { disp_l = -60.0; }
-                    if disp_r < -59.5 { disp_r = -60.0; }
-                    if peak_l < -59.5 { peak_l = -60.0; }
-                    if peak_r < -59.5 { peak_r = -60.0; }
+                    smooth_channel(target_l, &mut disp_l, &mut peak_l, &mut peak_hold_time_l, now);
+                    smooth_channel(target_r, &mut disp_r, &mut peak_r, &mut peak_hold_time_r, now);
 
                     app_data.set_audio_meter_l_db(disp_l);
                     app_data.set_audio_meter_r_db(disp_r);

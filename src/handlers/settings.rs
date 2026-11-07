@@ -5,51 +5,19 @@ use crate::{AppData, AppLogic, MainWindow};
 use another_encoder::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 use another_encoder::settings::{self, AppSettings};
 
-/// Extracts a complete AppSettings configuration from current Slint AppData state.
+/// Builds an `AppSettings` snapshot from the current Slint `AppData` state.
 pub fn extract_settings_from_app_data(data: &AppData) -> AppSettings {
     let func_idx = data.get_function_index();
-    let video_codec = match func_idx {
-        0 => VideoCodec::H264,
-        1 => VideoCodec::H265,
-        2 => VideoCodec::AV1,
-        3 => VideoCodec::AppleProRes,
-        4 => VideoCodec::AvidDNxHD,
-        5 => VideoCodec::VP9,
-        6 => VideoCodec::Copy,
-        _ => VideoCodec::H264,
-    };
+    let video_codec = VideoCodec::from_function_index(func_idx);
 
     let hw_accel_idx = data.get_hw_accel_index();
-    let hw_accel = match hw_accel_idx {
-        1 => HwAccel::Nvenc,
-        2 => HwAccel::Qsv,
-        3 => HwAccel::Amf,
-        4 => HwAccel::VideoToolbox,
-        5 => HwAccel::Cpu,
-        _ => HwAccel::Auto,
-    };
+    let hw_accel = HwAccel::from_index(hw_accel_idx);
 
     let audio_codec_idx = data.get_audio_codec_index();
-    let audio_codec = match audio_codec_idx {
-        1 => AudioCodecChoice::MP3,
-        2 => AudioCodecChoice::Opus,
-        3 => AudioCodecChoice::FLAC,
-        4 => AudioCodecChoice::WavPCM24,
-        5 => AudioCodecChoice::WavPCM16,
-        6 => AudioCodecChoice::AC3,
-        7 => AudioCodecChoice::Copy,
-        _ => AudioCodecChoice::AAC,
-    };
+    let audio_codec = AudioCodecChoice::from_index(audio_codec_idx);
 
     let audio_br_idx = data.get_audio_bitrate_index();
-    let audio_bitrate = match audio_br_idx {
-        0 => 320,
-        1 => 256,
-        2 => 192,
-        3 => 128,
-        4 => 96,
-        _ => 64,
-    };
+    let audio_bitrate = AudioCodecChoice::bitrate_from_index(audio_br_idx);
 
     let out_dir = data.get_output_directory().trim().to_string();
     let default_output_dir = if !out_dir.is_empty() && out_dir != "Same as source" {
@@ -137,30 +105,14 @@ pub fn apply_settings_to_app_data(data: &AppData, settings: &AppSettings) {
     let func_idx = if settings.default_function_index >= 0 {
         settings.default_function_index
     } else {
-        match settings.default_video_codec {
-            VideoCodec::H264 => 0,
-            VideoCodec::H265 => 1,
-            VideoCodec::AV1 => 2,
-            VideoCodec::AppleProRes => 3,
-            VideoCodec::AvidDNxHD => 4,
-            VideoCodec::VP9 => 5,
-            VideoCodec::Copy => 6,
-            _ => 0,
-        }
+        settings.default_video_codec.to_function_index()
     };
     data.set_function_index(func_idx);
 
     let hw_idx = if settings.default_hw_accel_index >= 0 {
         settings.default_hw_accel_index
     } else {
-        match settings.default_hw_accel {
-            HwAccel::Auto => 0,
-            HwAccel::Nvenc => 1,
-            HwAccel::Qsv => 2,
-            HwAccel::Amf => 3,
-            HwAccel::VideoToolbox => 4,
-            HwAccel::Cpu => 5,
-        }
+        settings.default_hw_accel.to_index()
     };
     data.set_hw_accel_index(hw_idx);
 
@@ -177,30 +129,14 @@ pub fn apply_settings_to_app_data(data: &AppData, settings: &AppSettings) {
     let audio_codec_idx = if settings.default_audio_codec_index >= 0 {
         settings.default_audio_codec_index
     } else {
-        match settings.default_audio_codec {
-            AudioCodecChoice::AAC => 0,
-            AudioCodecChoice::MP3 => 1,
-            AudioCodecChoice::Opus => 2,
-            AudioCodecChoice::FLAC => 3,
-            AudioCodecChoice::WavPCM24 => 4,
-            AudioCodecChoice::WavPCM16 => 5,
-            AudioCodecChoice::AC3 => 6,
-            AudioCodecChoice::Copy => 7,
-        }
+        settings.default_audio_codec.to_index()
     };
     data.set_audio_codec_index(audio_codec_idx);
 
     let audio_br_idx = if settings.default_audio_bitrate_index >= 0 {
         settings.default_audio_bitrate_index
     } else {
-        match settings.default_audio_bitrate_kbps {
-            320 => 0,
-            256 => 1,
-            192 => 2,
-            128 => 3,
-            96 => 4,
-            _ => 5,
-        }
+        AudioCodecChoice::bitrate_to_index(settings.default_audio_bitrate_kbps)
     };
     data.set_audio_bitrate_index(audio_br_idx);
     data.set_audio_sample_rate_index(settings.default_audio_sample_rate_index);

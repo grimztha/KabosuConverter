@@ -217,34 +217,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "another-encoder"
-version = "0.13.4"
-dependencies = [
- "anyhow",
- "chrono",
- "dirs",
- "futures-util",
- "hex",
- "raw-window-handle",
- "regex",
- "reqwest",
- "rfd",
- "serde",
- "serde_json",
- "sha2",
- "slint",
- "slint-build",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "windows-sys 0.61.2",
- "winres",
- "xz2",
- "zip",
-]
-
-[[package]]
 name = "anstyle"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2785,6 +2757,34 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kabosu-converter"
+version = "0.14.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs",
+ "futures-util",
+ "hex",
+ "raw-window-handle",
+ "regex",
+ "reqwest",
+ "rfd",
+ "serde",
+ "serde_json",
+ "sha2",
+ "slint",
+ "slint-build",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "windows-sys 0.61.2",
+ "winres",
+ "xz2",
+ "zip",
 ]
 
 [[package]]

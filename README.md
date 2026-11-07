@@ -19,18 +19,15 @@
 
 ---
 
-## Screenshot Preview
+## Preview
+
 
 <p align="center">
-  <img src="assets/previews/example_1.png" alt="Kabosu Converter Preview 1" width="100%" />
+  <img src="assets/previews/example_1.png" alt="Kabosu Converter Preview 2" width="50%" />
 </p>
 
 <p align="center">
-  <img src="assets/previews/example_2.png" alt="Kabosu Converter Preview 2" width="100%" />
-</p>
-
-<p align="center">
-  <img src="assets/previews/example_3.png" alt="Kabosu Converter Preview 3" width="100%" />
+  <img src="assets/previews/example_2.png" alt="Kabosu Converter Preview 3" width="50%" />
 </p>
 
 ---
@@ -65,25 +62,6 @@ Built with **Rust** for native performance and memory safety, **Slint** for a fl
 - **🔄 Lossless Container Remuxing**: Swap containers (`.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.ts`), isolate video/audio streams, or swap audio tracks in milliseconds with zero quality loss.
 - **🌐 Universal Media Downloader**: Paste stream links from YouTube, Twitch, Vimeo, TikTok, Bilibili, SoundCloud, Twitter/X, or direct HLS playlists to inspect available formats and download video or audio with one click.
 - **📦 Self-Contained Binary Management**: Automatic background discovery, streaming download, and SHA-256 verification of FFmpeg and yt-dlp into your clean user app data directory.
-
----
-
-## Tech Stack
-
-| Component                    | Technology                                       | Description                                                                              |
-| :--------------------------- | :----------------------------------------------- | :--------------------------------------------------------------------------------------- |
-| **Core Language**      | [Rust](https://www.rust-lang.org/) (2021 Edition) | Memory-safe, concurrency-driven, zero-overhead systems language                          |
-| **GUI Framework**      | [Slint](https://slint.dev/) (v1.18+)              | Native declarative GUI compiled directly to native code with GPU rendering               |
-| **Async Runtime**      | [Tokio](https://tokio.rs/) (v1.46+)               | Multi-threaded async engine powering non-blocking I/O, process management, and streaming |
-| **Media Processing**   | [FFmpeg](https://ffmpeg.org/) (8+)                | High-performance encoding, decoding, filtering, and stream extraction engine             |
-| **Media Inspection**   | [FFprobe](https://ffmpeg.org/ffprobe.html)        | JSON-based deep container and stream metadata introspection                              |
-| **Media Preview**      | [FFplay](https://ffmpeg.org/ffplay.html)          | Synchronized hardware-accelerated playback and audio preview                             |
-| **Stream Downloader**  | [yt-dlp](https://github.com/yt-dlp/yt-dlp)        | Industry-standard web video extraction and format discovery tool                         |
-| **Native Windows API** | `windows-sys` (v0.61)                          | Native shell integration, IDropTarget OLE drag-and-drop, and window styling              |
-| **Binary Compression** | `zip`, `tar`, `xz2`                        | Multi-format archive extraction for automated binary provisioning                        |
-| **CI/CD Automation**   | GitHub Actions                                   | Automated multi-platform testing and tagged release binary packaging                     |
-
----
 
 
 ## Building from Source

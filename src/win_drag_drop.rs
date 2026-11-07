@@ -408,22 +408,26 @@ pub unsafe fn get_window_class(hwnd: *mut std::ffi::c_void) -> String {
     }
 }
 
-/// Parse an HDROP handle into a list of file paths.
+/// Extracts dropped file paths from a Windows `HDROP` handle.
+///
 /// # Safety
-/// - `hdrop` must be a valid HDROP handle obtained from a drop operation.
-/// - This function assumes the Windows API returns valid data.
+/// `hdrop` must be a valid `HDROP` handle from an active drop operation.
 pub unsafe fn parse_hdrop(hdrop: *mut std::ffi::c_void) -> Vec<PathBuf> {
     if hdrop.is_null() {
         return Vec::new();
     }
     let count = DragQueryFileW(hdrop, 0xFFFFFFFF, std::ptr::null_mut(), 0);
     let mut paths = Vec::with_capacity(count as usize);
-    let mut buffer = [0u16; 2048];
+    let mut buf = Vec::with_capacity(260);
     for i in 0..count {
-        let len = DragQueryFileW(hdrop, i, buffer.as_mut_ptr(), buffer.len() as u32);
-        if len > 0 {
-            let path_str = String::from_utf16_lossy(&buffer[..len as usize]);
-            paths.push(PathBuf::from(path_str));
+        let char_len = DragQueryFileW(hdrop, i, std::ptr::null_mut(), 0);
+        if char_len > 0 {
+            buf.resize((char_len + 1) as usize, 0u16);
+            let copied = DragQueryFileW(hdrop, i, buf.as_mut_ptr(), char_len + 1);
+            if copied > 0 {
+                let path_str = String::from_utf16_lossy(&buf[..copied as usize]);
+                paths.push(PathBuf::from(path_str));
+            }
         }
     }
     paths
@@ -452,7 +456,15 @@ unsafe extern "system" fn drop_subclass_proc(
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
-/// Discovers the active top-level HWND for the current process (ignoring message/IME windows)
+#[inline]
+fn is_auxiliary_window_class(class: &str) -> bool {
+    matches!(
+        class,
+        "Winit Thread Event Target" | "IME" | "MSCTFIME UI" | "NVOpenGLPbuffer"
+    )
+}
+
+/// Finds the active top-level window for the current process, ignoring hidden message/IME windows.
 pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
     unsafe {
         let my_pid = GetCurrentProcessId();
@@ -468,11 +480,7 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
                 let class = get_window_class(hwnd);
                 let title = get_window_title(hwnd);
                 let visible = IsWindowVisible(hwnd) != 0;
-                if class != "Winit Thread Event Target"
-                    && class != "IME"
-                    && class != "MSCTFIME UI"
-                    && class != "NVOpenGLPbuffer"
-                {
+                if !is_auxiliary_window_class(&class) {
                     if title.contains("Another Encoder") {
                         *out = Some(hwnd);
                         return 0;
@@ -481,7 +489,7 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
                     }
                 }
             }
-            1 // Continue to find best candidate
+            1
         }
 
         let mut data = (my_pid, None);
@@ -490,29 +498,28 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
     }
 }
 
+unsafe fn register_hwnd_drop_hooks(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut DropTargetCom) {
+    let _ = RevokeDragDrop(hwnd);
+    ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, std::ptr::null_mut());
+    ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, std::ptr::null_mut());
+    ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, std::ptr::null_mut());
+
+    DragAcceptFiles(hwnd, 1);
+    let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_ACCEPTFILES);
+
+    SetWindowSubclass(hwnd, drop_subclass_proc, 1001, raw_com_ptr as usize);
+    let hr = RegisterDragDrop(hwnd, raw_com_ptr as *mut std::ffi::c_void);
+    log_dd(&format!("RegisterDragDrop({:p}) hr={:#x}", hwnd, hr));
+}
+
 unsafe extern "system" fn enum_child_windows_cb(
     child: *mut std::ffi::c_void,
     lparam: isize,
 ) -> i32 {
     let raw_com_ptr = lparam as *mut DropTargetCom;
-    let title = get_window_title(child);
-    let class = get_window_class(child);
-    log_dd(&format!("Found Child HWND {:p}, class='{}', title='{}'", child, class, title));
-
-    let _ = RevokeDragDrop(child);
-    ChangeWindowMessageFilterEx(child, WM_DROPFILES, MSGFLT_ALLOW, std::ptr::null_mut());
-    ChangeWindowMessageFilterEx(child, WM_COPYDATA, MSGFLT_ALLOW, std::ptr::null_mut());
-    ChangeWindowMessageFilterEx(child, WM_COPYGLOBALDATA, MSGFLT_ALLOW, std::ptr::null_mut());
-
-    DragAcceptFiles(child, 1);
-    let ex = GetWindowLongPtrW(child, GWL_EXSTYLE);
-    SetWindowLongPtrW(child, GWL_EXSTYLE, ex | WS_EX_ACCEPTFILES);
-
-    SetWindowSubclass(child, drop_subclass_proc, 1001, raw_com_ptr as usize);
-    let hr = RegisterDragDrop(child, raw_com_ptr as *mut std::ffi::c_void);
-    log_dd(&format!("Child HWND {:p} RegisterDragDrop hr={:#x}", child, hr));
-
-    1 // Continue
+    register_hwnd_drop_hooks(child, raw_com_ptr);
+    1
 }
 
 static ATTACHED_REAL_HWND: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -529,13 +536,7 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
     let class = get_window_class(hwnd);
     let visible = IsWindowVisible(hwnd) != 0;
 
-    let is_real = visible
-        && title.contains("Another Encoder")
-        && class != "Winit Thread Event Target"
-        && class != "IME"
-        && class != "MSCTFIME UI"
-        && class != "NVOpenGLPbuffer";
-    if is_real {
+    if visible && title.contains("Another Encoder") && !is_auxiliary_window_class(&class) {
         ATTACHED_REAL_HWND.store(hwnd as usize, Ordering::SeqCst);
         apply_window_rounded_corners(hwnd);
     }
@@ -545,22 +546,7 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
         hwnd, class, title
     ));
 
-    let revoke_hr = RevokeDragDrop(hwnd);
-    log_dd(&format!("RevokeDragDrop({:p}) hr={:#x}", hwnd, revoke_hr));
-
-    ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, std::ptr::null_mut());
-    ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, std::ptr::null_mut());
-    ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, std::ptr::null_mut());
-
-    DragAcceptFiles(hwnd, 1);
-    let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_ACCEPTFILES);
-
-    SetWindowSubclass(hwnd, drop_subclass_proc, 1001, raw_com_ptr as usize);
-
-    let hr = RegisterDragDrop(hwnd, raw_com_ptr as *mut std::ffi::c_void);
-    log_dd(&format!("RegisterDragDrop({:p}) hr={:#x}", hwnd, hr));
-
+    register_hwnd_drop_hooks(hwnd, raw_com_ptr);
     EnumChildWindows(hwnd, enum_child_windows_cb, raw_com_ptr as isize);
 }
 

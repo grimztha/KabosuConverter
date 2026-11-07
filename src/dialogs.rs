@@ -6,6 +6,14 @@ static LAST_OPENED_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 static MEDIA_DIALOG_ACTIVE: AtomicBool = AtomicBool::new(false);
 static FOLDER_DIALOG_ACTIVE: AtomicBool = AtomicBool::new(false);
 
+struct ActiveDialogGuard(&'static AtomicBool);
+
+impl Drop for ActiveDialogGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 pub fn get_last_opened_dir() -> Option<PathBuf> {
     LAST_OPENED_DIR.lock().ok().and_then(|d| d.clone())
 }
@@ -181,6 +189,44 @@ mod win {
         s
     }
 
+    /// Configures the starting folder on an `IFileOpenDialog` without disturbing its cached
+    /// Shell view when the dialog is already pointed at the same directory.
+    unsafe fn configure_dialog_folder(
+        dialog_ptr: *mut c_void,
+        vtbl: *const IFileOpenDialogVtbl,
+        suggested_dir: Option<&Path>,
+    ) {
+        let Some(dir) = suggested_dir.filter(|d| d.is_dir()) else {
+            return;
+        };
+
+        let last_dir = super::get_last_opened_dir();
+        if last_dir.as_deref() == Some(dir) {
+            // The dialog's client GUID is already at this folder; leave its Shell view untouched.
+            return;
+        }
+
+        let clean = dir.to_string_lossy();
+        let clean = clean.strip_prefix(r"\\?\").unwrap_or(&clean);
+        let dir_w = str_to_vec_u16(clean);
+        let mut shell_item: *mut c_void = std::ptr::null_mut();
+        if SHCreateItemFromParsingName(
+            dir_w.as_ptr(),
+            std::ptr::null_mut(),
+            &IID_ISHELLITEM,
+            &mut shell_item,
+        ) >= 0
+            && !shell_item.is_null()
+        {
+            if last_dir.is_some() {
+                let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
+            } else {
+                let _ = ((*vtbl).base.set_default_folder)(dialog_ptr, shell_item);
+            }
+            release(shell_item);
+        }
+    }
+
     pub fn pick_media_files(
         parent_hwnd: *mut c_void,
         suggested_dir: Option<&Path>,
@@ -208,10 +254,8 @@ mod win {
 
             let vtbl = *(dialog_ptr as *const *const IFileOpenDialogVtbl);
 
-            // Associate client GUID immediately after creation for clean state persistence
             let _ = ((*vtbl).base.set_client_guid)(dialog_ptr, &MEDIA_PICKER_GUID);
 
-            // 1. Get and preserve existing options, adding essential flags
             let mut options: FILEOPENDIALOGOPTIONS = 0;
             let _ = ((*vtbl).base.get_options)(dialog_ptr, &mut options);
             options |= FOS_ALLOWMULTISELECT
@@ -221,15 +265,12 @@ mod win {
                 | FOS_NOCHANGEDIR;
             let _ = ((*vtbl).base.set_options)(dialog_ptr, options);
 
-            // 2. Set dialog title
             let title_w = str_to_vec_u16("Select Media Files");
             let _ = ((*vtbl).base.set_title)(dialog_ptr, title_w.as_ptr());
 
-            // 3. Set default extension
             let def_ext_w = str_to_vec_u16("mp4");
             let _ = ((*vtbl).base.set_default_extension)(dialog_ptr, def_ext_w.as_ptr());
 
-            // 4. Set file filters
             let name_all_media = str_to_vec_u16("Video & Audio Files");
             let spec_all_media = str_to_vec_u16("*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m4v;*.flv;*.wmv;*.mp3;*.wav;*.flac;*.aac;*.m4a;*.ogg;*.opus;*.m4b");
 
@@ -263,46 +304,10 @@ mod win {
             let _ = ((*vtbl).base.set_file_types)(dialog_ptr, filter_specs.len() as u32, filter_specs.as_ptr());
             let _ = ((*vtbl).base.set_file_type_index)(dialog_ptr, 1);
 
-            // 5. Set starting folder: set SetDefaultFolder as a graceful fallback.
-            // Only explicitly call SetFolder if suggested_dir differs from the last opened directory.
-            // Calling SetFolder when the dialog is already at that location forces Windows Explorer
-            // to discard cached shell views and re-enumerate all metadata (causing "Working on it..." hangs
-            // on grouped folders like Downloads).
-            let last_dir = super::get_last_opened_dir();
-            let need_forced_navigation = match (&suggested_dir, &last_dir) {
-                (Some(s), Some(l)) => s != l,
-                (Some(_), None) => false,
-                _ => false,
-            };
+            configure_dialog_folder(dialog_ptr, vtbl, suggested_dir);
 
-            if let Some(dir) = suggested_dir {
-                if dir.is_dir() {
-                    let clean = dir.to_string_lossy();
-                    let clean = clean.strip_prefix(r"\\?\").unwrap_or(&clean);
-                    let dir_w = str_to_vec_u16(clean);
-                    let mut shell_item: *mut c_void = std::ptr::null_mut();
-                    if SHCreateItemFromParsingName(
-                        dir_w.as_ptr(),
-                        std::ptr::null_mut(),
-                        &IID_ISHELLITEM,
-                        &mut shell_item,
-                    ) >= 0 && !shell_item.is_null() {
-                        let _ = ((*vtbl).base.set_default_folder)(dialog_ptr, shell_item);
-                        if need_forced_navigation {
-                            let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
-                        }
-                        release(shell_item);
-                    }
-                }
-            }
-
-            // 6. Show dialog with parent HWND
             let owner_hwnd = parent_hwnd as HWND;
             let show_hr = ((*vtbl).base.base.show)(dialog_ptr, owner_hwnd);
-
-            if !owner_hwnd.is_null() {
-                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(owner_hwnd);
-            }
 
             let mut results = None;
             if show_hr == 0 {
@@ -372,7 +377,6 @@ mod win {
 
             let vtbl = *(dialog_ptr as *const *const IFileOpenDialogVtbl);
 
-            // Associate client GUID immediately after creation
             let _ = ((*vtbl).base.set_client_guid)(dialog_ptr, &FOLDER_PICKER_GUID);
 
             let mut options: FILEOPENDIALOGOPTIONS = 0;
@@ -387,40 +391,10 @@ mod win {
             let title_w = str_to_vec_u16(title);
             let _ = ((*vtbl).base.set_title)(dialog_ptr, title_w.as_ptr());
 
-            let last_dir = super::get_last_opened_dir();
-            let need_forced_navigation = match (&suggested_dir, &last_dir) {
-                (Some(s), Some(l)) => s != l,
-                (Some(_), None) => false,
-                _ => false,
-            };
-
-            if let Some(dir) = suggested_dir {
-                if dir.is_dir() {
-                    let clean = dir.to_string_lossy();
-                    let clean = clean.strip_prefix(r"\\?\").unwrap_or(&clean);
-                    let dir_w = str_to_vec_u16(clean);
-                    let mut shell_item: *mut c_void = std::ptr::null_mut();
-                    if SHCreateItemFromParsingName(
-                        dir_w.as_ptr(),
-                        std::ptr::null_mut(),
-                        &IID_ISHELLITEM,
-                        &mut shell_item,
-                    ) >= 0 && !shell_item.is_null() {
-                        let _ = ((*vtbl).base.set_default_folder)(dialog_ptr, shell_item);
-                        if need_forced_navigation {
-                            let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
-                        }
-                        release(shell_item);
-                    }
-                }
-            }
+            configure_dialog_folder(dialog_ptr, vtbl, suggested_dir);
 
             let owner_hwnd = parent_hwnd as HWND;
             let show_hr = ((*vtbl).base.base.show)(dialog_ptr, owner_hwnd);
-
-            if !owner_hwnd.is_null() {
-                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(owner_hwnd);
-            }
 
             let mut result = None;
             if show_hr == 0 {
@@ -500,11 +474,10 @@ pub fn pick_folder(
     }
 }
 
-/// Asynchronously presents the native media file picker on an isolated background STA thread.
-/// This prevents blocking the Slint event loop and ensures the Windows Shell message pump
-/// receives full priority for immediate folder enumeration and painting without stalling.
+/// Opens the native media file picker on a dedicated background STA thread so the UI
+/// event loop stays responsive and the Shell folder view has its own unblocked message pump.
 pub fn pick_media_files_async<F>(
-    parent_hwnd: *mut std::ffi::c_void,
+    _parent_hwnd: *mut std::ffi::c_void,
     suggested_dir: Option<PathBuf>,
     callback: F,
 ) where
@@ -517,13 +490,14 @@ pub fn pick_media_files_async<F>(
         return;
     }
 
-    let parent_usize = parent_hwnd as usize;
+    let guard = ActiveDialogGuard(&MEDIA_DIALOG_ACTIVE);
     let _ = std::thread::Builder::new()
         .name("media-file-dialog".into())
         .spawn(move || {
-            let hwnd = parent_usize as *mut std::ffi::c_void;
-            let res = pick_media_files(hwnd, suggested_dir.as_deref());
-            MEDIA_DIALOG_ACTIVE.store(false, Ordering::SeqCst);
+            let _guard = guard;
+            // Pass a null owner HWND because the dialog runs on its own STA thread;
+            // cross-thread owner HWNDs trigger AttachThreadInput and stall Shell view painting.
+            let res = pick_media_files(std::ptr::null_mut(), suggested_dir.as_deref());
             if let Some(paths) = res {
                 if !paths.is_empty() {
                     let _ = slint::invoke_from_event_loop(move || {
@@ -534,9 +508,9 @@ pub fn pick_media_files_async<F>(
         });
 }
 
-/// Asynchronously presents the native folder picker on an isolated background STA thread.
+/// Opens the native folder picker on a dedicated background STA thread.
 pub fn pick_folder_async<F>(
-    parent_hwnd: *mut std::ffi::c_void,
+    _parent_hwnd: *mut std::ffi::c_void,
     suggested_dir: Option<PathBuf>,
     title: &'static str,
     callback: F,
@@ -550,13 +524,12 @@ pub fn pick_folder_async<F>(
         return;
     }
 
-    let parent_usize = parent_hwnd as usize;
+    let guard = ActiveDialogGuard(&FOLDER_DIALOG_ACTIVE);
     let _ = std::thread::Builder::new()
         .name("folder-picker-dialog".into())
         .spawn(move || {
-            let hwnd = parent_usize as *mut std::ffi::c_void;
-            let res = pick_folder(hwnd, suggested_dir.as_deref(), title);
-            FOLDER_DIALOG_ACTIVE.store(false, Ordering::SeqCst);
+            let _guard = guard;
+            let res = pick_folder(std::ptr::null_mut(), suggested_dir.as_deref(), title);
             if let Some(path) = res {
                 let _ = slint::invoke_from_event_loop(move || {
                     callback(path);

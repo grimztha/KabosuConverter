@@ -326,7 +326,15 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
             ) {
                 let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
                 *lock = Some(session);
+            } else {
+                #[cfg(not(test))]
+                app_data.set_player_is_playing(false);
+                return;
             }
+        } else {
+            #[cfg(not(test))]
+            app_data.set_player_is_playing(false);
+            return;
         }
 
         let ui_w = ui.as_weak();

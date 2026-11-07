@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>High-performance, modern video & audio transcoding studio and universal stream downloader.</strong><br>
-  Built from scratch in <strong>Rust</strong> and <strong>Slint</strong>, powered by local <strong>FFmpeg 7+ / 8+</strong> and <strong>yt-dlp</strong> binaries.
+  Built from scratch in <strong>Rust</strong> and <strong>Slint</strong>, powered by local <strong>FFmpeg 8+</strong> and <strong>yt-dlp</strong> binaries.
 </p>
 
 <p align="center">
@@ -109,7 +109,7 @@ Featuring an intuitive **Studio Dark** aesthetic with vibrant lime-green accents
 | **Core Language** | [Rust](https://www.rust-lang.org/) (2021 Edition) | Memory-safe, concurrency-driven, zero-overhead systems language |
 | **GUI Framework** | [Slint](https://slint.dev/) (v1.18+) | Native declarative GUI compiled directly to native code with GPU rendering |
 | **Async Runtime** | [Tokio](https://tokio.rs/) (v1.46+) | Multi-threaded async engine powering non-blocking I/O, process management, and streaming |
-| **Media Processing** | [FFmpeg](https://ffmpeg.org/) (7+ / 8+) | High-performance encoding, decoding, filtering, and stream extraction engine |
+| **Media Processing** | [FFmpeg](https://ffmpeg.org/) (8+) | High-performance encoding, decoding, filtering, and stream extraction engine |
 | **Media Inspection** | [FFprobe](https://ffmpeg.org/ffprobe.html) | JSON-based deep container and stream metadata introspection |
 | **Media Preview** | [FFplay](https://ffmpeg.org/ffplay.html) | Synchronized hardware-accelerated playback and audio preview |
 | **Stream Downloader** | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Industry-standard web video extraction and format discovery tool |

@@ -13,7 +13,7 @@ fn main() {
         res.set("FileDescription", "Kabosu Converter — Professional Media Transcoder");
         res.set("ProductVersion", version);
         res.set("FileVersion", version);
-        res.set("LegalCopyright", "Copyright (c) SThao");
+        res.set("LegalCopyright", "Copyright (c) Kabosu Converter Contributors");
         if let Err(e) = res.compile() {
             eprintln!("Warning: Failed to compile windows resource: {}", e);
         }

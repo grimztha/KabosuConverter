@@ -45,7 +45,27 @@ $RECYCLE.BIN/
 .agents/
 .gemini/
 .claude/
+.antigravity/
 scratch/
 tasks/
 WALKTHROUGH.md
 ui.slint
+
+# Backups and patches
+*.bak
+*.patch
+*.diff
+
+# Environment files & secrets
+.env
+.env.*
+*.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local IDE / editor history
+.history/

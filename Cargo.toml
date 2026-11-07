@@ -1,12 +1,12 @@
 [package]
 name = "kabosu-converter"
 version = "0.14.0"
-authors = ["SThao <sthao42@users.noreply.github.com>"]
+authors = ["grimztha"]
 description = "Kabosu Converter — A modern media transcoder and universal video downloader built with Rust and Slint"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/sthao42/KabosuConverter"
-homepage = "https://github.com/sthao42/KabosuConverter"
+repository = "https://github.com/grimztha/KabosuConverter"
+homepage = "https://github.com/grimztha/KabosuConverter"
 readme = "README.md"
 keywords = ["video", "audio", "converter", "ffmpeg", "transcoder"]
 categories = ["multimedia::video", "multimedia::audio", "command-line-utilities"]

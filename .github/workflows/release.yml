@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -71,8 +71,6 @@ jobs:
           $STAGE = "stage-$TAG-${{ matrix.target }}"
           New-Item -ItemType Directory -Path $STAGE
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" -Destination "$STAGE/"
-          Copy-Item "README.md" -Destination "$STAGE/"
-          Copy-Item "LICENSE" -Destination "$STAGE/"
           Compress-Archive -Path "$STAGE/*" -DestinationPath $ARCHIVE
           (Get-FileHash -Algorithm SHA256 $ARCHIVE).Hash.ToLower() + "  $ARCHIVE" | Out-File -FilePath "$ARCHIVE.sha256" -Encoding ascii
           echo "ASSET=$ARCHIVE" >> $env:GITHUB_ENV
@@ -86,8 +84,6 @@ jobs:
           STAGE="stage-$TAG-${{ matrix.target }}"
           mkdir -p "$STAGE"
           cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "$STAGE/"
-          cp README.md "$STAGE/"
-          cp LICENSE "$STAGE/"
           tar -czvf "$ARCHIVE" -C "$STAGE" .
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           echo "ASSET=$ARCHIVE" >> $GITHUB_ENV

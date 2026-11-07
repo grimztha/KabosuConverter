@@ -1,6 +1,6 @@
 [package]
 name = "another-encoder"
-version = "0.13.0"
+version = "0.13.1"
 description = "A modern video encoder and editor built with Rust and Slint"
 edition = "2021"
 

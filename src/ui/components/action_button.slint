@@ -12,6 +12,7 @@ export component ActionButton inherits Rectangle {
     in property <length> font_size: Theme.font_body;
     in property <bool> is_disabled: false;
     in property <length> btn_radius: 6px;
+    in property <length> pad_horizontal: 8px;
     callback clicked();
 
     height: 34px;
@@ -25,9 +26,9 @@ export component ActionButton inherits Rectangle {
 
     HorizontalLayout {
         alignment: center;
-        spacing: 6px;
-        padding-left: 8px;
-        padding-right: 8px;
+        spacing: 4px;
+        padding-left: root.pad_horizontal;
+        padding-right: root.pad_horizontal;
 
         if root.has_icon : VerticalLayout {
             alignment: center;
@@ -46,6 +47,7 @@ export component ActionButton inherits Rectangle {
                 color: root.is_disabled ? Theme.text_muted : root.text_color;
                 font-size: root.font_size;
                 font-weight: 600;
+                overflow: elide;
             }
         }
     }

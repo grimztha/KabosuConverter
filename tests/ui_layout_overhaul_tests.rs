@@ -160,4 +160,18 @@ fn test_ui_layout_overhaul_lifecycle() {
     // 6. Source-Level Layout Verification (Finding #10: zero 1px dividers in transcoder_tab)
     let transcoder_src = std::fs::read_to_string("src/ui/views/transcoder_tab.slint").expect("read transcoder_tab");
     assert!(!transcoder_src.contains("Rectangle { height: 1px;"), "Transcoder tab must not contain redundant 1px divider lines");
+
+    // 7. EditPanel Layout & Right Side Cropping Verification
+    let edit_panel_src = std::fs::read_to_string("src/ui/views/edit_panel.slint").expect("read edit_panel");
+    assert!(edit_panel_src.contains("horizontal-stretch: 0;"), "EditPanel must specify horizontal-stretch: 0 to avoid being squeezed or stretched");
+    assert!(edit_panel_src.contains("width: 100%;"), "EditPanel ScrollView VerticalLayout must have width: 100% to prevent child overflow");
+    assert!(edit_panel_src.contains("padding-right: 12px;"), "EditPanel ScrollView VerticalLayout must provide right padding gutter for scrollbar");
+
+    // Ensure audio presets are compact and properly organized
+    assert!(edit_panel_src.contains("Quick Preset dB Scale (-12dB to +12dB)"), "Audio gain dB presets must be organized in a compact scale");
+    assert!(edit_panel_src.contains("Fine-Tuning Step Nudge (-1.0 dB / +1.0 dB)"), "Audio gain fine tuning must be organized with compact stepper buttons");
+    assert!(edit_panel_src.contains("width: 68px;"), "Fine-tuning buttons must have reduced, fixed width rather than stretching");
+
+    let action_btn_src = std::fs::read_to_string("src/ui/components/action_button.slint").expect("read action_button");
+    assert!(action_btn_src.contains("overflow: elide;"), "ActionButton text must have overflow: elide to prevent layout blowouts");
 }

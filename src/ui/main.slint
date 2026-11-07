@@ -356,6 +356,7 @@ export component MainWindow inherits Window {
 
             // RIGHT-SIDE EXPANDABLE / COLLAPSIBLE EDITING COLUMN (Shown when in player tab and media is loaded)
             if AppData.active_tab == 1 && AppData.player_has_media : EditPanel {
+                horizontal-stretch: 0;
                 request_focus => { fs.focus(); }
             }
         }

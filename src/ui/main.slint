@@ -16,7 +16,7 @@ import { EditPanel } from "views/edit_panel.slint";
 import { QueuePanel } from "views/queue_panel.slint";
 
 export component MainWindow inherits Window {
-    title: "Another Encoder — Professional Media Transcoder";
+    title: "Kabosu Converter — Professional Media Transcoder";
     icon: @image-url("icons/app-icon.png");
     min-width: 960px;
     min-height: 650px;
@@ -117,7 +117,7 @@ export component MainWindow inherits Window {
                                 if AppData.queue_panel_expanded : VerticalLayout {
                                     alignment: center;
                                     Text {
-                                        text: "ANOTHER ENCODER";
+                                        text: "KABOSU CONVERTER";
                                         font-size: 12px;
                                         font-weight: 700;
                                         letter-spacing: 0.5px;
@@ -387,7 +387,7 @@ export component MainWindow inherits Window {
                         text: AppData.log_preview;
                         font-size: 11px;
                         font-family: "Consolas";
-                        color: #a5f3fc;
+                        color: #bef264;
                         wrap: word-wrap;
                     }
                 }
@@ -448,7 +448,7 @@ export component MainWindow inherits Window {
                                 width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
                                 height: 100%;
                                 border-radius: 3px;
-                                background: @linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #10b981 100%);
+                                background: @linear-gradient(90deg, #65a30d 0%, #a3e635 50%, #10b981 100%);
                             }
                         }
                     }

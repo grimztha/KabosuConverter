@@ -57,7 +57,19 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_select_output_dir(move || {
-            if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+            let (parent_hwnd, suggested) = if let Some(ui) = ui_handle.upgrade() {
+                let hwnd = crate::dialogs::get_window_hwnd(ui.window());
+                let cur = ui.global::<AppData>().get_ytdlp_output_dir().to_string();
+                let dir = if !cur.is_empty() { Some(PathBuf::from(cur)) } else { None };
+                (hwnd, dir)
+            } else {
+                (std::ptr::null_mut(), None)
+            };
+            if let Some(folder) = crate::dialogs::pick_folder(
+                parent_hwnd,
+                suggested.as_deref(),
+                "Select yt-dlp Output Directory",
+            ) {
                 if let Some(ui) = ui_handle.upgrade() {
                     let folder_str = folder.to_string_lossy().to_string();
                     let data = ui.global::<AppData>();

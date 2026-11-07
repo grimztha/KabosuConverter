@@ -277,16 +277,30 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         let task_ctx = ctx.task_context();
 
         ui.global::<AppLogic>().on_add_files(move || {
-            let files = rfd::FileDialog::new()
-                .set_title("Select Media Files")
-                .add_filter(
-                    "Video & Audio",
-                    &[
-                        "mp4", "mkv", "mov", "avi", "webm", "ts", "m4v", "flv", "wmv", "mp3",
-                        "wav", "flac", "aac", "m4a", "ogg", "opus",
-                    ],
-                )
-                .pick_files();
+            let (parent_hwnd, suggested_dir) = if let Some(ui) = ui_handle.upgrade() {
+                let hwnd = crate::dialogs::get_window_hwnd(ui.window());
+                let app_data = ui.global::<AppData>();
+                let sel_path = app_data.get_selected_file_path().to_string();
+                let dir = if !sel_path.is_empty() {
+                    let p = PathBuf::from(sel_path);
+                    p.parent().map(|d| d.to_path_buf())
+                } else {
+                    let queue: Vec<QueueFile> = app_data.get_queue().iter().collect();
+                    queue.last().and_then(|item| {
+                        let p = item.file_path.to_string();
+                        if !p.is_empty() {
+                            PathBuf::from(p).parent().map(|d| d.to_path_buf())
+                        } else {
+                            None
+                        }
+                    }).or_else(crate::dialogs::get_last_opened_dir)
+                };
+                (hwnd, dir)
+            } else {
+                (std::ptr::null_mut(), crate::dialogs::get_last_opened_dir())
+            };
+
+            let files = crate::dialogs::pick_media_files(parent_hwnd, suggested_dir.as_deref());
 
             if let Some(paths) = files {
                 process_incoming_paths(paths, ui_handle.clone(), task_ctx.clone());

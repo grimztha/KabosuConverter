@@ -16,6 +16,7 @@ use another_encoder::settings;
 use another_encoder::ytdlp;
 
 mod context;
+mod dialogs;
 mod handlers;
 mod utils;
 mod workers;

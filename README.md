@@ -19,86 +19,36 @@
 
 ---
 
-## Overview
+## About
 
-**Kabosu Converter** is a desktop application engineered in native Rust to replace bloated, electron-based, or JVM-dependent transcoders with an ultra-responsive, memory-safe, hardware-accelerated transcoding studio. 
+**Kabosu Converter** is a lightweight, studio-grade desktop media encoder and universal web video downloader. Designed as a modern, high-performance alternative to bloated, electron-based, or JVM-dependent transcoders, it enables rapid video and audio conversion, instant lossless trimming, aspect-ratio cropping, loudness normalization, and direct media downloading from major platforms.
 
-Featuring an intuitive **Studio Dark** aesthetic with vibrant lime-green accents, Kabosu Converter pairs real-time visual scrubbing, interactive video cropping, audio normalization, and frame-accurate timeline trimming with professional intermediate codecs (ProRes, DNxHR), lossless container remuxing, and a universal web stream downloader.
+Built with **Rust** for native performance and memory safety, **Slint** for a fluid, hardware-accelerated declarative UI, and backed by the asynchronous **Tokio** runtime, Kabosu Converter harnesses local **FFmpeg 8+** and **yt-dlp** binaries to deliver zero-lag processing and instant operations.
+
+---
+
+## Install
+
+### Download & Run (Prebuilt)
+
+1. Download the latest release for your platform from [**Releases**](https://github.com/grimztha/KabosuConverter/releases):
+   - **Windows**: `kabosu-converter-v*-x86_64-pc-windows-msvc.zip`
+   - **macOS**: `kabosu-converter-v*-apple-darwin.tar.gz` (Apple Silicon or Intel)
+   - **Linux**: `kabosu-converter-v*-x86_64-unknown-linux-gnu.tar.gz`
+2. Extract the archive and launch `kabosu-converter` (or `kabosu-converter.exe` on Windows).
+3. **Zero-Config Setup**: Required external media tools (`FFmpeg`, `yt-dlp`) are automatically provisioned and verified into your local user data folder on first run if not already present on your machine.
 
 ---
 
 ## Highlights & Key Features
 
-### 🎬 Media Player & Timeline Studio
-- **Dual Visual Monitor**:
-  - **Video Screen**: Real-time debounced frame extraction at the playhead position with timecode display, playback status, and aspect-ratio preservation.
-  - **Audio Screen**: Multi-band dynamic equalizer visualizer with glowing amplitude bars and large timecode indicator.
-- **Interactive Timeline Scrubber**:
-  - Precision timeline scrubber with real-time needle cursor.
-  - Glowing visual range highlighting between **In Point** and **Out Point**.
-  - Multi-tier timecode display: Playhead position, Trimmed Span duration (`In → Out`), and Total Duration.
-- **Dedicated Trimming Controls**:
-  - `[ Set In ]` and `[ Set Out ]` cut boundaries with single-click precision.
-  - `[ ◀ Jump In ]` and `[ Jump Out ▶ ]` playhead navigation.
-  - `[ ✂ Preview Trim ]` to audition the exact trimmed cut.
-  - Frame-accurate micro-stepping (`-5s`, `-1s`, `-0.1s`, `+0.1s`, `+1s`, `+5s`).
-  - Two-way timecode synchronization: manual timestamp editing immediately updates timeline markers.
-- **Instant Lossless Export**:
-  - `[ ✂ Lossless Cut Now ]`: Exports selected range without re-encoding in milliseconds.
-  - `[ ⚙ Codec Settings → ]`: Transfers the trimmed clip to the Transcoder tab with active in/out points automatically applied.
-- **Native Player Integration**: Launches full-speed GPU accelerated preview with native audio playback via bundled `ffplay`.
-
-### 📐 Interactive Video Crop & Geometry Studio
-- **On-Canvas Interactive Crop Box**:
-  - 8 draggable resize handles for fluid, responsive crop boundary adjustment.
-  - Fully draggable crop zone with real-time coordinate and dimension updates.
-  - Keyboard arrow nudge mode with Center alignment button.
-- **Aspect Ratio Lock Presets**:
-  - `Free (Unlocked)`, `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `2:3`, `3:2`, `21:9`, `4:5`.
-- **Rotation & Mirroring**:
-  - 90°, -90°, and 180° instant video rotation.
-  - Horizontal flip and vertical mirror controls.
-
-### 🔊 Studio Audio Editing & Broadcast Normalization
-- **Gain & Attenuation**: Adjustable volume control from `-24 dB` to `+24 dB` with stepped quick-presets (`-12dB`, `-6dB`, `0dB`, `+3dB`, `+6dB`, `+12dB`, `±1.0dB`).
-- **Broadcast Loudness Normalization (EBU R128 / LUFS)**: Integrated multi-pass `loudnorm` filter with broadcast-standard profiles:
-  - **EBU R128** (-23 LUFS)
-  - **YouTube / Spotify** (-14 LUFS)
-  - **Apple Podcasts** (-16 LUFS)
-  - **Loud Web** (-12 LUFS)
-- **Live Stereo VU Peak Meters**: Dual-channel (L/R) dynamic peak level visualization calibrated from `-60 dB` to `0 dB`.
-
-### ⚡ Professional Transcoding & Lossless Remuxing
-- **Modern Distribution Codecs**:
-  - **H.264 (AVC)**: Multi-threaded `libx264`, NVIDIA NVENC (`h264_nvenc`), Intel QSV, AMD AMF with CRF, CBR, and VBR rate controls.
-  - **H.265 (HEVC)**: `libx265` and `hevc_nvenc` with Apple QuickTime compatibility tagging (`-tag:v hvc1`).
-  - **AV1**: `libsvtav1` and `av1_nvenc` with 10-bit color depth (`yuv420p10le`).
-  - **VP9**: `libvpx-vp9` with row-based multi-threading for web delivery.
-- **Post-Production & Intermediate Workflows**:
-  - **Apple ProRes**: Full profile suite via `prores_ks` (Proxy, LT, Standard 422, HQ, 4444 with alpha, 4444 XQ).
-  - **Avid DNxHD & DNxHR**: High-bitrate broadcast editing formats (`dnxhr_hq`, `dnxhd`).
-- **Lossless Stream Operations (Zero Quality Loss)**:
-  - **Rewrap / Remux**: Instantly swap containers between `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, and `.ts` without re-encoding (`-c copy`).
-  - **Stream Demuxing**: Isolate video streams, extract raw or converted audio tracks, or demux subtitles.
-  - **Audio Track Replacement**: Swap audio tracks into an existing video without touching video streams.
-
-### 🌐 Universal Media Downloader (`yt-dlp`)
-- **Direct Stream Inspection**: Paste stream URLs to discover all available formats, video resolutions, video/audio codecs, and standalone audio tracks.
-- **Supported Platforms**: YouTube, Twitch, Vimeo, TikTok, Bilibili, SoundCloud, X / Twitter, direct HLS / M3U8 livestream playlists.
-- **Format Selection**: Best Video + Audio muxing, 4K/1080p MP4/MKV presets, or standalone high-quality audio extraction (MP3, WAV, FLAC, Opus).
-- **Integrated Workflow**: One-click download transfer directly to the Player/Trimmer or the Queue for instant editing and transcoding.
-
-### 📦 Self-Contained Binary Management
-- **Zero-Config Deployment**: The application runs portably without requiring manual installation of external dependencies.
-- **Three-Tier Binary Discovery**:
-  1. Checks App-Local directory:
-     - **Windows**: `%LOCALAPPDATA%\Kabosu\bin\`
-     - **macOS**: `~/Library/Application Support/Kabosu/bin/`
-     - **Linux**: `~/.local/share/kabosu/bin/`
-  2. Fallback to system `$PATH` for custom installations.
-  3. Automatic streaming background download strictly into the app-local folder if binaries are missing.
-- **SHA-256 Integrity Verification**: Every binary download is verified against official checksum manifests before extraction.
-- **Clean Uninstallation**: All settings, caches, and downloaded tools reside inside the local app data folder; deleting the Kabosu folder leaves your system completely untouched.
+- **🎬 Media Player & Frame-Accurate Trimming**: Real-time visual scrubbing, audio equalizer visualizer, glowing range markers (`In` / `Out`), precision frame stepping, and instant lossless cut export without re-encoding.
+- **📐 Interactive Crop & Video Geometry**: Live on-canvas draggable crop box with 8 handles, aspect ratio lock presets (`16:9`, `9:16`, `4:3`, `1:1`, etc.), keyboard arrow nudge, 90°/180° rotation, and mirroring.
+- **🔊 Studio Audio Editing & Normalization**: Volume gain/attenuation (`-24 dB` to `+24 dB`), broadcast-standard EBU R128 loudness normalization, and live dual-channel VU dynamic peak meters.
+- **⚡ High-Performance Transcoding**: Hardware-accelerated encoding (NVENC, QSV, AMF) for H.264, H.265 (Apple `hvc1`), AV1 (10-bit), VP9, ProRes (Proxy to 4444 XQ), and Avid DNxHR/DNxHD.
+- **🔄 Lossless Container Remuxing**: Swap containers (`.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.ts`), isolate video/audio streams, or swap audio tracks in milliseconds with zero quality loss.
+- **🌐 Universal Media Downloader**: Paste stream links from YouTube, Twitch, Vimeo, TikTok, Bilibili, SoundCloud, Twitter/X, or direct HLS playlists to inspect available formats and download video or audio with one click.
+- **📦 Self-Contained Binary Management**: Automatic background discovery, streaming download, and SHA-256 verification of FFmpeg and yt-dlp into your clean user app data directory.
 
 ---
 
@@ -204,17 +154,6 @@ cargo build --release
 The optimized standalone binary will be generated at:
 - **Windows**: `target/release/kabosu-converter.exe`
 - **macOS / Linux**: `target/release/kabosu-converter`
-
----
-
-## Prebuilt Binaries
-
-Precompiled standalone packages are automatically built and published for every release via GitHub Actions:
-- **Windows x64** (`.zip`)
-- **macOS Apple Silicon & Intel** (`.tar.gz`)
-- **Linux x64** (`.tar.gz`)
-
-Check the [Releases](https://github.com/grimztha/KabosuConverter/releases) page for the latest version.
 
 ---
 

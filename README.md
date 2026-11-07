@@ -109,3 +109,9 @@ cargo build --release
 ```
 The optimized standalone executable will be located at:
 `target/release/kabosu-converter.exe`
+
+---
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

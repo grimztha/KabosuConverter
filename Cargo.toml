@@ -3,6 +3,7 @@ name = "kabosu-converter"
 version = "0.14.0"
 description = "Kabosu Converter — A modern media transcoder and universal video downloader built with Rust and Slint"
 edition = "2021"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }

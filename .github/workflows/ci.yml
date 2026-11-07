@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -38,7 +38,8 @@ jobs:
             libxi-dev \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
-            libasound2-dev
+            libasound2-dev \
+            xvfb
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -49,5 +50,10 @@ jobs:
       - name: Cargo Check
         run: cargo check --verbose
 
-      - name: Cargo Test
+      - name: Cargo Test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a cargo test --verbose
+
+      - name: Cargo Test (macOS & Windows)
+        if: runner.os != 'Linux'
         run: cargo test --verbose

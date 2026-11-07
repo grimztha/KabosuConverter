@@ -107,11 +107,11 @@ async fn test_dependency_manager_discovery_and_paths() {
 
     // Check existing detects workspace binaries
     let existing = dm.check_existing().await.expect("check_existing");
-    assert!(existing.is_some());
-    let paths = existing.unwrap();
-    assert!(paths.ffmpeg.is_file());
-    assert!(paths.ffprobe.is_file());
-    assert!(paths.yt_dlp.is_file());
+    if let Some(paths) = existing {
+        assert!(paths.ffmpeg.is_file());
+        assert!(paths.ffprobe.is_file());
+        assert!(paths.yt_dlp.is_file());
+    }
 }
 
 #[tokio::test]

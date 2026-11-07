@@ -1,6 +1,6 @@
 [package]
 name = "another-encoder"
-version = "0.13.1"
+version = "0.13.2"
 description = "A modern video encoder and editor built with Rust and Slint"
 edition = "2021"
 
@@ -33,6 +33,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Com",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 [build-dependencies]

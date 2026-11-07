@@ -300,11 +300,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 (std::ptr::null_mut(), crate::dialogs::get_last_opened_dir())
             };
 
-            let files = crate::dialogs::pick_media_files(parent_hwnd, suggested_dir.as_deref());
+            let ui_weak = ui_handle.clone();
+            let task_ctx_c = task_ctx.clone();
 
-            if let Some(paths) = files {
-                process_incoming_paths(paths, ui_handle.clone(), task_ctx.clone());
-            }
+            crate::dialogs::pick_media_files_async(parent_hwnd, suggested_dir, move |paths| {
+                process_incoming_paths(paths, ui_weak, task_ctx_c);
+            });
         });
     }
 

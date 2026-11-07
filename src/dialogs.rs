@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 static LAST_OPENED_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
+static MEDIA_DIALOG_ACTIVE: AtomicBool = AtomicBool::new(false);
+static FOLDER_DIALOG_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub fn get_last_opened_dir() -> Option<PathBuf> {
     LAST_OPENED_DIR.lock().ok().and_then(|d| d.clone())
@@ -65,6 +68,8 @@ mod win {
 
     const IID_IFILEOPENDIALOG: GUID = GUID::from_u128(0xd57c7288_d4ad_4768_be02_9d969532d960);
     const IID_ISHELLITEM: GUID = GUID::from_u128(0x43826d1e_e718_42ee_bc55_a1e261c37bfe);
+    const MEDIA_PICKER_GUID: GUID = GUID::from_u128(0xb9b1e408_a9f0_45d3_8e5f_3f173c4d1d41);
+    const FOLDER_PICKER_GUID: GUID = GUID::from_u128(0x4a123bc8_628e_4e88_a2bb_5d9321bf8310);
 
     #[repr(C)]
     struct IUnknownVtbl {
@@ -106,7 +111,7 @@ mod win {
         add_place: usize,
         set_default_extension: unsafe extern "system" fn(this: *mut c_void, pszdefaultextension: PCWSTR) -> HRESULT,
         close: usize,
-        set_client_guid: usize,
+        set_client_guid: unsafe extern "system" fn(this: *mut c_void, pguid: *const GUID) -> HRESULT,
         clear_client_data: usize,
         set_filter: usize,
     }
@@ -203,6 +208,9 @@ mod win {
 
             let vtbl = *(dialog_ptr as *const *const IFileOpenDialogVtbl);
 
+            // Associate client GUID immediately after creation for clean state persistence
+            let _ = ((*vtbl).base.set_client_guid)(dialog_ptr, &MEDIA_PICKER_GUID);
+
             // 1. Get and preserve existing options, adding essential flags
             let mut options: FILEOPENDIALOGOPTIONS = 0;
             let _ = ((*vtbl).base.get_options)(dialog_ptr, &mut options);
@@ -255,7 +263,18 @@ mod win {
             let _ = ((*vtbl).base.set_file_types)(dialog_ptr, filter_specs.len() as u32, filter_specs.as_ptr());
             let _ = ((*vtbl).base.set_file_type_index)(dialog_ptr, 1);
 
-            // 5. Explicitly set starting directory if available, forcing Shell View refresh
+            // 5. Set starting folder: set SetDefaultFolder as a graceful fallback.
+            // Only explicitly call SetFolder if suggested_dir differs from the last opened directory.
+            // Calling SetFolder when the dialog is already at that location forces Windows Explorer
+            // to discard cached shell views and re-enumerate all metadata (causing "Working on it..." hangs
+            // on grouped folders like Downloads).
+            let last_dir = super::get_last_opened_dir();
+            let need_forced_navigation = match (&suggested_dir, &last_dir) {
+                (Some(s), Some(l)) => s != l,
+                (Some(_), None) => false,
+                _ => false,
+            };
+
             if let Some(dir) = suggested_dir {
                 if dir.is_dir() {
                     let clean = dir.to_string_lossy();
@@ -268,8 +287,10 @@ mod win {
                         &IID_ISHELLITEM,
                         &mut shell_item,
                     ) >= 0 && !shell_item.is_null() {
-                        let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
                         let _ = ((*vtbl).base.set_default_folder)(dialog_ptr, shell_item);
+                        if need_forced_navigation {
+                            let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
+                        }
                         release(shell_item);
                     }
                 }
@@ -278,6 +299,10 @@ mod win {
             // 6. Show dialog with parent HWND
             let owner_hwnd = parent_hwnd as HWND;
             let show_hr = ((*vtbl).base.base.show)(dialog_ptr, owner_hwnd);
+
+            if !owner_hwnd.is_null() {
+                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(owner_hwnd);
+            }
 
             let mut results = None;
             if show_hr == 0 {
@@ -347,6 +372,9 @@ mod win {
 
             let vtbl = *(dialog_ptr as *const *const IFileOpenDialogVtbl);
 
+            // Associate client GUID immediately after creation
+            let _ = ((*vtbl).base.set_client_guid)(dialog_ptr, &FOLDER_PICKER_GUID);
+
             let mut options: FILEOPENDIALOGOPTIONS = 0;
             let _ = ((*vtbl).base.get_options)(dialog_ptr, &mut options);
             options |= FOS_PICKFOLDERS
@@ -358,6 +386,13 @@ mod win {
 
             let title_w = str_to_vec_u16(title);
             let _ = ((*vtbl).base.set_title)(dialog_ptr, title_w.as_ptr());
+
+            let last_dir = super::get_last_opened_dir();
+            let need_forced_navigation = match (&suggested_dir, &last_dir) {
+                (Some(s), Some(l)) => s != l,
+                (Some(_), None) => false,
+                _ => false,
+            };
 
             if let Some(dir) = suggested_dir {
                 if dir.is_dir() {
@@ -371,8 +406,10 @@ mod win {
                         &IID_ISHELLITEM,
                         &mut shell_item,
                     ) >= 0 && !shell_item.is_null() {
-                        let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
                         let _ = ((*vtbl).base.set_default_folder)(dialog_ptr, shell_item);
+                        if need_forced_navigation {
+                            let _ = ((*vtbl).base.set_folder)(dialog_ptr, shell_item);
+                        }
                         release(shell_item);
                     }
                 }
@@ -380,6 +417,10 @@ mod win {
 
             let owner_hwnd = parent_hwnd as HWND;
             let show_hr = ((*vtbl).base.base.show)(dialog_ptr, owner_hwnd);
+
+            if !owner_hwnd.is_null() {
+                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(owner_hwnd);
+            }
 
             let mut result = None;
             if show_hr == 0 {
@@ -457,6 +498,71 @@ pub fn pick_folder(
         }
         dialog.pick_folder()
     }
+}
+
+/// Asynchronously presents the native media file picker on an isolated background STA thread.
+/// This prevents blocking the Slint event loop and ensures the Windows Shell message pump
+/// receives full priority for immediate folder enumeration and painting without stalling.
+pub fn pick_media_files_async<F>(
+    parent_hwnd: *mut std::ffi::c_void,
+    suggested_dir: Option<PathBuf>,
+    callback: F,
+) where
+    F: FnOnce(Vec<PathBuf>) + Send + 'static,
+{
+    if MEDIA_DIALOG_ACTIVE
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+
+    let parent_usize = parent_hwnd as usize;
+    let _ = std::thread::Builder::new()
+        .name("media-file-dialog".into())
+        .spawn(move || {
+            let hwnd = parent_usize as *mut std::ffi::c_void;
+            let res = pick_media_files(hwnd, suggested_dir.as_deref());
+            MEDIA_DIALOG_ACTIVE.store(false, Ordering::SeqCst);
+            if let Some(paths) = res {
+                if !paths.is_empty() {
+                    let _ = slint::invoke_from_event_loop(move || {
+                        callback(paths);
+                    });
+                }
+            }
+        });
+}
+
+/// Asynchronously presents the native folder picker on an isolated background STA thread.
+pub fn pick_folder_async<F>(
+    parent_hwnd: *mut std::ffi::c_void,
+    suggested_dir: Option<PathBuf>,
+    title: &'static str,
+    callback: F,
+) where
+    F: FnOnce(PathBuf) + Send + 'static,
+{
+    if FOLDER_DIALOG_ACTIVE
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+
+    let parent_usize = parent_hwnd as usize;
+    let _ = std::thread::Builder::new()
+        .name("folder-picker-dialog".into())
+        .spawn(move || {
+            let hwnd = parent_usize as *mut std::ffi::c_void;
+            let res = pick_folder(hwnd, suggested_dir.as_deref(), title);
+            FOLDER_DIALOG_ACTIVE.store(false, Ordering::SeqCst);
+            if let Some(path) = res {
+                let _ = slint::invoke_from_event_loop(move || {
+                    callback(path);
+                });
+            }
+        });
 }
 
 #[cfg(test)]

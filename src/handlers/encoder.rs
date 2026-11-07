@@ -28,19 +28,21 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             } else {
                 (std::ptr::null_mut(), None)
             };
-            if let Some(folder) = crate::dialogs::pick_folder(
+            let ui_w = ui_handle.clone();
+            crate::dialogs::pick_folder_async(
                 parent_hwnd,
-                suggested.as_deref(),
+                suggested,
                 "Select Output Directory",
-            ) {
-                if let Some(ui) = ui_handle.upgrade() {
-                    let folder_str = folder.to_string_lossy().to_string();
-                    let data = ui.global::<AppData>();
-                    data.set_output_directory(SharedString::from(&folder_str));
-                    data.set_ytdlp_output_dir(SharedString::from(&folder_str));
-                    crate::handlers::settings::save_settings_from_app_data(&data);
-                }
-            }
+                move |folder| {
+                    if let Some(ui) = ui_w.upgrade() {
+                        let folder_str = folder.to_string_lossy().to_string();
+                        let data = ui.global::<AppData>();
+                        data.set_output_directory(SharedString::from(&folder_str));
+                        data.set_ytdlp_output_dir(SharedString::from(&folder_str));
+                        crate::handlers::settings::save_settings_from_app_data(&data);
+                    }
+                },
+            );
         });
     }
 

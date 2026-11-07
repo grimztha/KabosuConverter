@@ -6,6 +6,7 @@ import { ActionButton } from "../components/action_button.slint";
 
 export component EditPanel inherits HorizontalLayout {
     callback request_focus();
+    property <bool> confirm_reset: false;
 
                 spacing: 0px;
 
@@ -31,11 +32,11 @@ export component EditPanel inherits HorizontalLayout {
                             alignment: center;
                             IconButton {
                                 btn_width: 26px;
-                                btn_height: 26px;
+                                btn_height: Theme.btn_height_sm;
                                 icon_source: @image-url("../icons/chevron-left.svg");
                                 has_icon: true;
                                 icon_size: 13px;
-                                text_color: (AppData.has_active_video_edits || AppData.has_active_audio_edits) ? #38bdf8 : #a1a1aa;
+                                text_color: (AppData.has_active_video_edits || AppData.has_active_audio_edits) ? Theme.accent_cyan : Theme.text_muted;
                                 hover_bg: #26262e;
                                 clicked => { AppLogic.toggle_edit_panel(); }
                             }
@@ -47,7 +48,7 @@ export component EditPanel inherits HorizontalLayout {
                                 width: 8px;
                                 height: 8px;
                                 border-radius: 4px;
-                                background: #38bdf8;
+                                background: Theme.accent_cyan;
                             }
                         }
                     }
@@ -67,7 +68,7 @@ export component EditPanel inherits HorizontalLayout {
                                     source: @image-url("../icons/sliders.svg");
                                     width: 14px;
                                     height: 14px;
-                                    colorize: #38bdf8;
+                                    colorize: Theme.accent_cyan;
                                 }
                             }
 
@@ -75,7 +76,7 @@ export component EditPanel inherits HorizontalLayout {
                                 alignment: center;
                                 Text {
                                     text: "Editing";
-                                    font-size: 13px;
+                                    font-size: Theme.font_body;
                                     font-weight: 700;
                                     color: Theme.text_primary;
                                 }
@@ -86,20 +87,27 @@ export component EditPanel inherits HorizontalLayout {
                             if (AppData.has_active_video_edits || AppData.has_active_audio_edits) : VerticalLayout {
                                 alignment: center;
                                 ActionButton {
-                                    width: 58px;
-                                    height: 22px;
-                                    title: "Reset All";
-                                    fill_color: Theme.btn_neutral_bg;
-                                    hover_color: Theme.btn_neutral_hover;
-                                    text_color: #f87171;
-                                    font_size: 9.5px;
-                                    clicked => { AppLogic.reset_all_edits(); }
+                                    width: root.confirm_reset ? 76px : 64px;
+                                    height: Theme.btn_height_sm;
+                                    title: root.confirm_reset ? "Confirm?" : "Reset All";
+                                    fill_color: root.confirm_reset ? Theme.accent_red : Theme.btn_neutral_bg;
+                                    hover_color: root.confirm_reset ? Theme.accent_red_hover : Theme.btn_neutral_hover;
+                                    text_color: root.confirm_reset ? #ffffff : Theme.accent_red;
+                                    font_size: Theme.font_badge;
+                                    clicked => {
+                                        if root.confirm_reset {
+                                            root.confirm_reset = false;
+                                            AppLogic.reset_all_edits();
+                                        } else {
+                                            root.confirm_reset = true;
+                                        }
+                                    }
                                 }
                             }
 
                             IconButton {
                                 btn_width: 24px;
-                                btn_height: 24px;
+                                btn_height: Theme.btn_height_sm;
                                 icon_source: @image-url("../icons/chevron-right.svg");
                                 has_icon: true;
                                 icon_size: 13px;
@@ -122,7 +130,7 @@ export component EditPanel inherits HorizontalLayout {
                                     border-radius: 7px;
                                     background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.video_rotation_index != 0 ? #38bdf866 : Theme.card_border;
+                                    border-color: AppData.video_rotation_index != 0 ? Theme.accent_cyan.with-alpha(0.40) : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -140,9 +148,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 text: AppData.video_rotation_index == 0 ? "0° (Original)" :
                                                       (AppData.video_rotation_index == 1 ? "90° CW" :
                                                       (AppData.video_rotation_index == 2 ? "-90° CCW" : "180° Upside Down"));
-                                                font-size: 10px;
+                                                font-size: Theme.font_badge;
                                                 font-weight: 700;
-                                                color: AppData.video_rotation_index != 0 ? #38bdf8 : Theme.text_muted;
+                                                color: AppData.video_rotation_index != 0 ? Theme.accent_cyan : Theme.text_muted;
                                             }
                                         }
 
@@ -153,8 +161,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "0°";
-                                                fill_color: AppData.video_rotation_index == 0 ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_rotation_index == 0 ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_rotation_index == 0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 0 ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_rotation_index == 0 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(0); }
@@ -164,8 +172,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "90°";
-                                                fill_color: AppData.video_rotation_index == 1 ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_rotation_index == 1 ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_rotation_index == 1 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 1 ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_rotation_index == 1 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(1); }
@@ -175,8 +183,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "-90°";
-                                                fill_color: AppData.video_rotation_index == 2 ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_rotation_index == 2 ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_rotation_index == 2 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 2 ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_rotation_index == 2 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(2); }
@@ -186,8 +194,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "180°";
-                                                fill_color: AppData.video_rotation_index == 3 ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_rotation_index == 3 ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_rotation_index == 3 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_rotation_index == 3 ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_rotation_index == 3 ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 11px;
                                                 clicked => { AppLogic.set_video_rotation(3); }
@@ -201,7 +209,7 @@ export component EditPanel inherits HorizontalLayout {
                                     border-radius: 7px;
                                     background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf866 : Theme.card_border;
+                                    border-color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? Theme.accent_cyan.with-alpha(0.40) : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -219,9 +227,9 @@ export component EditPanel inherits HorizontalLayout {
                                                 text: (AppData.video_flip_horizontal && AppData.video_flip_vertical) ? "H + V Flipped" :
                                                       (AppData.video_flip_horizontal ? "Horizontal Mirror" :
                                                       (AppData.video_flip_vertical ? "Vertical Flip" : "Normal"));
-                                                font-size: 10px;
+                                                font-size: Theme.font_badge;
                                                 font-weight: 700;
-                                                color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? #38bdf8 : Theme.text_muted;
+                                                color: (AppData.video_flip_horizontal || AppData.video_flip_vertical) ? Theme.accent_cyan : Theme.text_muted;
                                             }
                                         }
 
@@ -232,8 +240,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "Flip Horizontal";
-                                                fill_color: AppData.video_flip_horizontal ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_flip_horizontal ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_flip_horizontal ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_flip_horizontal ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_flip_horizontal ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 10.5px;
                                                 clicked => { AppLogic.toggle_flip_horizontal(); }
@@ -243,8 +251,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 horizontal-stretch: 1;
                                                 height: 28px;
                                                 title: "Flip Vertical";
-                                                fill_color: AppData.video_flip_vertical ? #0284c7 : Theme.btn_neutral_bg;
-                                                hover_color: AppData.video_flip_vertical ? #0369a1 : Theme.btn_neutral_hover;
+                                                fill_color: AppData.video_flip_vertical ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: AppData.video_flip_vertical ? Theme.accent_primary_hover : Theme.btn_neutral_hover;
                                                 text_color: AppData.video_flip_vertical ? #ffffff : Theme.btn_neutral_text;
                                                 font_size: 10.5px;
                                                 clicked => { AppLogic.toggle_flip_vertical(); }
@@ -258,7 +266,7 @@ export component EditPanel inherits HorizontalLayout {
                                     border-radius: 7px;
                                     background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.crop_enabled ? #38bdf8 : Theme.card_border;
+                                    border-color: AppData.crop_enabled ? Theme.accent_cyan : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -281,11 +289,11 @@ export component EditPanel inherits HorizontalLayout {
 
                                             ActionButton {
                                                 width: 106px;
-                                                height: 24px;
+                                                height: Theme.btn_height_sm;
                                                 title: AppData.crop_enabled ? "Crop Active" : "Enable Crop";
-                                                fill_color: AppData.crop_enabled ? #059669 : #1c1c22;
-                                                hover_color: AppData.crop_enabled ? #047857 : #2a2a30;
-                                                text_color: AppData.crop_enabled ? #ffffff : #38bdf8;
+                                                fill_color: AppData.crop_enabled ? Theme.accent_emerald_hover : Theme.btn_neutral_bg;
+                                                hover_color: AppData.crop_enabled ? #047857 : Theme.slider_track;
+                                                text_color: AppData.crop_enabled ? #ffffff : Theme.accent_cyan;
                                                 font_size: 10.5px;
                                                 clicked => {
                                                     AppLogic.toggle_crop_enabled();
@@ -299,12 +307,12 @@ export component EditPanel inherits HorizontalLayout {
                                             spacing: 3px;
                                             Text {
                                                 text: "Aspect Ratio Lock Preset:";
-                                                font-size: 10px;
+                                                font-size: Theme.font_badge;
                                                 font-weight: 600;
-                                                color: #a1a1aa;
+                                                color: Theme.text_muted;
                                             }
                                             ComboBox {
-                                                height: 26px;
+                                                height: Theme.btn_height_sm;
                                                 model: AppData.crop_aspect_options;
                                                 current-index <=> AppData.crop_aspect_index;
                                                 selected(_) => {
@@ -319,47 +327,47 @@ export component EditPanel inherits HorizontalLayout {
                                             spacing: 4px;
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "Free";
-                                                fill_color: AppData.crop_aspect_index == 0 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(0); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "16:9";
-                                                fill_color: AppData.crop_aspect_index == 1 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 1 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(1); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "9:16";
-                                                fill_color: AppData.crop_aspect_index == 2 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 2 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(2); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "4:3";
-                                                fill_color: AppData.crop_aspect_index == 3 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 3 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(3); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "3:4";
-                                                fill_color: AppData.crop_aspect_index == 4 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 4 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(4); root.request_focus(); }
                                             }
                                         }
@@ -369,47 +377,47 @@ export component EditPanel inherits HorizontalLayout {
                                             spacing: 4px;
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "1:1";
-                                                fill_color: AppData.crop_aspect_index == 5 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 5 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(5); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "2:3";
-                                                fill_color: AppData.crop_aspect_index == 6 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 6 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(6); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "3:2";
-                                                fill_color: AppData.crop_aspect_index == 7 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 7 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(7); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "21:9";
-                                                fill_color: AppData.crop_aspect_index == 8 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 8 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(8); root.request_focus(); }
                                             }
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 22px;
+                                                height: Theme.btn_height_sm;
                                                 title: "4:5";
-                                                fill_color: AppData.crop_aspect_index == 9 ? #0284c7 : #1c1c22;
-                                                hover_color: #2a2a32;
-                                                font_size: 9.5px;
+                                                fill_color: AppData.crop_aspect_index == 9 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.set_crop_aspect_preset(9); root.request_focus(); }
                                             }
                                         }
@@ -419,9 +427,9 @@ export component EditPanel inherits HorizontalLayout {
                                             spacing: 4px;
                                             Text {
                                                 text: "Crop Box Dimensions (Pixels):";
-                                                font-size: 10px;
+                                                font-size: Theme.font_badge;
                                                 font-weight: 600;
-                                                color: #a1a1aa;
+                                                color: Theme.text_muted;
                                             }
 
                                             HorizontalLayout {
@@ -430,7 +438,7 @@ export component EditPanel inherits HorizontalLayout {
                                                 VerticalLayout {
                                                     horizontal-stretch: 1;
                                                     spacing: 2px;
-                                                    Text { text: "Width (W)"; font-size: 9.5px; color: #71717a; }
+                                                    Text { text: "Width (W)"; font-size: Theme.font_badge; color: Theme.text_muted; }
                                                     NumInput {
                                                         text <=> AppData.crop_width_text;
                                                         placeholder: "Width";
@@ -442,7 +450,7 @@ export component EditPanel inherits HorizontalLayout {
                                                 VerticalLayout {
                                                     horizontal-stretch: 1;
                                                     spacing: 2px;
-                                                    Text { text: "Height (H)"; font-size: 9.5px; color: #71717a; }
+                                                    Text { text: "Height (H)"; font-size: Theme.font_badge; color: Theme.text_muted; }
                                                     NumInput {
                                                         text <=> AppData.crop_height_text;
                                                         placeholder: "Height";
@@ -457,37 +465,37 @@ export component EditPanel inherits HorizontalLayout {
                                         HorizontalLayout {
                                             spacing: 6px;
 
-                                            VerticalLayout {
-                                                horizontal-stretch: 1;
-                                                spacing: 2px;
-                                                Text { text: "Position X"; font-size: 9.5px; color: #71717a; }
-                                                NumInput {
-                                                    text <=> AppData.crop_x_text;
-                                                    placeholder: "X";
-                                                    edited(val) => { AppLogic.crop_x_edited(val); }
-                                                    accepted => { root.request_focus(); }
-                                                }
-                                            }
+                                             VerticalLayout {
+                                                 horizontal-stretch: 1;
+                                                 spacing: 2px;
+                                                 Text { text: "Position X"; font-size: Theme.font_badge; color: Theme.text_muted; }
+                                                 NumInput {
+                                                     text <=> AppData.crop_x_text;
+                                                     placeholder: "X";
+                                                     edited(val) => { AppLogic.crop_x_edited(val); }
+                                                     accepted => { root.request_focus(); }
+                                                 }
+                                             }
 
-                                            VerticalLayout {
-                                                horizontal-stretch: 1;
-                                                spacing: 2px;
-                                                Text { text: "Position Y"; font-size: 9.5px; color: #71717a; }
-                                                NumInput {
-                                                    text <=> AppData.crop_y_text;
-                                                    placeholder: "Y";
-                                                    edited(val) => { AppLogic.crop_y_edited(val); }
-                                                    accepted => { root.request_focus(); }
-                                                }
-                                            }
+                                             VerticalLayout {
+                                                 horizontal-stretch: 1;
+                                                 spacing: 2px;
+                                                 Text { text: "Position Y"; font-size: Theme.font_badge; color: Theme.text_muted; }
+                                                 NumInput {
+                                                     text <=> AppData.crop_y_text;
+                                                     placeholder: "Y";
+                                                     edited(val) => { AppLogic.crop_y_edited(val); }
+                                                     accepted => { root.request_focus(); }
+                                                 }
+                                             }
                                         }
 
                                         // Arrow Keys Nudge Option & Directional Controls
                                         Rectangle {
                                             border-radius: 5px;
-                                            background: #111114;
+                                            background: Theme.bg_surface;
                                             border-width: 1px;
-                                            border-color: #1c1c22;
+                                            border-color: Theme.btn_neutral_bg;
 
                                             VerticalLayout {
                                                 padding: 8px;
@@ -508,12 +516,12 @@ export component EditPanel inherits HorizontalLayout {
                                                                 width: 16px;
                                                                 height: 16px;
                                                                 border-radius: 4px;
-                                                                background: AppData.crop_arrow_keys_enabled ? #0284c7 : #1c1c22;
+                                                                background: AppData.crop_arrow_keys_enabled ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                                 border-width: 1px;
-                                                                border-color: AppData.crop_arrow_keys_enabled ? #38bdf8 : #383840;
+                                                                border-color: AppData.crop_arrow_keys_enabled ? Theme.accent_cyan : #383840;
                                                                 if AppData.crop_arrow_keys_enabled : Text {
                                                                     text: "✓";
-                                                                    font-size: 11px;
+                                                                    font-size: Theme.font_badge;
                                                                     font-weight: 700;
                                                                     color: #ffffff;
                                                                     horizontal-alignment: center;
@@ -525,7 +533,7 @@ export component EditPanel inherits HorizontalLayout {
                                                             alignment: center;
                                                             Text {
                                                                 text: "Use Arrow Keys to Move Crop Box";
-                                                                font-size: 10.5px;
+                                                                font-size: Theme.font_badge;
                                                                 font-weight: 500;
                                                                 color: #e2e8f0;
                                                                 vertical-alignment: center;
@@ -540,52 +548,52 @@ export component EditPanel inherits HorizontalLayout {
 
                                                     ActionButton {
                                                         width: 32px;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "←";
-                                                        fill_color: #1c1c22;
-                                                        hover_color: #2a2a32;
+                                                        fill_color: Theme.btn_neutral_bg;
+                                                        hover_color: Theme.btn_neutral_hover;
                                                         font_size: 11px;
                                                         is_disabled: !AppData.crop_enabled;
                                                         clicked => { AppLogic.crop_nudge(-AppData.crop_nudge_step, 0); root.request_focus(); }
                                                     }
                                                     ActionButton {
                                                         width: 32px;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "↑";
-                                                        fill_color: #1c1c22;
-                                                        hover_color: #2a2a32;
+                                                        fill_color: Theme.btn_neutral_bg;
+                                                        hover_color: Theme.btn_neutral_hover;
                                                         font_size: 11px;
                                                         is_disabled: !AppData.crop_enabled;
                                                         clicked => { AppLogic.crop_nudge(0, -AppData.crop_nudge_step); root.request_focus(); }
                                                     }
                                                     ActionButton {
                                                         width: 32px;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "↓";
-                                                        fill_color: #1c1c22;
-                                                        hover_color: #2a2a32;
+                                                        fill_color: Theme.btn_neutral_bg;
+                                                        hover_color: Theme.btn_neutral_hover;
                                                         font_size: 11px;
                                                         is_disabled: !AppData.crop_enabled;
                                                         clicked => { AppLogic.crop_nudge(0, AppData.crop_nudge_step); root.request_focus(); }
                                                     }
                                                     ActionButton {
                                                         width: 32px;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "→";
-                                                        fill_color: #1c1c22;
-                                                        hover_color: #2a2a32;
+                                                        fill_color: Theme.btn_neutral_bg;
+                                                        hover_color: Theme.btn_neutral_hover;
                                                         font_size: 11px;
                                                         is_disabled: !AppData.crop_enabled;
                                                         clicked => { AppLogic.crop_nudge(AppData.crop_nudge_step, 0); root.request_focus(); }
                                                     }
                                                     ActionButton {
                                                         horizontal-stretch: 1;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "Center";
-                                                        fill_color: #1c1c22;
-                                                        hover_color: #2a2a32;
-                                                        text_color: #38bdf8;
-                                                        font_size: 10px;
+                                                        fill_color: Theme.btn_neutral_bg;
+                                                        hover_color: Theme.btn_neutral_hover;
+                                                        text_color: Theme.accent_cyan;
+                                                        font_size: Theme.font_badge;
                                                         is_disabled: !AppData.crop_enabled;
                                                         clicked => { AppLogic.center_crop_box(); root.request_focus(); }
                                                     }
@@ -598,14 +606,14 @@ export component EditPanel inherits HorizontalLayout {
                                             spacing: 6px;
                                             ActionButton {
                                                 horizontal-stretch: 1;
-                                                height: 26px;
+                                                height: Theme.btn_height_sm;
                                                 title: "Reset Crop to Full Frame";
                                                 icon_source: @image-url("../icons/reset.svg");
                                                 has_icon: true;
                                                 icon_size: 11px;
-                                                fill_color: #1c1c22;
-                                                hover_color: #2a2a32;
-                                                text_color: #a1a1aa;
+                                                fill_color: Theme.btn_neutral_bg;
+                                                hover_color: Theme.btn_neutral_hover;
+                                                text_color: Theme.text_muted;
                                                 font_size: 10.5px;
                                                 clicked => { AppLogic.reset_crop(); root.request_focus(); }
                                             }
@@ -618,7 +626,7 @@ export component EditPanel inherits HorizontalLayout {
                                     border-radius: 7px;
                                     background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: AppData.has_active_audio_edits ? #38bdf866 : Theme.card_border;
+                                    border-color: AppData.has_active_audio_edits ? Theme.accent_cyan.with-alpha(0.40) : Theme.card_border;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -633,7 +641,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     source: @image-url("../icons/volume-2.svg");
                                                     width: 13px;
                                                     height: 13px;
-                                                    colorize: #38bdf8;
+                                                    colorize: Theme.accent_cyan;
                                                 }
                                             }
                                             VerticalLayout {
@@ -652,8 +660,8 @@ export component EditPanel inherits HorizontalLayout {
                                                 title: "Reset";
                                                 fill_color: Theme.btn_neutral_bg;
                                                 hover_color: Theme.btn_neutral_hover;
-                                                text_color: #fbbf24;
-                                                font_size: 9px;
+                                                text_color: Theme.accent_amber;
+                                                font_size: Theme.font_badge;
                                                 clicked => { AppLogic.reset_audio_edits(); }
                                             }
                                         }
@@ -665,18 +673,18 @@ export component EditPanel inherits HorizontalLayout {
                                             HorizontalLayout {
                                                 Text {
                                                     text: "Volume Gain / Attenuation:";
-                                                    font-size: 10.5px;
+                                                    font-size: Theme.font_badge;
                                                     font-weight: 600;
-                                                    color: #a1a1aa;
+                                                    color: Theme.text_muted;
                                                     vertical-alignment: center;
                                                 }
                                                 Rectangle { horizontal-stretch: 1; }
                                                 Text {
                                                     text: AppData.audio_gain_text;
-                                                    font-size: 11px;
+                                                    font-size: Theme.font_badge;
                                                     font-weight: 800;
                                                     color: AppData.audio_gain_db > 0.05 ? #34d399 :
-                                                          (AppData.audio_gain_db < -0.05 ? #fbbf24 : #38bdf8);
+                                                          (AppData.audio_gain_db < -0.05 ? Theme.accent_amber : Theme.accent_cyan);
                                                     vertical-alignment: center;
                                                 }
                                             }
@@ -685,7 +693,7 @@ export component EditPanel inherits HorizontalLayout {
                                             HorizontalLayout {
                                                 spacing: 8px;
 
-                                                Text { text: "-24dB"; font-size: 9px; color: #71717a; vertical-alignment: center; }
+                                                Text { text: "-24dB"; font-size: Theme.font_badge; color: Theme.text_muted; vertical-alignment: center; }
 
                                                 Slider {
                                                     horizontal-stretch: 1;
@@ -697,7 +705,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     }
                                                 }
 
-                                                Text { text: "+24dB"; font-size: 9px; color: #71717a; vertical-alignment: center; }
+                                                Text { text: "+24dB"; font-size: Theme.font_badge; color: Theme.text_muted; vertical-alignment: center; }
                                             }
 
                                             // Quick Preset dB Buttons
@@ -706,67 +714,67 @@ export component EditPanel inherits HorizontalLayout {
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "-12dB";
-                                                    fill_color: AppData.audio_gain_db == -12.0 ? #0284c7 : #1c1c22;
-                                                    hover_color: AppData.audio_gain_db == -12.0 ? #0369a1 : #2a2a30;
-                                                    text_color: AppData.audio_gain_db == -12.0 ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: AppData.audio_gain_db == -12.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: AppData.audio_gain_db == -12.0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: AppData.audio_gain_db == -12.0 ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(-12.0); }
                                                 }
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "-6dB";
-                                                    fill_color: AppData.audio_gain_db == -6.0 ? #0284c7 : #1c1c22;
-                                                    hover_color: AppData.audio_gain_db == -6.0 ? #0369a1 : #2a2a30;
-                                                    text_color: AppData.audio_gain_db == -6.0 ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: AppData.audio_gain_db == -6.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: AppData.audio_gain_db == -6.0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: AppData.audio_gain_db == -6.0 ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(-6.0); }
                                                 }
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "0 dB";
-                                                    fill_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? #0284c7 : #1c1c22;
-                                                    hover_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? #0369a1 : #2a2a30;
-                                                    text_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(0.0); }
                                                 }
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "+3dB";
-                                                    fill_color: AppData.audio_gain_db == 3.0 ? #0284c7 : #1c1c22;
-                                                    hover_color: AppData.audio_gain_db == 3.0 ? #0369a1 : #2a2a30;
-                                                    text_color: AppData.audio_gain_db == 3.0 ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: AppData.audio_gain_db == 3.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: AppData.audio_gain_db == 3.0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: AppData.audio_gain_db == 3.0 ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(3.0); }
                                                 }
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "+6dB";
-                                                    fill_color: AppData.audio_gain_db == 6.0 ? #0284c7 : #1c1c22;
-                                                    hover_color: AppData.audio_gain_db == 6.0 ? #0369a1 : #2a2a30;
-                                                    text_color: AppData.audio_gain_db == 6.0 ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: AppData.audio_gain_db == 6.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: AppData.audio_gain_db == 6.0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: AppData.audio_gain_db == 6.0 ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(6.0); }
                                                 }
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 24px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "+12dB";
-                                                    fill_color: AppData.audio_gain_db == 12.0 ? #0284c7 : #1c1c22;
-                                                    hover_color: AppData.audio_gain_db == 12.0 ? #0369a1 : #2a2a30;
-                                                    text_color: AppData.audio_gain_db == 12.0 ? #ffffff : #d4d4d8;
-                                                    font_size: 9.5px;
+                                                    fill_color: AppData.audio_gain_db == 12.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                    hover_color: AppData.audio_gain_db == 12.0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                    text_color: AppData.audio_gain_db == 12.0 ? #ffffff : Theme.btn_neutral_text;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.set_audio_gain_db(12.0); }
                                                 }
                                             }
@@ -776,22 +784,22 @@ export component EditPanel inherits HorizontalLayout {
                                                 spacing: 6px;
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 22px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "-1.0 dB";
-                                                    fill_color: #1c1c22;
-                                                    hover_color: #2a2a32;
-                                                    text_color: #a1a1aa;
-                                                    font_size: 9.5px;
+                                                    fill_color: Theme.btn_neutral_bg;
+                                                    hover_color: Theme.btn_neutral_hover;
+                                                    text_color: Theme.text_muted;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.step_audio_gain_db(-1.0); }
                                                 }
                                                 ActionButton {
                                                     horizontal-stretch: 1;
-                                                    height: 22px;
+                                                    height: Theme.btn_height_sm;
                                                     title: "+1.0 dB";
-                                                    fill_color: #1c1c22;
-                                                    hover_color: #2a2a32;
-                                                    text_color: #a1a1aa;
-                                                    font_size: 9.5px;
+                                                    fill_color: Theme.btn_neutral_bg;
+                                                    hover_color: Theme.btn_neutral_hover;
+                                                    text_color: Theme.text_muted;
+                                                    font_size: Theme.font_badge;
                                                     clicked => { AppLogic.step_audio_gain_db(1.0); }
                                                 }
                                             }
@@ -807,9 +815,9 @@ export component EditPanel inherits HorizontalLayout {
                                             Rectangle {
                                                 height: 32px;
                                                 border-radius: 5px;
-                                                background: AppData.audio_normalize_enabled ? #0284c722 : Theme.card_secondary_bg;
+                                                background: AppData.audio_normalize_enabled ? Theme.accent_primary.with-alpha(0.13) : Theme.card_secondary_bg;
                                                 border-width: 1px;
-                                                border-color: AppData.audio_normalize_enabled ? #0284c766 : Theme.card_border;
+                                                border-color: AppData.audio_normalize_enabled ? Theme.accent_primary.with-alpha(0.40) : Theme.card_border;
 
                                                 TouchArea {
                                                     mouse-cursor: pointer;
@@ -828,13 +836,13 @@ export component EditPanel inherits HorizontalLayout {
                                                             width: 16px;
                                                             height: 16px;
                                                             border-radius: 4px;
-                                                            background: AppData.audio_normalize_enabled ? #0284c7 : Theme.control_bg;
+                                                            background: AppData.audio_normalize_enabled ? Theme.accent_primary : Theme.control_bg;
                                                             border-width: 1px;
-                                                            border-color: AppData.audio_normalize_enabled ? #38bdf8 : Theme.border_color;
+                                                            border-color: AppData.audio_normalize_enabled ? Theme.accent_cyan : Theme.border_color;
 
                                                             if AppData.audio_normalize_enabled : Text {
                                                                 text: "✓";
-                                                                font-size: 11px;
+                                                                font-size: Theme.font_badge;
                                                                 font-weight: 800;
                                                                 color: #ffffff;
                                                                 horizontal-alignment: center;
@@ -847,9 +855,9 @@ export component EditPanel inherits HorizontalLayout {
                                                         alignment: center;
                                                         Text {
                                                             text: "Normalize Audio (EBU R128)";
-                                                            font-size: 10.5px;
+                                                            font-size: Theme.font_badge;
                                                             font-weight: 700;
-                                                            color: AppData.audio_normalize_enabled ? #fafafa : #d4d4d8;
+                                                            color: AppData.audio_normalize_enabled ? #fafafa : Theme.btn_neutral_text;
                                                             vertical-alignment: center;
                                                         }
                                                     }
@@ -860,9 +868,9 @@ export component EditPanel inherits HorizontalLayout {
                                                         alignment: center;
                                                         Text {
                                                             text: "\{AppData.audio_normalize_lufs} LUFS";
-                                                            font-size: 10px;
+                                                            font-size: Theme.font_badge;
                                                             font-weight: 800;
-                                                            color: #38bdf8;
+                                                            color: Theme.accent_cyan;
                                                             vertical-alignment: center;
                                                         }
                                                     }
@@ -876,9 +884,9 @@ export component EditPanel inherits HorizontalLayout {
 
                                                 Text {
                                                     text: "Target Loudness Level:";
-                                                    font-size: 9.5px;
+                                                    font-size: Theme.font_badge;
                                                     font-weight: 600;
-                                                    color: #71717a;
+                                                    color: Theme.text_muted;
                                                 }
 
                                                 HorizontalLayout {
@@ -886,45 +894,45 @@ export component EditPanel inherits HorizontalLayout {
 
                                                     ActionButton {
                                                         horizontal-stretch: 1;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "-16 LUFS";
-                                                        fill_color: AppData.audio_normalize_preset_index == 0 ? #0284c7 : #1c1c22;
-                                                        hover_color: AppData.audio_normalize_preset_index == 0 ? #0369a1 : #2a2a30;
-                                                        text_color: AppData.audio_normalize_preset_index == 0 ? #ffffff : #d4d4d8;
-                                                        font_size: 9px;
+                                                        fill_color: AppData.audio_normalize_preset_index == 0 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                        hover_color: AppData.audio_normalize_preset_index == 0 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                        text_color: AppData.audio_normalize_preset_index == 0 ? #ffffff : Theme.btn_neutral_text;
+                                                        font_size: Theme.font_badge;
                                                         clicked => { AppLogic.set_audio_normalize_preset(0); }
                                                     }
 
                                                     ActionButton {
                                                         horizontal-stretch: 1;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "-14 LUFS";
-                                                        fill_color: AppData.audio_normalize_preset_index == 1 ? #0284c7 : #1c1c22;
-                                                        hover_color: AppData.audio_normalize_preset_index == 1 ? #0369a1 : #2a2a30;
-                                                        text_color: AppData.audio_normalize_preset_index == 1 ? #ffffff : #d4d4d8;
-                                                        font_size: 9px;
+                                                        fill_color: AppData.audio_normalize_preset_index == 1 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                        hover_color: AppData.audio_normalize_preset_index == 1 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                        text_color: AppData.audio_normalize_preset_index == 1 ? #ffffff : Theme.btn_neutral_text;
+                                                        font_size: Theme.font_badge;
                                                         clicked => { AppLogic.set_audio_normalize_preset(1); }
                                                     }
 
                                                     ActionButton {
                                                         horizontal-stretch: 1;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "-23 LUFS";
-                                                        fill_color: AppData.audio_normalize_preset_index == 2 ? #0284c7 : #1c1c22;
-                                                        hover_color: AppData.audio_normalize_preset_index == 2 ? #0369a1 : #2a2a30;
-                                                        text_color: AppData.audio_normalize_preset_index == 2 ? #ffffff : #d4d4d8;
-                                                        font_size: 9px;
+                                                        fill_color: AppData.audio_normalize_preset_index == 2 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                        hover_color: AppData.audio_normalize_preset_index == 2 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                        text_color: AppData.audio_normalize_preset_index == 2 ? #ffffff : Theme.btn_neutral_text;
+                                                        font_size: Theme.font_badge;
                                                         clicked => { AppLogic.set_audio_normalize_preset(2); }
                                                     }
 
                                                     ActionButton {
                                                         horizontal-stretch: 1;
-                                                        height: 24px;
+                                                        height: Theme.btn_height_sm;
                                                         title: "-12 LUFS";
-                                                        fill_color: AppData.audio_normalize_preset_index == 3 ? #0284c7 : #1c1c22;
-                                                        hover_color: AppData.audio_normalize_preset_index == 3 ? #0369a1 : #2a2a30;
-                                                        text_color: AppData.audio_normalize_preset_index == 3 ? #ffffff : #d4d4d8;
-                                                        font_size: 9px;
+                                                        fill_color: AppData.audio_normalize_preset_index == 3 ? Theme.accent_primary : Theme.btn_neutral_bg;
+                                                        hover_color: AppData.audio_normalize_preset_index == 3 ? Theme.accent_primary_hover : Theme.slider_track;
+                                                        text_color: AppData.audio_normalize_preset_index == 3 ? #ffffff : Theme.btn_neutral_text;
+                                                        font_size: Theme.font_badge;
                                                         clicked => { AppLogic.set_audio_normalize_preset(3); }
                                                     }
                                                 }
@@ -933,11 +941,11 @@ export component EditPanel inherits HorizontalLayout {
 
                                         // Realtime Preview Status Indicator Pill
                                         Rectangle {
-                                            height: 24px;
+                                            height: Theme.btn_height_sm;
                                             border-radius: 4px;
-                                            background: #141418;
+                                            background: Theme.card_bg;
                                             border-width: 1px;
-                                            border-color: #1c1c22;
+                                            border-color: Theme.btn_neutral_bg;
 
                                             HorizontalLayout {
                                                 padding-left: 6px;
@@ -951,15 +959,15 @@ export component EditPanel inherits HorizontalLayout {
                                                         source: @image-url("../icons/play.svg");
                                                         width: 10px;
                                                         height: 10px;
-                                                        colorize: #38bdf8;
+                                                        colorize: Theme.accent_cyan;
                                                     }
                                                 }
                                                 VerticalLayout {
                                                     alignment: center;
                                                     Text {
-                                                        text: "Real-time preview in player • Applied on RUN TASK";
-                                                        font-size: 9px;
-                                                        color: #a1a1aa;
+                                                        text: "Real-time preview in player • Applied on Run Task";
+                                                        font-size: Theme.font_badge;
+                                                        color: Theme.text_muted;
                                                         vertical-alignment: center;
                                                     }
                                                 }
@@ -971,9 +979,9 @@ export component EditPanel inherits HorizontalLayout {
                                 // Canvas Info Summary Footer
                                 if AppData.selected_is_video : Rectangle {
                                     border-radius: 6px;
-                                    background: #141418;
+                                    background: Theme.card_bg;
                                     border-width: 1px;
-                                    border-color: #1c1c22;
+                                    border-color: Theme.btn_neutral_bg;
 
                                     VerticalLayout {
                                         padding: 8px;
@@ -981,14 +989,14 @@ export component EditPanel inherits HorizontalLayout {
 
                                         Text {
                                             text: "Source Canvas: \{AppData.selected_video_width} × \{AppData.selected_video_height} px";
-                                            font-size: 10px;
+                                            font-size: Theme.font_badge;
                                             color: #71717a;
                                         }
                                         Text {
                                             text: "Output Canvas: \{AppData.crop_enabled ? AppData.crop_width : AppData.effective_video_width} × \{AppData.crop_enabled ? AppData.crop_height : AppData.effective_video_height} px";
-                                            font-size: 10.5px;
+                                            font-size: Theme.font_badge;
                                             font-weight: 700;
-                                            color: #38bdf8;
+                                            color: Theme.accent_cyan;
                                         }
                                     }
                                 }

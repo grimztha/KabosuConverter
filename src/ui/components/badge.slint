@@ -1,4 +1,4 @@
-import { Theme } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 export component Badge inherits Rectangle {
     in property <string> label: "";
@@ -19,9 +19,9 @@ export component Badge inherits Rectangle {
             alignment: center;
             Text {
                 text: root.label;
-                font-size: 11px;
+                font-size: Theme.font_badge;
                 color: root.fg_color;
-                font-weight: 500;
+                font-weight: 600;
             }
         }
     }

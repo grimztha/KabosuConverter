@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { AppData } from "../globals.slint";
+import { AppData, Theme } from "../globals.slint";
 import { TimelineScrollBar } from "timeline_scrollbar.slint";
 import { TimelineGrid } from "timeline_grid.slint";
 
@@ -60,11 +60,11 @@ export component AudioWaveformStudio inherits Rectangle {
 
             // Left Amplitude Scale & Channel Guide
             Rectangle {
-                width: 38px;
-                background: #09090b;
+                width: 48px;
+                background: Theme.app_bg;
                 border-radius: 4px;
                 border-width: 1px;
-                border-color: #1c1c22;
+                border-color: Theme.control_border;
                 clip: true;
                 
                 VerticalLayout {
@@ -74,18 +74,18 @@ export component AudioWaveformStudio inherits Rectangle {
                     // Top Ruler Cap for Left Amplitude Scale
                     Rectangle {
                         height: 18px;
-                        background: #111116;
+                        background: Theme.header_bg;
                         Rectangle {
                             y: parent.height - 1px;
                             width: 100%;
                             height: 1px;
-                            background: #272730;
+                            background: Theme.border_color;
                         }
                         Text {
                             text: "CH / dB";
-                            font-size: 7.5px;
+                            font-size: Theme.font_badge;
                             font-weight: 700;
-                            color: #71717a;
+                            color: Theme.text_muted;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -100,22 +100,22 @@ export component AudioWaveformStudio inherits Rectangle {
                         alignment: space-between;
 
                         // Channel 1 / Left Top
-                        Text { text: "L / CH1"; font-size: 8px; font-weight: 800; color: #38bdf8; horizontal-alignment: center; }
-                        Text { text: "0 dB"; font-size: 7.5px; font-weight: 600; color: #71717a; horizontal-alignment: center; }
-                        Text { text: "-6 dB"; font-size: 7.5px; font-weight: 600; color: #383840; horizontal-alignment: center; }
+                        Text { text: "L / CH1"; font-size: Theme.font_badge; font-weight: 800; color: Theme.accent_cyan; horizontal-alignment: center; }
+                        Text { text: "0 dB"; font-size: Theme.font_badge; font-weight: 600; font-family: Theme.font_mono; color: Theme.text_muted; horizontal-alignment: center; }
+                        Text { text: "-6 dB"; font-size: Theme.font_badge; font-weight: 600; font-family: Theme.font_mono; color: Theme.text_faint; horizontal-alignment: center; }
 
                         // Center 0.0 Baseline
                         Rectangle {
-                            height: 12px;
-                            border-radius: 2px;
-                            background: #1c1c22;
-                            Text { text: "0.0"; font-size: 7.5px; font-weight: 800; color: #a1a1aa; horizontal-alignment: center; vertical-alignment: center; }
+                            height: 14px;
+                            border-radius: 3px;
+                            background: Theme.control_bg;
+                            Text { text: "0.0"; font-size: Theme.font_badge; font-weight: 800; font-family: Theme.font_mono; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                         }
 
                         // Channel 2 / Right Bottom
-                        Text { text: "-6 dB"; font-size: 7.5px; font-weight: 600; color: #383840; horizontal-alignment: center; }
-                        Text { text: "0 dB"; font-size: 7.5px; font-weight: 600; color: #71717a; horizontal-alignment: center; }
-                        Text { text: "R / CH2"; font-size: 8px; font-weight: 800; color: #c084fc; horizontal-alignment: center; }
+                        Text { text: "-6 dB"; font-size: Theme.font_badge; font-weight: 600; font-family: Theme.font_mono; color: Theme.text_faint; horizontal-alignment: center; }
+                        Text { text: "0 dB"; font-size: Theme.font_badge; font-weight: 600; font-family: Theme.font_mono; color: Theme.text_muted; horizontal-alignment: center; }
+                        Text { text: "R / CH2"; font-size: Theme.font_badge; font-weight: 800; color: Theme.accent_purple; horizontal-alignment: center; }
                     }
                 }
             }

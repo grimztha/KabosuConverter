@@ -18,7 +18,7 @@ export component TranscoderTab inherits ScrollView {
             padding-bottom: 2px;
             Text {
                 text: "Settings";
-                font-size: 22px;
+                font-size: Theme.font_title + 2px;
                 font-weight: 700;
                 color: Theme.text_primary;
             }
@@ -32,19 +32,19 @@ export component TranscoderTab inherits ScrollView {
 
             Text {
                 text: "General";
-                font-size: 12.5px;
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
-                border-radius: 8px;
+                border-radius: Theme.radius_lg;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 0px;
+                    spacing: 4px;
 
                     // Row: Open Folder on Finish
                     HorizontalLayout {
@@ -71,13 +71,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Open folder on finish";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Show target destination in Windows File Explorer when export completes";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -94,7 +94,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Play Sound on Finish
                     HorizontalLayout {
@@ -121,13 +120,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Play sound on finish";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Play an audible notification sound when batch encoding completes";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -144,7 +143,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Default Destination Folder
                     HorizontalLayout {
@@ -171,13 +169,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Default destination folder";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: AppData.output_directory == "Same as source" ? "Save exported files alongside source media by default" : AppData.output_directory;
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                                 overflow: elide;
                             }
@@ -191,7 +189,7 @@ export component TranscoderTab inherits ScrollView {
 
                                 ActionButton {
                                     width: 105px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     title: "Change...";
                                     icon_source: @image-url("../icons/folder.svg");
                                     has_icon: true;
@@ -205,7 +203,7 @@ export component TranscoderTab inherits ScrollView {
 
                                 ActionButton {
                                     width: 75px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     title: "Open";
                                     icon_source: @image-url("../icons/folder-open.svg");
                                     has_icon: true;
@@ -231,19 +229,19 @@ export component TranscoderTab inherits ScrollView {
 
             Text {
                 text: "Video & Transcoding";
-                font-size: 12.5px;
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
-                border-radius: 8px;
+                border-radius: Theme.radius_lg;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 0px;
+                    spacing: 4px;
 
                     // Row: Primary Video Codec
                     HorizontalLayout {
@@ -270,13 +268,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Primary video codec";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Default video encoding workflow and compression codec";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -287,7 +285,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 250px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "H.264 (AVC) — Universal Web",
                                         "H.265 (HEVC) — High Efficiency",
@@ -310,7 +308,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Hardware Acceleration
                     HorizontalLayout {
@@ -337,13 +334,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Hardware acceleration";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Accelerate encoding pipelines using dedicated GPU silicon";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -354,7 +351,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 230px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "Auto Detect (Recommended)",
                                         "NVIDIA NVENC (CUDA)",
@@ -370,7 +367,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Rate Control Mode
                     HorizontalLayout {
@@ -397,13 +393,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Rate control mode";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Constant Quality (CRF) for fidelity vs Target Bitrate for fixed file size";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -414,7 +410,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
                                     current-index <=> AppData.rate_control_index;
                                     selected(_) => { AppLogic.save_settings(); }
@@ -423,7 +419,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Quality Target Tuning (CRF or Bitrate)
                     HorizontalLayout {
@@ -450,7 +445,7 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: AppData.rate_control_index == 0 ? "Target CRF quality" : "Target video bitrate";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
@@ -458,7 +453,7 @@ export component TranscoderTab inherits ScrollView {
                                 text: AppData.rate_control_index == 0 ?
                                     "Visual quality: 0 = lossless, 18 = high fidelity, 23 = balanced, 28 = compact" :
                                     "Average stream bandwidth allocated for encoding";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -488,7 +483,7 @@ export component TranscoderTab inherits ScrollView {
                                             alignment: center;
                                             Text {
                                                 text: "CRF " + Math.round(AppData.crf_value);
-                                                font-size: 11px;
+                                                font-size: Theme.font_badge;
                                                 font-weight: 700;
                                                 color: Theme.accent_cyan;
                                                 vertical-alignment: center;
@@ -499,7 +494,7 @@ export component TranscoderTab inherits ScrollView {
 
                                 if AppData.rate_control_index == 1 : ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "12000 kbps (4K/High)",
                                         "8000 kbps (1080p60)",
@@ -515,7 +510,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Encoder Preset & Speed
                     HorizontalLayout {
@@ -542,13 +536,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Encoder preset & speed";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Trade-off between compression speed and file density (medium recommended)";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -559,7 +553,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 190px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
                                     current-index <=> AppData.preset_index;
                                     selected(_) => { AppLogic.save_settings(); }
@@ -568,7 +562,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Resolution Scaling
                     HorizontalLayout {
@@ -595,13 +588,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Resolution scaling";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Conform or downscale output frame dimensions";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -612,7 +605,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "Original Source",
                                         "4K UHD (3840x2160)",
@@ -628,7 +621,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Framerate Conform
                     HorizontalLayout {
@@ -655,13 +647,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Framerate conform";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Output cadence and target frames per second";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -672,7 +664,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "Original Source",
                                         "23.976 fps (Cinema)",
@@ -691,7 +683,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Deinterlacing Filter
                     HorizontalLayout {
@@ -718,13 +709,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Deinterlacing filter";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Eliminate comb artifacts from interlaced television and camera footage";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -735,7 +726,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "None (Keep Progressive)",
                                         "YADIF (Deinterlace)",
@@ -748,7 +739,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Web FastStart Optimization
                     HorizontalLayout {
@@ -775,13 +765,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Web FastStart optimization";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Moves the MP4 moov atom to the beginning of the file for instant streaming";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -798,7 +788,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Output Container Format
                     HorizontalLayout {
@@ -825,13 +814,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Output container format";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Default container wrapper (.mp4, .mkv, .mov, .webm, .avi, .ts)";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -842,7 +831,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         ".mp4 (Standard MPEG-4)",
                                         ".mkv (Matroska Multi-Track)",
@@ -869,19 +858,19 @@ export component TranscoderTab inherits ScrollView {
 
             Text {
                 text: "Audio & Broadcast Loudness";
-                font-size: 12.5px;
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
-                border-radius: 8px;
+                border-radius: Theme.radius_lg;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 0px;
+                    spacing: 4px;
 
                     // Row: Default Audio Codec
                     HorizontalLayout {
@@ -908,13 +897,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Default audio codec";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Compression format for exported audio tracks";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -925,7 +914,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 230px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "AAC (High Quality Standard)",
                                         "MP3 (Universal Compatibility)",
@@ -941,7 +930,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Target Audio Bitrate
                     HorizontalLayout {
@@ -968,13 +956,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Audio encoding bitrate";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Target bitrate allocated per channel for lossy audio formats";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -985,7 +973,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "320 kbps (Maximum Fidelity)",
                                         "256 kbps (Studio Quality)",
@@ -1000,7 +988,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Sample Rate
                     HorizontalLayout {
@@ -1027,13 +1014,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Sample rate frequency";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Audio clock frequency conform (48 kHz is cinema/video standard)";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1044,7 +1031,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 210px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "Keep Source Frequency",
                                         "48.0 kHz (Cinema & Video Standard)",
@@ -1058,7 +1045,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Broadcast Loudness Normalization
                     HorizontalLayout {
@@ -1085,13 +1071,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 2px;
                             Text {
                                 text: "Broadcast loudness normalization";
-                                font-size: 13px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Conform loudness levels to broadcast and streaming standards (EBU R128 / LUFS)";
-                                font-size: 11px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1102,7 +1088,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 ComboBox {
                                     width: 240px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     model: [
                                         "Disabled (Preserve Dynamic Range)",
                                         "EBU R128 TV Broadcast (-23 LUFS)",
@@ -1128,19 +1114,19 @@ export component TranscoderTab inherits ScrollView {
 
             Text {
                 text: "About";
-                font-size: 12.5px;
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
-                border-radius: 8px;
+                border-radius: Theme.radius_lg;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 0px;
+                    spacing: 4px;
 
                     // Row: About Another Encoder
                     HorizontalLayout {
@@ -1166,13 +1152,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 1px;
                             Text {
                                 text: "About Another Encoder";
-                                font-size: 12.5px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "An open-source, high-performance media transcoder and universal video downloader";
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1182,8 +1168,8 @@ export component TranscoderTab inherits ScrollView {
                             HorizontalLayout {
                                 alignment: end;
                                 Text {
-                                    text: "Version 0.12.6 • Up to date";
-                                    font-size: 11px;
+                                    text: "Version 0.13.0 • Up to date";
+                                    font-size: Theme.font_badge;
                                     font-weight: 500;
                                     color: Theme.text_muted;
                                 }
@@ -1191,7 +1177,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: FFmpeg Core Engine
                     HorizontalLayout {
@@ -1218,13 +1203,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 1px;
                             Text {
                                 text: "FFmpeg Multimedia Engine";
-                                font-size: 12.5px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Core transcode engine with NVENC, QSV, AMF, ProRes, AV1, and multi-track audio muxing";
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1235,7 +1220,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 Text {
                                     text: AppData.ffmpeg_version_badge;
-                                    font-size: 11px;
+                                    font-size: Theme.font_badge;
                                     font-weight: 500;
                                     color: Theme.text_secondary;
                                 }
@@ -1243,7 +1228,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: yt-dlp Stream Extractor
                     HorizontalLayout {
@@ -1270,13 +1254,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 1px;
                             Text {
                                 text: "yt-dlp Downloader Engine";
-                                font-size: 12.5px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Ingests media and livestreams from over 1,000 video, audio, and playlist platforms";
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1287,7 +1271,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 Text {
                                     text: AppData.ytdlp_version_badge;
-                                    font-size: 11px;
+                                    font-size: Theme.font_badge;
                                     font-weight: 500;
                                     color: Theme.text_secondary;
                                 }
@@ -1295,7 +1279,6 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    Rectangle { height: 1px; background: Theme.card_secondary_border; }
 
                     // Row: Slint UI & Rust Core Runtime
                     HorizontalLayout {
@@ -1322,13 +1305,13 @@ export component TranscoderTab inherits ScrollView {
                             spacing: 1px;
                             Text {
                                 text: "Core Framework & Runtime";
-                                font-size: 12.5px;
+                                font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: "Slint UI 1.18 Native GUI Toolkit • Rust 2021 Edition • tokio, rodio, image, symphonia";
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
                         }
@@ -1339,7 +1322,7 @@ export component TranscoderTab inherits ScrollView {
                                 alignment: end;
                                 Text {
                                     text: "Slint 1.18 • Rust 2021";
-                                    font-size: 11px;
+                                    font-size: Theme.font_badge;
                                     font-weight: 500;
                                     color: Theme.text_secondary;
                                 }

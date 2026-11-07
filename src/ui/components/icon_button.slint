@@ -1,23 +1,28 @@
-import { Theme } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 export component IconButton inherits Rectangle {
     in property <string> text: "";
     in property <image> icon_source;
     in property <bool> has_icon: false;
-    in property <length> icon_size: 14px;
+    in property <length> icon_size: 13px;
     in property <color> text_color: Theme.text_secondary;
     in property <color> hover_bg: Theme.control_hover;
+    in property <color> pressed_bg: Theme.control_pressed;
     in property <length> btn_width: 28px;
     in property <length> btn_height: 28px;
-    in property <length> font_size: 13px;
+    in property <length> font_size: Theme.font_caption;
+    in property <bool> is_disabled: false;
     callback clicked();
 
     width: root.btn_width;
     height: root.btn_height;
     border-radius: 6px;
-    background: ta.has-hover ? hover_bg : #00000000;
+    background: is_disabled ? transparent : (ta.pressed ? pressed_bg : (ta.has-hover ? hover_bg : #00000000));
+    border-width: fs.has-focus ? 1.5px : 0px;
+    border-color: Theme.focus_ring;
 
-    animate background { duration: 150ms; }
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
 
     HorizontalLayout {
         alignment: center;
@@ -31,7 +36,7 @@ export component IconButton inherits Rectangle {
                 source: root.icon_source;
                 width: root.icon_size;
                 height: root.icon_size;
-                colorize: ta.has-hover ? Theme.text_primary : root.text_color;
+                colorize: is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
             }
         }
 
@@ -39,15 +44,30 @@ export component IconButton inherits Rectangle {
             alignment: center;
             Text {
                 text: root.text;
-                color: ta.has-hover ? Theme.text_primary : root.text_color;
+                color: is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
                 font-size: root.font_size;
                 font-weight: 600;
             }
         }
     }
 
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
+    fs := FocusScope {
+        enabled: !root.is_disabled;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            enabled: !root.is_disabled;
+            mouse-cursor: is_disabled ? default : pointer;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
     }
 }

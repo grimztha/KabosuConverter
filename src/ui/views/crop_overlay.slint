@@ -1,4 +1,5 @@
 import { AppLogic } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 export component CropOverlayView inherits Rectangle {
     in property <float> norm_x: 0.0;
@@ -22,7 +23,7 @@ export component CropOverlayView inherits Rectangle {
         y: 0px;
         width: root.width;
         height: max(0px, root.box_y);
-        background: #000000aa;
+        background: Theme.overlay_mask;
     }
 
     // Bottom dark mask outside crop area
@@ -31,7 +32,7 @@ export component CropOverlayView inherits Rectangle {
         y: root.box_y + root.box_h;
         width: root.width;
         height: max(0px, root.height - (root.box_y + root.box_h));
-        background: #000000aa;
+        background: Theme.overlay_mask;
     }
 
     // Left dark mask outside crop area
@@ -40,7 +41,7 @@ export component CropOverlayView inherits Rectangle {
         y: root.box_y;
         width: max(0px, root.box_x);
         height: root.box_h;
-        background: #000000aa;
+        background: Theme.overlay_mask;
     }
 
     // Right dark mask outside crop area
@@ -49,7 +50,7 @@ export component CropOverlayView inherits Rectangle {
         y: root.box_y;
         width: max(0px, root.width - (root.box_x + root.box_w));
         height: root.box_h;
-        background: #000000aa;
+        background: Theme.overlay_mask;
     }
 
     // Crop Box Frame
@@ -59,8 +60,8 @@ export component CropOverlayView inherits Rectangle {
         width: root.box_w;
         height: root.box_h;
         border-width: 2px;
-        border-color: #38bdf8;
-        background: #38bdf80a;
+        border-color: Theme.accent_cyan;
+        background: Theme.accent_cyan.with-alpha(0.04);
 
         // Rule of thirds vertical lines
         Rectangle {
@@ -68,14 +69,14 @@ export component CropOverlayView inherits Rectangle {
             y: 0px;
             width: 1px;
             height: parent.height;
-            background: #ffffff44;
+            background: #ffffff.with-alpha(0.27);
         }
         Rectangle {
             x: (parent.width * 2) / 3;
             y: 0px;
             width: 1px;
             height: parent.height;
-            background: #ffffff44;
+            background: #ffffff.with-alpha(0.27);
         }
 
         // Rule of thirds horizontal lines
@@ -84,14 +85,14 @@ export component CropOverlayView inherits Rectangle {
             y: parent.height / 3;
             width: parent.width;
             height: 1px;
-            background: #ffffff44;
+            background: #ffffff.with-alpha(0.27);
         }
         Rectangle {
             x: 0px;
             y: (parent.height * 2) / 3;
             width: parent.width;
             height: 1px;
-            background: #ffffff44;
+            background: #ffffff.with-alpha(0.27);
         }
 
         // Center Crosshair
@@ -100,14 +101,14 @@ export component CropOverlayView inherits Rectangle {
             y: (parent.height - 1px) / 2;
             width: 12px;
             height: 1px;
-            background: #38bdf8aa;
+            background: Theme.accent_cyan.with-alpha(0.66);
         }
         Rectangle {
             x: (parent.width - 1px) / 2;
             y: (parent.height - 12px) / 2;
             width: 1px;
             height: 12px;
-            background: #38bdf8aa;
+            background: Theme.accent_cyan.with-alpha(0.66);
         }
 
         // Live Dimensions & Coordinates Readout Pill inside Crop Box
@@ -117,17 +118,18 @@ export component CropOverlayView inherits Rectangle {
             height: 20px;
             width: dim_txt.preferred-width + 12px;
             border-radius: 4px;
-            background: #141418cc;
+            background: Theme.card_bg.with-alpha(0.8);
             border-width: 1px;
-            border-color: #38bdf888;
+            border-color: Theme.accent_cyan.with-alpha(0.53);
 
             dim_txt := Text {
                 x: 6px;
                 y: (parent.height - self.height) / 2;
                 text: "\{root.crop_px_w} × \{root.crop_px_h}  (\{root.crop_px_x}, \{root.crop_px_y})";
-                font-size: 10px;
+                font-size: Theme.font_badge;
+                font-family: Theme.font_mono;
                 font-weight: 700;
-                color: #38bdf8;
+                color: Theme.accent_cyan;
             }
         }
 
@@ -166,9 +168,9 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: tl_ta.has-hover || tl_ta.pressed ? #fbbf24 : #ffffff;
+        background: tl_ta.has-hover || tl_ta.pressed ? Theme.accent_amber : #ffffff;
         border-width: 2px;
-        border-color: #0284c7;
+        border-color: Theme.accent_primary;
         tl_ta := TouchArea {
             mouse-cursor: nwse-resize;
             pointer-event(ev) => {
@@ -204,9 +206,9 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: tr_ta.has-hover || tr_ta.pressed ? #fbbf24 : #ffffff;
+        background: tr_ta.has-hover || tr_ta.pressed ? Theme.accent_amber : #ffffff;
         border-width: 2px;
-        border-color: #0284c7;
+        border-color: Theme.accent_primary;
         tr_ta := TouchArea {
             mouse-cursor: nesw-resize;
             pointer-event(ev) => {
@@ -242,9 +244,9 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: bl_ta.has-hover || bl_ta.pressed ? #fbbf24 : #ffffff;
+        background: bl_ta.has-hover || bl_ta.pressed ? Theme.accent_amber : #ffffff;
         border-width: 2px;
-        border-color: #0284c7;
+        border-color: Theme.accent_primary;
         bl_ta := TouchArea {
             mouse-cursor: nesw-resize;
             pointer-event(ev) => {
@@ -280,9 +282,9 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: br_ta.has-hover || br_ta.pressed ? #fbbf24 : #ffffff;
+        background: br_ta.has-hover || br_ta.pressed ? Theme.accent_amber : #ffffff;
         border-width: 2px;
-        border-color: #0284c7;
+        border-color: Theme.accent_primary;
         br_ta := TouchArea {
             mouse-cursor: nwse-resize;
             pointer-event(ev) => {
@@ -318,7 +320,7 @@ export component CropOverlayView inherits Rectangle {
         width: 24px;
         height: 8px;
         border-radius: 2px;
-        background: t_ta.has-hover || t_ta.pressed ? #fbbf24 : #38bdf8;
+        background: t_ta.has-hover || t_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
         t_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
@@ -354,7 +356,7 @@ export component CropOverlayView inherits Rectangle {
         width: 24px;
         height: 8px;
         border-radius: 2px;
-        background: b_ta.has-hover || b_ta.pressed ? #fbbf24 : #38bdf8;
+        background: b_ta.has-hover || b_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
         b_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
@@ -390,7 +392,7 @@ export component CropOverlayView inherits Rectangle {
         width: 8px;
         height: 24px;
         border-radius: 2px;
-        background: l_ta.has-hover || l_ta.pressed ? #fbbf24 : #38bdf8;
+        background: l_ta.has-hover || l_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
         l_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {
@@ -426,7 +428,7 @@ export component CropOverlayView inherits Rectangle {
         width: 8px;
         height: 24px;
         border-radius: 2px;
-        background: r_ta.has-hover || r_ta.pressed ? #fbbf24 : #38bdf8;
+        background: r_ta.has-hover || r_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
         r_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {

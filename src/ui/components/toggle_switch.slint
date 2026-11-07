@@ -1,4 +1,4 @@
-import { Theme } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 export component ToggleSwitch inherits Rectangle {
     in-out property <bool> checked: false;
@@ -8,9 +8,12 @@ export component ToggleSwitch inherits Rectangle {
     width: 44px;
     height: 24px;
     border-radius: 12px;
-    background: root.is_disabled ? #27272a : (root.checked ? (ta.has-hover ? #0284c7 : Theme.accent_cyan) : (ta.has-hover ? #4b4b55 : #3f3f46));
+    background: root.is_disabled ? Theme.control_bg : (root.checked ? (ta.has-hover ? Theme.accent_primary_hover : Theme.accent_primary) : (ta.has-hover ? Theme.control_hover : Theme.control_bg));
+    border-width: fs.has-focus ? 2px : 1px;
+    border-color: fs.has-focus ? Theme.focus_ring : Theme.border_color;
 
     animate background { duration: 160ms; easing: ease-out; }
+    animate border-color { duration: 160ms; easing: ease-out; }
 
     knob := Rectangle {
         x: root.checked ? (root.width - self.width - 3px) : 3px;
@@ -18,22 +21,35 @@ export component ToggleSwitch inherits Rectangle {
         width: 18px;
         height: 18px;
         border-radius: 9px;
-        background: root.is_disabled ? #52525b : #ffffff;
+        background: root.is_disabled ? Theme.text_faint : #ffffff;
         drop-shadow-blur: 4px;
         drop-shadow-offset-y: 1px;
-        drop-shadow-color: #00000033;
+        drop-shadow-color: #00000044;
 
         animate x { duration: 160ms; easing: ease-out; }
     }
 
-    ta := TouchArea {
-        width: 100%;
-        height: 100%;
+    fs := FocusScope {
         enabled: !root.is_disabled;
-        mouse-cursor: root.is_disabled ? default : pointer;
-        clicked => {
-            root.checked = !root.checked;
-            root.toggled(root.checked);
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " {
+                root.checked = !root.checked;
+                root.toggled(root.checked);
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            width: 100%;
+            height: 100%;
+            enabled: !root.is_disabled;
+            mouse-cursor: root.is_disabled ? default : pointer;
+            clicked => {
+                fs.focus();
+                root.checked = !root.checked;
+                root.toggled(root.checked);
+            }
         }
     }
 }

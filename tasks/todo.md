@@ -1,39 +1,52 @@
-# Tasks: Another Encoder
+# UI & Layout Overhaul Task List
 
-## Phase 1: FFmpeg Engine & Media Intelligence
-- [x] Task 1.1: Binary locator (`src/ffmpeg/locator.rs`) to detect local & system `ffmpeg.exe`, `ffprobe.exe`.
-- [x] Task 1.2: Media metadata probe engine (`src/ffmpeg/probe.rs`) parsing video/audio codecs, resolution, duration, bitrate, frame rate.
-- [x] Task 1.3: Type-safe FFmpeg CLI command builder (`src/ffmpeg/builder.rs`) supporting all modes: Transcode (H.264, H.265, AV1, ProRes, DNxHD, VP9), Rewrap, Cut, Extract, Audio Normalization, Merge, Replace Audio.
-- [x] Task 1.4: Real-time asynchronous process runner (`src/ffmpeg/runner.rs`) with progress percentage, FPS, bitrate, speed parsing and job cancellation.
-- [x] Task 1.5: Unit tests for locator, probe parsing, command builder, and progress parsing (`cargo test` - 11/11 passed).
+- [x] Task 1: Centralized Design System & Semantic Tokens (`src/ui/theme.slint`)
+  - [x] Define full semantic palette (surfaces, borders, interactive states, status ramps)
+  - [x] Fix text contrast (`text_muted: #9ca3af`, `text_secondary: #d4d4d8`)
+  - [x] Define 5-tier semantic type scale (18px, 14px, 13px, 12px, 11px floor) and monospace font family
+  - [x] Add meter and visualizer color tokens
+- [x] Task 2: Component Architecture & Tactile States (`src/ui/components/`)
+  - [x] Update `ActionButton` with `0.96` press scale, standard height tiers, and focus indicators
+  - [x] Update `IconButton` with `0.96` press scale, focus indicators, and Theme colors
+  - [x] Rewire `VolumeBar` and `VolumeMeter` to `Theme` tokens and fix micro-text
+  - [x] Update `ToggleSwitch`, `NumInput`, and `Badge` to adhere to Theme tokens
+- [x] Task 3: Shell & Collapsible Queue Panel (`src/ui/main.slint`, `src/ui/views/queue_panel.slint`)
+  - [x] Add collapsible toggle for `QueuePanel` to reclaim horizontal space
+  - [x] Fix concentric border radius formula (`outer = inner + padding`) on queue cards
+  - [x] Replace 9.5px micro-text in `QueuePanel` with 11px/12px tokens
+  - [x] Add safety confirmation guard on "Clear Queue"
+  - [x] Bind status bar telemetry to monospace font
+- [x] Task 4: Player & Trimming Studio Overhaul (`src/ui/views/player_tab.slint`, `src/ui/timeline/`)
+  - [x] Fix Pause button color from red (`#e11d48`) to accent/neutral active state
+  - [x] Redesign transport and trimming deck with responsive wrapping to prevent 960px clipping
+  - [x] Apply tabular monospace font to `player_time_text` and `player_duration_text`
+  - [x] Establish single primary action hierarchy ("Lossless Cut Now")
+  - [x] Fix sub-10px fonts in `audio_waveform.slint` and `timeline_grid.slint`
+- [x] Task 5: Downloader & Transcoder Views Overhaul (`src/ui/views/downloader_tab.slint`, `transcoder_tab.slint`, `edit_panel.slint`)
+  - [x] Tokenize colors in `downloader_tab.slint` and add tabular monospace telemetry
+  - [x] Fix micro-text in `edit_panel.slint` and convert all-caps labels to natural title case
+  - [x] Add safety confirmation guard on "Clear History"
+- [x] Task 6: Unit & Integration Tests Verification
+  - [x] Create `tests/ui_layout_overhaul_tests.rs` with automated Slint UI assertions
+  - [x] Run and verify `cargo check` and `cargo test`
 
-## Phase 2: Configuration & State Management
-- [x] Task 2.1: Rich settings schema (`src/settings.rs`) for encoder presets, hardware acceleration, default output folder, audio normalization defaults.
-- [x] Task 2.2: Queue management logic integrated in UI model for multiple input files, statuses, and batch progression.
+## Phase 2: Remaining Findings Implementation
 
-## Phase 3: Slint UI Design & Pro Aesthetics
-- [x] Task 3.1: Design system in Slint (`src/ui/main.slint`) with modern dark theme palette, typography, badges, custom buttons, and smooth sliders.
-- [x] Task 3.2: Input Files queue component with multi-file list, remove item, clear, file details (resolution, duration, codec, file size).
-- [x] Task 3.3: Function & Preset selector with categorized functions (Output Codecs, Editing Codecs, Audio Conversion, Lossless Remux, Cut, Extract, Merge, Normalize).
-- [x] Task 3.4: Video settings panel (Codec, Hardware Accel, Rate Control CRF/Bitrate, Preset, Scaling, Framerate, Deinterlace).
-- [x] Task 3.5: Audio settings panel (Audio Codec, Bitrate, Channels, Sample Rate, Normalization LUFS).
-- [x] Task 3.6: Cut & Trim controls (In Point, Out Point) and Output destination selection.
-- [x] Task 3.7: Progress bar, stats indicators (speed, ETA, elapsed), log drawer, Start and Cancel actions.
-
-## Phase 4: Integration & Wire-Up
-- [x] Task 4.1: Connect Slint UI callbacks in `src/main.rs` with native file pickers (`rfd`), media probe, and async queue runner.
-- [x] Task 4.2: Real-time UI updates via Slint `slint::invoke_from_event_loop`.
-- [x] Task 4.3: Open destination folder / play output file.
-
-## Phase 5: Verification, Testing & Polish
-- [x] Task 5.1: Run all unit tests and verify they pass (`cargo test`).
-- [x] Task 5.2: Test actual encoding with synthetic media created with `ffmpeg.exe`.
-- [x] Task 5.3: Build release binary and verify startup and performance (`target/release/another-encoder.exe`).
-
-## Phase 6: Media Player & Timeline Trimming Studio
-- [x] Task 6.1: Dual Video/Audio Player screen in Slint (`src/ui/main.slint`) with dynamic frame canvas, audio equalizer visualizer, and timecode overlays.
-- [x] Task 6.2: Interactive timeline scrubber with visual trimmed range highlight, in-point/out-point markers, and step buttons (`-5s`, `-1s`, `-0.1s`, `+0.1s`, `+1s`, `+5s`).
-- [x] Task 6.3: Asynchronous frame preview extraction engine (`src/ffmpeg/preview.rs`) using background worker with request deduplication and temporary file cleanup.
-- [x] Task 6.4: Two-way synchronization between visual timeline markers, playhead time, and text inputs for In & Out points.
-- [x] Task 6.5: Native FFplay integration for high-performance external playback and previewing trimmed ranges.
-- [x] Task 6.6: Integration and unit tests for timecode parsing and preview frame extraction (13/13 tests passing).
+- [x] Task 7: Eliminate 1px Dividers in TranscoderTab & Group with Whitespace (Finding #10)
+  - [x] Remove all 17+ `Rectangle { height: 1px; background: Theme.card_secondary_border; }` in `transcoder_tab.slint`
+  - [x] Adjust padding and spacing (12px/16px) between settings rows to group cleanly by whitespace
+  - [x] Use `Theme.font_body` and `Theme.font_badge` instead of hardcoded font sizes
+- [x] Task 8: Tabular Monospace on Queue Metadata & Concentric Radii (Findings #9 & #13)
+  - [x] Apply `Theme.font_mono` to Resolution, Duration, File Size in `queue_panel.slint`
+  - [x] Apply concentric radii formula (`outer = inner + padding`) to secondary cards and chips in `edit_panel.slint` and `transcoder_tab.slint`
+- [x] Task 9: Standardize All Button Call Sites into 3 Sizing Tiers (Finding #15)
+  - [x] Add explicit `btn_height_sm: 28px`, `btn_height_md: 34px`, `btn_height_lg: 40px` in `Theme`
+  - [x] Update `ActionButton` and `IconButton` calls across `edit_panel.slint`, `downloader_tab.slint`, `queue_panel.slint`, `player_tab.slint`, `transcoder_tab.slint`
+- [x] Task 10: Deep Tokenization of Raw Hex Literals (Finding #6)
+  - [x] Add missing overlay, timeline track, and trim boundary tokens to `theme.slint`
+  - [x] Import `Theme` and replace raw `#hex` in `crop_overlay.slint`
+  - [x] Import `Theme` and replace raw `#hex` in `visual_timeline.slint` and `timeline_scrollbar.slint`
+  - [x] Replace recurring raw `#hex` in `edit_panel.slint` and `downloader_tab.slint` with `Theme` tokens
+- [x] Task 11: Unit Tests Updates & Full Verification
+  - [x] Update `tests/ui_layout_overhaul_tests.rs` to assert divider removal, button tier compliance, and metadata monospace
+  - [x] Verify `cargo check` and run full regression tests

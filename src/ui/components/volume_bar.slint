@@ -1,3 +1,5 @@
+import { Theme } from "../theme.slint";
+
 export component VolumeBar inherits Rectangle {
     in-out property <float> volume: 1.0;
     in-out property <bool> is_muted: false;
@@ -6,9 +8,9 @@ export component VolumeBar inherits Rectangle {
 
     height: 28px;
     border-radius: 6px;
-    background: #1c1c22;
+    background: Theme.control_bg;
     border-width: 1px;
-    border-color: #272a38;
+    border-color: Theme.border_color;
 
     HorizontalLayout {
         padding-top: 4px;
@@ -23,7 +25,7 @@ export component VolumeBar inherits Rectangle {
             width: 20px;
             height: 20px;
             border-radius: 4px;
-            background: mute_ta.has-hover ? #2a2a30 : #00000000;
+            background: mute_ta.has-hover ? Theme.control_hover : #00000000;
 
             Image {
                 x: (parent.width - self.width) / 2;
@@ -31,7 +33,7 @@ export component VolumeBar inherits Rectangle {
                 width: 14px;
                 height: 14px;
                 source: root.is_muted || root.volume <= 0.01 ? @image-url("../icons/volume-x.svg") : (root.volume > 0.5 ? @image-url("../icons/volume-2.svg") : @image-url("../icons/volume-1.svg"));
-                colorize: root.is_muted || root.volume <= 0.01 ? #ef4444 : (mute_ta.has-hover ? #38bdf8 : #a1a1aa);
+                colorize: root.is_muted || root.volume <= 0.01 ? Theme.accent_red : (mute_ta.has-hover ? Theme.accent_cyan : Theme.text_muted);
             }
 
             mute_ta := TouchArea {
@@ -51,7 +53,7 @@ export component VolumeBar inherits Rectangle {
                 width: 100%;
                 height: 5px;
                 border-radius: 2.5px;
-                background: #2a2a30;
+                background: Theme.slider_track;
 
                 // Filled Track (colored)
                 Rectangle {
@@ -60,7 +62,7 @@ export component VolumeBar inherits Rectangle {
                     height: 100%;
                     width: root.is_muted || root.volume <= 0.0 ? 0px : min(parent.width, (parent.width - 12px) * root.volume.clamp(0.0, 1.0) + 6px);
                     border-radius: 2.5px;
-                    background: root.is_muted ? #71717a : @linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
+                    background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_cyan 100%);
                 }
             }
 
@@ -72,9 +74,9 @@ export component VolumeBar inherits Rectangle {
                 width: 12px;
                 height: 12px;
                 border-radius: 6px;
-                background: root.is_muted ? #a1a1aa : (slider_ta.has-hover || slider_ta.pressed ? #38bdf8 : #ffffff);
+                background: root.is_muted ? Theme.text_muted : (slider_ta.has-hover || slider_ta.pressed ? Theme.accent_cyan : Theme.slider_thumb);
                 border-width: 1.5px;
-                border-color: root.is_muted ? #71717a : #0284c7;
+                border-color: root.is_muted ? Theme.text_faint : Theme.accent_primary;
             }
 
             slider_ta := TouchArea {
@@ -100,22 +102,6 @@ export component VolumeBar inherits Rectangle {
                     }
                     reject
                 }
-            }
-        }
-
-        // Percentage Text Readout
-        Rectangle {
-            width: 32px;
-            height: 20px;
-            Text {
-                width: 100%;
-                height: 100%;
-                text: root.is_muted ? "0%" : "\{Math.round(root.volume * 100)}%";
-                font-size: 11px;
-                font-weight: 700;
-                color: root.is_muted ? #ef4444 : #a1a1aa;
-                horizontal-alignment: right;
-                vertical-alignment: center;
             }
         }
     }

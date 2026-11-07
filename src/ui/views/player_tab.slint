@@ -38,13 +38,13 @@ export component PlayerTab inherits VerticalLayout {
                     width: 64px;
                     height: 64px;
                     border-radius: 32px;
-                    background: @linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+                    background: @linear-gradient(135deg, Theme.accent_primary 0%, #38bdf8 100%);
                     Image {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                         source: @image-url("../icons/film.svg");
                         width: 28px;
-                        height: 28px;
+                        height: Theme.btn_height_sm;
                         colorize: #ffffff;
                     }
                 }
@@ -62,7 +62,7 @@ export component PlayerTab inherits VerticalLayout {
                 }
                 Text {
                     text: "Load any audio or video file to preview frame-by-frame, scrub the interactive timeline, and trim.";
-                    font-size: 13px;
+                    font-size: Theme.font_body;
                     color: Theme.text_secondary;
                     horizontal-alignment: center;
                 }
@@ -72,14 +72,14 @@ export component PlayerTab inherits VerticalLayout {
                 alignment: center;
                 ActionButton {
                     width: 240px;
-                    height: 42px;
+                    height: Theme.btn_height_lg;
                     title: "Open Audio or Video File";
                     icon_source: @image-url("../icons/folder-open.svg");
                     has_icon: true;
                     icon_size: 16px;
-                    fill_color: #0284c7;
-                    hover_color: #0369a1;
-                    font_size: 13px;
+                    fill_color: Theme.accent_primary;
+                    hover_color: Theme.accent_primary_hover;
+                    font_size: Theme.font_body;
                     clicked => { AppLogic.add_files(); }
                 }
             }
@@ -121,7 +121,7 @@ export component PlayerTab inherits VerticalLayout {
                     width: 32px;
                     height: 32px;
                     border-radius: 6px;
-                    background: AppData.selected_is_video ? @linear-gradient(135deg, #0284c7 0%, #38bdf8 100%) : @linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+                    background: AppData.selected_is_video ? @linear-gradient(135deg, Theme.accent_primary 0%, #38bdf8 100%) : @linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
                     Image {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
@@ -286,7 +286,7 @@ export component PlayerTab inherits VerticalLayout {
 
                     // Left: Combined Playhead & Duration Pill
                     Rectangle {
-                        height: 28px;
+                        height: Theme.btn_height_sm;
                         border-radius: 6px;
                         background: Theme.card_secondary_bg;
                         border-width: 1px;
@@ -296,9 +296,9 @@ export component PlayerTab inherits VerticalLayout {
                             padding-right: 8px;
                             spacing: 5px;
                             alignment: center;
-                            Text { text: AppData.player_time_text; font-size: 12px; font-weight: 800; color: Theme.accent_cyan; vertical-alignment: center; }
-                            Text { text: "/"; font-size: 11px; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
-                            Text { text: AppData.player_duration_text; font-size: 11.5px; font-weight: 700; color: Theme.text_primary; vertical-alignment: center; }
+                            Text { text: AppData.player_time_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.accent_cyan; vertical-alignment: center; }
+                            Text { text: "/"; font-size: Theme.font_badge; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
+                            Text { text: AppData.player_duration_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.text_primary; vertical-alignment: center; }
                         }
                     }
 
@@ -316,7 +316,7 @@ export component PlayerTab inherits VerticalLayout {
 
                     // Zoom Controls (for both audio waveform and video timeline)
                     Rectangle {
-                        height: 28px;
+                        height: Theme.btn_height_sm;
                         border-radius: 6px;
                         background: Theme.card_secondary_bg;
                         border-width: 1px;
@@ -329,58 +329,58 @@ export component PlayerTab inherits VerticalLayout {
                             spacing: 3px;
                             alignment: center;
 
-                            Text { text: "ZOOM:"; font-size: 10px; font-weight: 700; color: Theme.text_muted; vertical-alignment: center; }
+                            Text { text: "Zoom:"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; vertical-alignment: center; }
 
                             Rectangle {
                                 width: 20px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzm_ta.has-hover ? Theme.control_hover : transparent;
-                                Text { text: "−"; font-size: 13px; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "−"; font-size: Theme.font_body; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzm_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5); } }
                             }
 
                             Rectangle {
-                                width: 24px;
+                                width: 26px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan.with-alpha(0.18) : (vz1_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: AppData.timeline_zoom <= 1.05 ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "1x"; font-size: 9.5px; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "1x"; font-size: Theme.font_badge; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz1_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 1.0; } }
                             }
 
                             Rectangle {
-                                width: 24px;
+                                width: 26px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz2_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "2x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "2x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz2_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 2.0; } }
                             }
 
                             Rectangle {
-                                width: 24px;
+                                width: 26px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz4_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "4x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "4x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz4_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 4.0; } }
                             }
 
                             Rectangle {
-                                width: 24px;
+                                width: 26px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz8_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? 1px : 0px;
                                 border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "8x"; font-size: 9.5px; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "8x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz8_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 8.0; } }
                             }
 
@@ -389,7 +389,7 @@ export component PlayerTab inherits VerticalLayout {
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzp_ta.has-hover ? Theme.control_hover : transparent;
-                                Text { text: "+"; font-size: 13px; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "+"; font-size: Theme.font_body; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzp_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5); } }
                             }
 
@@ -411,7 +411,7 @@ export component PlayerTab inherits VerticalLayout {
 
                     // Volume Meter Toggle Button
                     meter_toggle_btn := Rectangle {
-                        height: 28px;
+                        height: Theme.btn_height_sm;
                         border-radius: 6px;
                         background: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.18) : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.card_secondary_bg);
                         border-width: 1px;
@@ -465,8 +465,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Text {
-                                text: "METER";
-                                font-size: 10px;
+                                text: "Meter";
+                                font-size: Theme.font_badge;
                                 font-weight: 700;
                                 color: AppData.show_volume_meter ? Theme.accent_cyan : Theme.text_muted;
                                 vertical-alignment: center;
@@ -483,13 +483,13 @@ export component PlayerTab inherits VerticalLayout {
 
                     Rectangle { horizontal-stretch: 1; }
 
-                    // Right: Yellow Trim Pill (when active)
+                    // Right: Amber Trim Pill (when active)
                     if AppData.has_active_trim : Rectangle {
-                        height: 28px;
+                        height: Theme.btn_height_sm;
                         border-radius: 6px;
-                        background: #d9770633;
+                        background: Theme.accent_amber.with-alpha(0.18);
                         border-width: 1px;
-                        border-color: #f59e0b;
+                        border-color: Theme.accent_amber;
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
@@ -501,16 +501,16 @@ export component PlayerTab inherits VerticalLayout {
                                     source: @image-url("../icons/scissors.svg");
                                     width: 12px;
                                     height: 12px;
-                                    colorize: #f59e0b;
+                                    colorize: Theme.accent_amber;
                                 }
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Text { text: "TRIM:"; font-size: 10px; font-weight: 700; color: #f59e0b; }
+                                Text { text: "Trim:"; font-size: Theme.font_badge; font-weight: 700; color: Theme.accent_amber; }
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Text { text: AppData.trim_duration_text; font-size: 11.5px; font-weight: 800; color: #fbbf24; }
+                                Text { text: AppData.trim_duration_text; font-size: Theme.font_caption; font-weight: 800; font-family: Theme.font_mono; color: Theme.accent_amber; }
                             }
                         }
                     }
@@ -545,71 +545,72 @@ export component PlayerTab inherits VerticalLayout {
 
                 IconButton {
                     btn_width: 52px;
-                    btn_height: 30px;
+                    btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
                     icon_size: 13px;
                     text: "-1s";
-                    font_size: 11px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.player_step(-1.0); }
                 }
                 IconButton {
-                    btn_width: 56px;
-                    btn_height: 30px;
+                    btn_width: 54px;
+                    btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevron-left.svg");
                     has_icon: true;
                     icon_size: 12px;
                     text: "-0.1s";
-                    font_size: 10px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.player_step(-0.1); }
                 }
 
-                // Play / Pause Button
+                // Play / Pause Button (Neutral active when playing, Cyan when paused)
                 ActionButton {
-                    width: 90px;
-                    height: 30px;
+                    width: 88px;
+                    height: Theme.btn_height_md;
                     title: AppData.player_is_playing ? "Pause" : "Play";
                     icon_source: AppData.player_is_playing ? @image-url("../icons/pause.svg") : @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: AppData.player_is_playing ? #e11d48 : #0284c7;
-                    hover_color: AppData.player_is_playing ? #be123c : #0369a1;
-                    font_size: 12px;
+                    fill_color: AppData.player_is_playing ? Theme.btn_neutral_bg : Theme.accent_primary;
+                    hover_color: AppData.player_is_playing ? Theme.btn_neutral_hover : Theme.accent_primary_hover;
+                    text_color: AppData.player_is_playing ? Theme.accent_cyan : #ffffff;
+                    font_size: Theme.font_caption;
                     clicked => { AppLogic.player_play_pause(); }
                 }
 
                 IconButton {
                     btn_width: 34px;
-                    btn_height: 30px;
+                    btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/stop.svg");
                     has_icon: true;
                     icon_size: 13px;
-                    hover_bg: #26262e;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.player_stop(); }
                 }
 
                 IconButton {
-                    btn_width: 56px;
-                    btn_height: 30px;
+                    btn_width: 54px;
+                    btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevron-right.svg");
                     has_icon: true;
                     icon_size: 12px;
                     text: "+0.1s";
-                    font_size: 10px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.player_step(0.1); }
                 }
                 IconButton {
                     btn_width: 52px;
-                    btn_height: 30px;
+                    btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
                     icon_size: 13px;
                     text: "+1s";
-                    font_size: 11px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.player_step(1.0); }
                 }
             }
@@ -620,92 +621,95 @@ export component PlayerTab inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
-                    width: 62px;
-                    height: 26px;
+                    width: 66px;
+                    height: Theme.btn_height_sm;
                     title: "[ Set In";
-                    fill_color: #d97706;
-                    hover_color: #b45309;
-                    font_size: 10px;
+                    fill_color: Theme.card_secondary_bg;
+                    hover_color: Theme.control_hover;
+                    text_color: Theme.accent_amber;
+                    font_size: Theme.font_badge;
                     clicked => { AppLogic.set_in_point_current(); }
                 }
 
                 ActionButton {
-                    width: 62px;
-                    height: 26px;
+                    width: 66px;
+                    height: Theme.btn_height_sm;
                     title: "Set Out ]";
-                    fill_color: #d97706;
-                    hover_color: #b45309;
-                    font_size: 10px;
+                    fill_color: Theme.card_secondary_bg;
+                    hover_color: Theme.control_hover;
+                    text_color: Theme.accent_amber;
+                    font_size: Theme.font_badge;
                     clicked => { AppLogic.set_out_point_current(); }
                 }
 
                 IconButton {
                     btn_width: 38px;
-                    btn_height: 26px;
+                    btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "In";
-                    font_size: 10px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.jump_to_in_point(); }
                 }
 
                 IconButton {
                     btn_width: 40px;
-                    btn_height: 26px;
+                    btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "Out";
-                    font_size: 10px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.jump_to_out_point(); }
                 }
 
                 ActionButton {
-                    width: 74px;
-                    height: 26px;
+                    width: 82px;
+                    height: Theme.btn_height_sm;
                     title: "Play Trim";
                     icon_source: @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 10px;
-                    fill_color: #059669;
-                    hover_color: #047857;
-                    font_size: 10px;
+                    fill_color: Theme.card_secondary_bg;
+                    hover_color: Theme.control_hover;
+                    text_color: Theme.accent_emerald;
+                    font_size: Theme.font_badge;
                     clicked => { AppLogic.play_trimmed_range(); }
                 }
 
                 IconButton {
-                    btn_width: 52px;
-                    btn_height: 26px;
+                    btn_width: 54px;
+                    btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/reset.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "Reset";
-                    font_size: 10px;
-                    hover_bg: #26262e;
+                    font_size: Theme.font_badge;
+                    hover_bg: Theme.control_hover;
                     clicked => { AppLogic.clear_trim_points(); }
                 }
             }
 
-            // Row 2: Precision In/Out Timecodes & Instant Actions Deck
+            // Row 3: Precision In/Out Timecodes & Instant Actions Deck
             HorizontalLayout {
-                spacing: 8px;
+                spacing: 6px;
                 alignment: center;
 
                 Text {
                     text: "In:";
-                    font-size: 11px;
+                    font-size: Theme.font_badge;
                     font-weight: 700;
-                    color: #fbbf24;
+                    color: Theme.accent_amber;
                     vertical-alignment: center;
                 }
 
                 LineEdit {
-                    width: 105px;
-                    height: 28px;
-                    font-size: 11px;
+                    width: 95px;
+                    height: Theme.btn_height_sm;
+                    font-size: Theme.font_badge;
                     text <=> AppData.in_point;
                     placeholder-text: "00:00:00.000";
                     edited(txt) => { AppLogic.in_point_text_changed(txt); }
@@ -713,40 +717,41 @@ export component PlayerTab inherits VerticalLayout {
 
                 Text {
                     text: "Out:";
-                    font-size: 11px;
+                    font-size: Theme.font_badge;
                     font-weight: 700;
-                    color: #fbbf24;
+                    color: Theme.accent_amber;
                     vertical-alignment: center;
                 }
 
                 LineEdit {
-                    width: 105px;
-                    height: 28px;
-                    font-size: 11px;
+                    width: 95px;
+                    height: Theme.btn_height_sm;
+                    font-size: Theme.font_badge;
                     text <=> AppData.out_point;
                     placeholder-text: "00:00:00.000";
                     edited(txt) => { AppLogic.out_point_text_changed(txt); }
                 }
 
-                Rectangle { width: 1px; height: 18px; background: #2a2a30; }
+                Rectangle { width: 1px; height: 16px; background: Theme.card_border; }
 
                 ActionButton {
-                    width: 128px;
-                    height: 28px;
+                    width: 124px;
+                    height: Theme.btn_height_sm;
                     title: "Lossless Cut Now";
                     icon_source: @image-url("../icons/scissors.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: #059669;
-                    hover_color: #047857;
-                    font_size: 10.5px;
+                    fill_color: AppData.has_active_trim ? Theme.accent_emerald : Theme.control_bg;
+                    hover_color: AppData.has_active_trim ? Theme.accent_emerald_hover : Theme.control_bg;
+                    text_color: AppData.has_active_trim ? #ffffff : Theme.text_muted;
+                    font_size: Theme.font_badge;
                     is_disabled: !AppData.has_active_trim;
                     clicked => { AppLogic.quick_lossless_cut(); }
                 }
 
                 ActionButton {
-                    width: 120px;
-                    height: 28px;
+                    width: 114px;
+                    height: Theme.btn_height_sm;
                     title: "Codec Settings";
                     icon_source: @image-url("../icons/settings.svg");
                     has_icon: true;
@@ -754,7 +759,7 @@ export component PlayerTab inherits VerticalLayout {
                     fill_color: Theme.btn_neutral_bg;
                     hover_color: Theme.btn_neutral_hover;
                     text_color: Theme.accent_cyan;
-                    font_size: 10.5px;
+                    font_size: Theme.font_badge;
                     clicked => { AppLogic.switch_tab(2); }
                 }
             }

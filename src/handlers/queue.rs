@@ -385,6 +385,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             }
         });
     }
+
+    // Handle Toggle Queue Panel
+    {
+        let ui_handle = ui.as_weak();
+        ui.global::<AppLogic>().on_toggle_queue_panel(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                app_data.set_queue_panel_expanded(!app_data.get_queue_panel_expanded());
+            }
+        });
+    }
 }
 
 #[cfg(test)]

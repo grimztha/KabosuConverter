@@ -1,15 +1,17 @@
+import { Theme } from "../theme.slint";
+
 export component VolumeMeter inherits Rectangle {
     in property <float> level_l_db: -60.0;
     in property <float> level_r_db: -60.0;
     in property <float> peak_l_db: -60.0;
     in property <float> peak_r_db: -60.0;
 
-    width: 50px;
+    width: 56px;
     height: 280px;
     border-radius: 8px;
-    background: #12141e;
+    background: Theme.meter_bg;
     border-width: 1px;
-    border-color: #2b2f44;
+    border-color: Theme.meter_border;
     clip: true;
 
     // Helper calculations for normalized scale [0.0, 1.0] corresponding to [-60dB, 0dB]
@@ -23,7 +25,7 @@ export component VolumeMeter inherits Rectangle {
         padding-right: 5px;
         padding-top: 10px;
         padding-bottom: 10px;
-        spacing: 4px;
+        spacing: 5px;
 
         // Bars Container (Left & Right Channels)
         bars_container := Rectangle {
@@ -44,7 +46,7 @@ export component VolumeMeter inherits Rectangle {
                     // 1. Red Zone: 0 dB to -6 dB (top 10%)
                     Rectangle {
                         height: 10%;
-                        background: #3b070c;
+                        background: Theme.meter_red_dim;
 
                         if root.norm_l > 0.90 : Rectangle {
                             x: 0px;
@@ -52,14 +54,14 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.90) / 0.10));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #ef4444;
+                            background: Theme.meter_red;
                         }
                     }
 
                     // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
-                        background: #332405;
+                        background: Theme.meter_yellow_dim;
 
                         if root.norm_l > 0.70 : Rectangle {
                             x: 0px;
@@ -67,14 +69,14 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.70) / 0.20));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #eab308;
+                            background: Theme.meter_yellow;
                         }
                     }
 
                     // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
-                        background: #062311;
+                        background: Theme.meter_green_dim;
 
                         if root.norm_l > 0.001 : Rectangle {
                             x: 0px;
@@ -82,7 +84,7 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, root.norm_l / 0.70));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #22c55e;
+                            background: Theme.meter_green;
                         }
                     }
                 }
@@ -102,7 +104,7 @@ export component VolumeMeter inherits Rectangle {
                     y: max(0px, parent.height * (1.0 - root.p_norm_l) - 1px);
                     width: 100%;
                     height: 2px;
-                    background: root.p_norm_l > 0.90 ? #f87171 : (root.p_norm_l > 0.70 ? #fde047 : #4ade80);
+                    background: root.p_norm_l > 0.90 ? Theme.meter_red : (root.p_norm_l > 0.70 ? Theme.meter_yellow : Theme.meter_green);
                 }
 
                 // Bottom silence/floor indicator
@@ -111,7 +113,7 @@ export component VolumeMeter inherits Rectangle {
                     y: parent.height - 2px;
                     width: 100%;
                     height: 2px;
-                    background: #ef4444;
+                    background: Theme.meter_red;
                 }
             }
 
@@ -130,7 +132,7 @@ export component VolumeMeter inherits Rectangle {
                     // 1. Red Zone: 0 dB to -6 dB (top 10%)
                     Rectangle {
                         height: 10%;
-                        background: #3b070c;
+                        background: Theme.meter_red_dim;
 
                         if root.norm_r > 0.90 : Rectangle {
                             x: 0px;
@@ -138,14 +140,14 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.90) / 0.10));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #ef4444;
+                            background: Theme.meter_red;
                         }
                     }
 
                     // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
-                        background: #332405;
+                        background: Theme.meter_yellow_dim;
 
                         if root.norm_r > 0.70 : Rectangle {
                             x: 0px;
@@ -153,14 +155,14 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.70) / 0.20));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #eab308;
+                            background: Theme.meter_yellow;
                         }
                     }
 
                     // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
-                        background: #062311;
+                        background: Theme.meter_green_dim;
 
                         if root.norm_r > 0.001 : Rectangle {
                             x: 0px;
@@ -168,7 +170,7 @@ export component VolumeMeter inherits Rectangle {
                             property <float> fill: min(1.0, max(0.0, root.norm_r / 0.70));
                             y: parent.height * (1.0 - fill);
                             height: parent.height * fill;
-                            background: #22c55e;
+                            background: Theme.meter_green;
                         }
                     }
                 }
@@ -188,7 +190,7 @@ export component VolumeMeter inherits Rectangle {
                     y: max(0px, parent.height * (1.0 - root.p_norm_r) - 1px);
                     width: 100%;
                     height: 2px;
-                    background: root.p_norm_r > 0.90 ? #f87171 : (root.p_norm_r > 0.70 ? #fde047 : #4ade80);
+                    background: root.p_norm_r > 0.90 ? Theme.meter_red : (root.p_norm_r > 0.70 ? Theme.meter_yellow : Theme.meter_green);
                 }
 
                 // Bottom silence/floor indicator
@@ -197,7 +199,7 @@ export component VolumeMeter inherits Rectangle {
                     y: parent.height - 2px;
                     width: 100%;
                     height: 2px;
-                    background: #ef4444;
+                    background: Theme.meter_red;
                 }
             }
         }
@@ -207,17 +209,17 @@ export component VolumeMeter inherits Rectangle {
             horizontal-stretch: 1;
             alignment: space-between;
 
-            Text { text: "- 0"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -6"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -12"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -18"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -24"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -30"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -36"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -42"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -48"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -54"; font-size: 8px; font-weight: 700; color: #94a3b8; }
-            Text { text: "- -60"; font-size: 8px; font-weight: 700; color: #94a3b8; }
+            Text { text: "- 0"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -6"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -12"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -18"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -24"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -30"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -36"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -42"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -48"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -54"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            Text { text: "- -60"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
         }
     }
 }

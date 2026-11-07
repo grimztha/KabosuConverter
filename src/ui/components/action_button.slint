@@ -1,28 +1,33 @@
-import { Theme } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 export component ActionButton inherits Rectangle {
     in property <string> title: "Button";
     in property <image> icon_source;
     in property <bool> has_icon: false;
-    in property <length> icon_size: 14px;
-    in property <color> fill_color: #0284c7;
-    in property <color> hover_color: #0369a1;
+    in property <length> icon_size: 13px;
+    in property <color> fill_color: Theme.accent_primary;
+    in property <color> hover_color: Theme.accent_primary_hover;
+    in property <color> pressed_color: fill_color.darker(0.25);
     in property <color> text_color: #ffffff;
-    in property <length> font_size: 13px;
+    in property <length> font_size: Theme.font_body;
     in property <bool> is_disabled: false;
+    in property <length> btn_radius: 6px;
     callback clicked();
 
-    height: 38px;
-    border-radius: 8px;
-    background: is_disabled ? #2a2a30 : (ta.has-hover ? hover_color : fill_color);
+    height: 34px;
+    border-radius: root.btn_radius;
+    background: is_disabled ? Theme.control_bg : (ta.pressed ? pressed_color : (ta.has-hover ? hover_color : fill_color));
+    border-width: fs.has-focus ? 2px : 0px;
+    border-color: Theme.focus_ring;
 
-    animate background { duration: 150ms; }
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
 
     HorizontalLayout {
         alignment: center;
-        spacing: 5px;
-        padding-left: 6px;
-        padding-right: 6px;
+        spacing: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
 
         if root.has_icon : VerticalLayout {
             alignment: center;
@@ -45,9 +50,23 @@ export component ActionButton inherits Rectangle {
         }
     }
 
-    ta := TouchArea {
-        mouse-cursor: is_disabled ? default : pointer;
-        enabled: !is_disabled;
-        clicked => { root.clicked(); }
+    fs := FocusScope {
+        enabled: !root.is_disabled;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            mouse-cursor: is_disabled ? default : pointer;
+            enabled: !is_disabled;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
     }
 }

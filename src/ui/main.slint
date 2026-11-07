@@ -29,7 +29,7 @@ export component MainWindow inherits Window {
 
     forward-focus: fs;
 
-    property <length> queue_panel_width: 300px;
+    property <length> queue_panel_width: AppData.queue_panel_expanded ? 300px : 38px;
 
     Rectangle {
         border-radius: AppData.is_window_maximized ? 0px : 12px;
@@ -95,9 +95,13 @@ export component MainWindow inherits Window {
                             min-width: root.queue_panel_width + 1px;
                             max-width: root.queue_panel_width + 1px;
                             horizontal-stretch: 0;
+                            clip: true;
+
+                            animate min-width { duration: 160ms; easing: ease-out; }
+                            animate max-width { duration: 160ms; easing: ease-out; }
 
                             HorizontalLayout {
-                                padding-left: 14px;
+                                padding-left: AppData.queue_panel_expanded ? 14px : 9px;
                                 spacing: 8px;
                                 alignment: start;
 
@@ -110,7 +114,7 @@ export component MainWindow inherits Window {
                                     }
                                 }
 
-                                VerticalLayout {
+                                if AppData.queue_panel_expanded : VerticalLayout {
                                     alignment: center;
                                     Text {
                                         text: "ANOTHER ENCODER";
@@ -118,6 +122,7 @@ export component MainWindow inherits Window {
                                         font-weight: 700;
                                         letter-spacing: 0.5px;
                                         color: Theme.text_primary;
+                                        overflow: elide;
                                     }
                                 }
                             }
@@ -328,6 +333,8 @@ export component MainWindow inherits Window {
                 max-width: root.queue_panel_width;
                 horizontal-stretch: 0;
                 request_focus => { fs.focus(); }
+                animate min-width { duration: 160ms; easing: ease-out; }
+                animate max-width { duration: 160ms; easing: ease-out; }
             }
 
             // Vertical Split Divider
@@ -413,15 +420,16 @@ export component MainWindow inherits Window {
                             width: 8px;
                             height: 8px;
                             border-radius: 4px;
-                            background: AppData.is_processing ? #f59e0b : (AppData.queue.length > 0 ? #10b981 : Theme.text_muted);
+                            background: AppData.is_processing ? Theme.accent_amber : (AppData.queue.length > 0 ? Theme.accent_emerald : Theme.text_muted);
                         }
                     }
 
                     Text {
                         text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
-                        font-size: 11px;
+                        font-size: Theme.font_badge;
                         font-weight: 600;
-                        color: AppData.is_processing ? #fbbf24 : Theme.text_primary;
+                        font-family: AppData.is_processing ? Theme.font_mono : "";
+                        color: AppData.is_processing ? Theme.accent_amber : Theme.text_primary;
                         vertical-alignment: center;
                     }
 
@@ -455,7 +463,7 @@ export component MainWindow inherits Window {
                     padding-right: 6px;
                     Text {
                         text: "High Performance Rust Transcoder & Video Downloader by SThao";
-                        font-size: 10.5px;
+                        font-size: Theme.font_badge;
                         font-weight: 500;
                         color: Theme.text_muted;
                         overflow: elide;

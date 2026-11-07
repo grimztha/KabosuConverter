@@ -1,3 +1,5 @@
+import { Theme } from "../theme.slint";
+
 export component TimelineGrid inherits Rectangle {
     in property <float> duration: 1.0;
     in property <bool> is_dual_channel: false;
@@ -92,7 +94,7 @@ export component TimelineGrid inherits Rectangle {
             y: root.ruler_height - 6px;
             width: 1px;
             height: 6px;
-            background: #94a3b8;
+            background: Theme.text_muted;
         }
 
         // Timecode Label in Ruler Bar
@@ -100,9 +102,10 @@ export component TimelineGrid inherits Rectangle {
             x: 4px;
             y: 2px;
             text: root.format_timecode(tick_item.tick_sec, root.show_fraction);
-            font-size: 8.5px;
+            font-size: Theme.font_badge;
             font-weight: 700;
-            color: #94a3b8;
+            font-family: Theme.font_mono;
+            color: Theme.text_muted;
         }
 
         // Minor Tick & Grid Line at Halfway

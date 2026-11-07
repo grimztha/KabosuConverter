@@ -1,4 +1,4 @@
-import { Theme } from "../globals.slint";
+import { Theme } from "../theme.slint";
 
 // Compact numeric/text input with zero min-width constraint
 export component NumInput inherits Rectangle {
@@ -7,11 +7,11 @@ export component NumInput inherits Rectangle {
     callback edited(string);
     callback accepted();
 
-    height: 26px;
+    height: 28px;
     border-radius: 5px;
     background: Theme.control_bg;
     border-width: 1px;
-    border-color: ti.has-focus ? Theme.accent_cyan : Theme.border_color;
+    border-color: ti.has-focus ? Theme.focus_ring : Theme.border_color;
 
     ti := TextInput {
         x: 6px;
@@ -19,9 +19,10 @@ export component NumInput inherits Rectangle {
         height: 100%;
         vertical-alignment: center;
         text <=> root.text;
-        font-size: 11px;
+        font-size: Theme.font_caption;
+        font-family: Theme.font_mono;
         color: Theme.text_primary;
-        selection-background-color: #0284c7;
+        selection-background-color: Theme.accent_primary;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(); }
     }
@@ -32,7 +33,7 @@ export component NumInput inherits Rectangle {
         height: 100%;
         vertical-alignment: center;
         text: root.placeholder;
-        font-size: 11px;
+        font-size: Theme.font_caption;
         color: Theme.text_muted;
     }
 }

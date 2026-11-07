@@ -124,7 +124,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
                                 alignment: center;
                                 Text {
                                     text: root.get_tag(opt);
-                                    font-size: 10.5px;
+                                    font-size: Theme.font_badge;
                                     font-weight: 700;
                                     color: root.get_tag_color(opt);
                                 }
@@ -136,7 +136,7 @@ export component DownloaderFormatDropdown inherits Rectangle {
                                 horizontal-stretch: 1;
                                 Text {
                                     text: root.get_label(opt);
-                                    font-size: 10.5px;
+                                    font-size: Theme.font_badge;
                                     font-weight: idx == root.safe_index ? 600 : 400;
                                     color: idx == root.safe_index ? Theme.text_primary : (item_ta.has-hover ? Theme.text_primary : Theme.text_secondary);
                                     overflow: elide;

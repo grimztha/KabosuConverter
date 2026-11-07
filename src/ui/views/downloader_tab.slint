@@ -5,6 +5,8 @@ import { Badge } from "../components/badge.slint";
 import { DownloaderFormatDropdown } from "../components/downloader_format_dropdown.slint";
 
 export component DownloaderTab inherits ScrollView {
+    property <bool> confirm_clear_history: false;
+
     VerticalLayout {
         padding-left: 20px;
         padding-right: 20px;
@@ -45,7 +47,7 @@ export component DownloaderTab inherits ScrollView {
                         spacing: 8px;
 
                         LineEdit {
-                            height: 36px;
+                            height: Theme.btn_height_md;
                             horizontal-stretch: 1;
                             font-size: 12px;
                             text <=> AppData.ytdlp_url;
@@ -56,7 +58,7 @@ export component DownloaderTab inherits ScrollView {
 
                         ActionButton {
                             width: 76px;
-                            height: 36px;
+                            height: Theme.btn_height_md;
                             title: "Paste";
                             icon_source: @image-url("../icons/layers.svg");
                             has_icon: true;
@@ -70,7 +72,7 @@ export component DownloaderTab inherits ScrollView {
 
                         ActionButton {
                             width: 76px;
-                            height: 36px;
+                            height: Theme.btn_height_md;
                             title: "Clear";
                             icon_source: @image-url("../icons/trash.svg");
                             has_icon: true;
@@ -84,13 +86,13 @@ export component DownloaderTab inherits ScrollView {
 
                         ActionButton {
                             width: 130px;
-                            height: 36px;
+                            height: Theme.btn_height_md;
                             title: AppData.ytdlp_is_discovering ? "Detecting..." : "Discover Media";
                             icon_source: @image-url("../icons/search.svg");
                             has_icon: true;
                             icon_size: 13px;
-                            fill_color: #0284c7;
-                            hover_color: #0369a1;
+                            fill_color: Theme.accent_primary;
+                            hover_color: Theme.accent_primary_hover;
                             text_color: #ffffff;
                             font_size: 12px;
                             is_disabled: AppData.ytdlp_url == "" || AppData.ytdlp_is_discovering;
@@ -105,7 +107,7 @@ export component DownloaderTab inherits ScrollView {
 
                         Text {
                             text: "Supported Platforms:";
-                            font-size: 10.5px;
+                            font-size: Theme.font_badge;
                             font-weight: 600;
                             color: Theme.text_muted;
                             vertical-alignment: center;
@@ -114,7 +116,7 @@ export component DownloaderTab inherits ScrollView {
                         Badge { label: "YouTube"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_red; height: 19px; }
                         Badge { label: "Twitch"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; height: 19px; }
                         Badge { label: "Vimeo"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; height: 19px; }
-                        Badge { label: "TikTok"; bg_color: Theme.card_secondary_bg; fg_color: #f43f5e; height: 19px; }
+                        Badge { label: "TikTok"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_red; height: 19px; }
                         Badge { label: "Bilibili"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; height: 19px; }
                         Badge { label: "SoundCloud"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_amber; height: 19px; }
                         Badge { label: "X / Twitter"; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_primary; height: 19px; }
@@ -128,9 +130,9 @@ export component DownloaderTab inherits ScrollView {
         if AppData.ytdlp_is_discovering : Rectangle {
             vertical-stretch: 0;
             border-radius: 8px;
-            background: #0284c715;
+            background: Theme.accent_primary.with-alpha(0.08);
             border-width: 1px;
-            border-color: #0284c755;
+            border-color: Theme.accent_primary.with-alpha(0.33);
 
             HorizontalLayout {
                 padding-left: 14px;
@@ -146,7 +148,7 @@ export component DownloaderTab inherits ScrollView {
                         source: @image-url("../icons/search.svg");
                         width: 16px;
                         height: 16px;
-                        colorize: #38bdf8;
+                        colorize: Theme.accent_cyan;
                     }
                 }
 
@@ -156,7 +158,7 @@ export component DownloaderTab inherits ScrollView {
                         text: "Querying stream metadata and discovering available formats & audio tracks via yt-dlp...";
                         font-size: 12px;
                         font-weight: 600;
-                        color: #38bdf8;
+                        color: Theme.accent_cyan;
                     }
                 }
             }
@@ -165,9 +167,9 @@ export component DownloaderTab inherits ScrollView {
         if AppData.ytdlp_has_error : Rectangle {
             vertical-stretch: 0;
             border-radius: 8px;
-            background: #ef444415;
+            background: Theme.accent_red.with-alpha(0.08);
             border-width: 1px;
-            border-color: #ef444455;
+            border-color: Theme.accent_red.with-alpha(0.33);
 
             HorizontalLayout {
                 padding-left: 14px;
@@ -182,7 +184,7 @@ export component DownloaderTab inherits ScrollView {
                         source: @image-url("../icons/x.svg");
                         width: 15px;
                         height: 15px;
-                        colorize: #ef4444;
+                        colorize: Theme.accent_red;
                     }
                 }
 
@@ -202,8 +204,8 @@ export component DownloaderTab inherits ScrollView {
                     width: 68px;
                     height: 28px;
                     title: "Dismiss";
-                    fill_color: #ef444433;
-                    hover_color: #ef444455;
+                    fill_color: Theme.accent_red.with-alpha(0.20);
+                    hover_color: Theme.accent_red.with-alpha(0.33);
                     text_color: #fca5a5;
                     font_size: 10.5px;
                     clicked => { AppData.ytdlp_has_error = false; }
@@ -226,7 +228,7 @@ export component DownloaderTab inherits ScrollView {
                 border-radius: 8px;
                 background: Theme.card_bg;
                 border-width: 1px;
-                border-color: #34d39966;
+                border-color: Theme.accent_emerald.with-alpha(0.40);
 
                 VerticalLayout {
                     padding-left: 14px;
@@ -245,7 +247,7 @@ export component DownloaderTab inherits ScrollView {
                                 source: @image-url("../icons/film.svg");
                                 width: 14px;
                                 height: 14px;
-                                colorize: #34d399;
+                                colorize: Theme.accent_emerald;
                             }
                         }
 
@@ -260,15 +262,15 @@ export component DownloaderTab inherits ScrollView {
                             alignment: center;
                             Text {
                                 text: "Author:";
-                                font-size: 10px;
+                                font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                                 vertical-alignment: center;
                             }
                             Text {
                                 text: AppData.ytdlp_uploader;
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 font-weight: 600;
-                                color: #38bdf8;
+                                color: Theme.accent_cyan;
                                 vertical-alignment: center;
                             }
                         }
@@ -294,7 +296,7 @@ export component DownloaderTab inherits ScrollView {
                             }
                             Text {
                                 text: AppData.ytdlp_duration;
-                                font-size: 10.5px;
+                                font-size: Theme.font_badge;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                                 vertical-alignment: center;
@@ -312,9 +314,9 @@ export component DownloaderTab inherits ScrollView {
                             alignment: center;
                             Text {
                                 text: "ID: " + AppData.ytdlp_discovered_id;
-                                font-size: 10px;
+                                font-size: Theme.font_badge;
                                 font-weight: 600;
-                                color: #71717a;
+                                color: Theme.text_muted;
                                 vertical-alignment: center;
                             }
                         }
@@ -328,7 +330,7 @@ export component DownloaderTab inherits ScrollView {
                         border-radius: 4px;
                         background: #05966922;
                         border-width: 1px;
-                        border-color: #34d399;
+                        border-color: Theme.accent_emerald;
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 8px;
@@ -340,16 +342,16 @@ export component DownloaderTab inherits ScrollView {
                                     source: @image-url("../icons/check.svg");
                                     width: 10px;
                                     height: 10px;
-                                    colorize: #34d399;
+                                    colorize: Theme.accent_emerald;
                                 }
                             }
                             VerticalLayout {
                                 alignment: center;
                                 Text {
                                     text: "Ready to Download";
-                                    font-size: 10px;
+                                    font-size: Theme.font_badge;
                                     font-weight: 700;
-                                    color: #34d399;
+                                    color: Theme.accent_emerald;
                                 }
                             }
                         }
@@ -368,9 +370,9 @@ export component DownloaderTab inherits ScrollView {
                 // CUSTOM SAVE FILE NAME SECTION (Full Width Container)
                 Rectangle {
                     border-radius: 6px;
-                    background: #101014;
+                    background: Theme.bg_surface;
                     border-width: 1px;
-                    border-color: #0284c744;
+                    border-color: Theme.accent_primary.with-alpha(0.27);
 
                     VerticalLayout {
                         padding-left: 10px;
@@ -388,7 +390,7 @@ export component DownloaderTab inherits ScrollView {
                                     source: @image-url("../icons/sliders.svg");
                                     width: 12px;
                                     height: 12px;
-                                    colorize: #38bdf8;
+                                    colorize: Theme.accent_cyan;
                                 }
                             }
 
@@ -396,7 +398,7 @@ export component DownloaderTab inherits ScrollView {
                                 text: "Custom Output File Name:";
                                 font-size: 11px;
                                 font-weight: 700;
-                                color: #38bdf8;
+                                color: Theme.accent_cyan;
                                 vertical-alignment: center;
                             }
 
@@ -404,8 +406,8 @@ export component DownloaderTab inherits ScrollView {
 
                             Text {
                                 text: "(Appropriate extension will be auto-appended based on selected preset)";
-                                font-size: 10px;
-                                color: #71717a;
+                                font-size: Theme.font_badge;
+                                color: Theme.text_muted;
                                 vertical-alignment: center;
                             }
                         }
@@ -415,7 +417,7 @@ export component DownloaderTab inherits ScrollView {
 
                             LineEdit {
                                 horizontal-stretch: 1;
-                                height: 32px;
+                                height: Theme.btn_height_md;
                                 font-size: 11.5px;
                                 placeholder-text: "Enter custom file name (without extension)...";
                                 text <=> AppData.ytdlp_custom_filename;
@@ -423,7 +425,7 @@ export component DownloaderTab inherits ScrollView {
 
                             ActionButton {
                                 width: 80px;
-                                height: 32px;
+                                height: Theme.btn_height_md;
                                 title: "Reset";
                                 icon_source: @image-url("../icons/reset.svg");
                                 has_icon: true;
@@ -463,7 +465,7 @@ export component DownloaderTab inherits ScrollView {
                 Rectangle {
                     height: 18px;
                     border-radius: 4px;
-                    background: is_audio_format ? #7c3aed22 : #0284c722;
+                    background: is_audio_format ? #7c3aed22 : Theme.accent_primary.with-alpha(0.13);
                     border-width: 1px;
                     border-color: is_audio_format ? Theme.accent_purple.with-alpha(0.5) : Theme.accent_cyan.with-alpha(0.5);
                     HorizontalLayout {
@@ -482,7 +484,7 @@ export component DownloaderTab inherits ScrollView {
                         }
                         Text {
                             text: is_audio_format ? "Audio Extraction Mode" : "Video + Audio Merge (MP4)";
-                            font-size: 9.5px;
+                            font-size: Theme.font_badge;
                             font-weight: 600;
                             color: is_audio_format ? Theme.accent_purple : Theme.accent_cyan;
                             vertical-alignment: center;
@@ -524,7 +526,7 @@ export component DownloaderTab inherits ScrollView {
                             }
 
                             DownloaderFormatDropdown {
-                                height: 32px;
+                                height: Theme.btn_height_md;
                                 model: AppData.ytdlp_format_options;
                                 current-index <=> AppData.ytdlp_selected_format_index;
                                 selected(_) => { AppLogic.save_settings(); }
@@ -532,8 +534,8 @@ export component DownloaderTab inherits ScrollView {
 
                             Text {
                                 text: "Highest available video and audio streams are muxed without generation quality loss.";
-                                font-size: 10px;
-                                color: #71717a;
+                                font-size: Theme.font_badge;
+                                color: Theme.text_muted;
                                 wrap: word-wrap;
                             }
                         }
@@ -556,7 +558,7 @@ export component DownloaderTab inherits ScrollView {
 
                                 LineEdit {
                                     horizontal-stretch: 1;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     font-size: 11.5px;
                                     placeholder-text: "Choose or paste folder path to save downloaded media";
                                     text <=> AppData.ytdlp_output_dir;
@@ -564,7 +566,7 @@ export component DownloaderTab inherits ScrollView {
 
                                 ActionButton {
                                     width: 84px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     title: "Browse...";
                                     icon_source: @image-url("../icons/folder.svg");
                                     has_icon: true;
@@ -578,7 +580,7 @@ export component DownloaderTab inherits ScrollView {
 
                                 ActionButton {
                                     width: 98px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     title: "Open Folder";
                                     icon_source: @image-url("../icons/folder-open.svg");
                                     has_icon: true;
@@ -593,8 +595,8 @@ export component DownloaderTab inherits ScrollView {
 
                             Text {
                                 text: "Default directory configured in Settings. Changes apply to subsequent downloads.";
-                                font-size: 10px;
-                                color: #71717a;
+                                font-size: Theme.font_badge;
+                                color: Theme.text_muted;
                                 wrap: word-wrap;
                             }
                         }
@@ -647,7 +649,7 @@ export component DownloaderTab inherits ScrollView {
                                         source: @image-url("../icons/check.svg");
                                         width: 14px;
                                         height: 14px;
-                                        colorize: #34d399;
+                                        colorize: Theme.accent_emerald;
                                     }
                                 }
 
@@ -655,7 +657,7 @@ export component DownloaderTab inherits ScrollView {
                                     text: AppData.ytdlp_status_message;
                                     font-size: 11.5px;
                                     font-weight: 600;
-                                    color: AppData.ytdlp_download_finished ? #34d399 : (AppData.ytdlp_is_downloading ? Theme.accent_cyan : Theme.text_secondary);
+                                    color: AppData.ytdlp_download_finished ? Theme.accent_emerald : (AppData.ytdlp_is_downloading ? Theme.accent_cyan : Theme.text_secondary);
                                     vertical-alignment: center;
                                     overflow: elide;
                                 }
@@ -667,7 +669,7 @@ export component DownloaderTab inherits ScrollView {
                             alignment: end;
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_progress_text; bg_color: Theme.card_secondary_bg; fg_color: #38bdf8; height: 22px; }
+                                Badge { label: AppData.ytdlp_progress_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; height: 22px; }
                             }
                             VerticalLayout {
                                 alignment: center;
@@ -675,7 +677,7 @@ export component DownloaderTab inherits ScrollView {
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_eta_text; bg_color: Theme.card_secondary_bg; fg_color: #34d399; height: 22px; }
+                                Badge { label: AppData.ytdlp_eta_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_emerald; height: 22px; }
                             }
                             VerticalLayout {
                                 alignment: center;
@@ -685,27 +687,27 @@ export component DownloaderTab inherits ScrollView {
 
                         if !AppData.ytdlp_is_downloading : ActionButton {
                             width: 170px;
-                            height: 36px;
-                            title: "START DOWNLOAD";
+                            height: Theme.btn_height_md;
+                            title: "Start Download";
                             icon_source: @image-url("../icons/download.svg");
                             has_icon: true;
                             icon_size: 14px;
-                            fill_color: #10b981;
-                            hover_color: #059669;
-                            font_size: 12px;
+                            fill_color: Theme.accent_emerald;
+                            hover_color: Theme.accent_emerald_hover;
+                            font_size: Theme.font_caption;
                             clicked => { AppLogic.ytdlp_start_download(); }
                         }
 
                         if AppData.ytdlp_is_downloading : ActionButton {
                             width: 170px;
-                            height: 36px;
-                            title: "CANCEL DOWNLOAD";
+                            height: Theme.btn_height_md;
+                            title: "Cancel Download";
                             icon_source: @image-url("../icons/stop.svg");
                             has_icon: true;
                             icon_size: 14px;
-                            fill_color: #ef4444;
-                            hover_color: #dc2626;
-                            font_size: 12px;
+                            fill_color: Theme.accent_red;
+                            hover_color: Theme.accent_red_hover;
+                            font_size: Theme.font_caption;
                             clicked => { AppLogic.ytdlp_cancel_download(); }
                         }
                     }
@@ -721,7 +723,7 @@ export component DownloaderTab inherits ScrollView {
                             width: parent.width * (AppData.ytdlp_progress / 100.0).clamp(0.0, 1.0);
                             height: parent.height;
                             border-radius: 4px;
-                            background: @linear-gradient(90deg, #0284c7 0%, #10b981 100%);
+                            background: @linear-gradient(90deg, Theme.accent_primary 0%, #10b981 100%);
                         }
                     }
 
@@ -754,7 +756,7 @@ export component DownloaderTab inherits ScrollView {
                             alignment: end;
 
                             ActionButton {
-                                height: 30px;
+                                height: Theme.btn_height_md;
                                 title: "Add to Transcoder Queue";
                                 icon_source: @image-url("../icons/plus.svg");
                                 has_icon: true;
@@ -792,7 +794,7 @@ export component DownloaderTab inherits ScrollView {
                 Rectangle {
                     height: 18px;
                     border-radius: 4px;
-                    background: AppData.ytdlp_history.length > 0 ? #0284c722 : Theme.card_secondary_bg;
+                    background: AppData.ytdlp_history.length > 0 ? Theme.accent_primary.with-alpha(0.13) : Theme.card_secondary_bg;
                     border-width: 1px;
                     border-color: AppData.ytdlp_history.length > 0 ? Theme.accent_cyan.with-alpha(0.4) : Theme.border_color;
                     HorizontalLayout {
@@ -801,7 +803,7 @@ export component DownloaderTab inherits ScrollView {
                         alignment: center;
                         Text {
                             text: AppData.ytdlp_history.length == 0 ? "0 items" : (AppData.ytdlp_history.length == 1 ? "1 item" : "\{AppData.ytdlp_history.length} items");
-                            font-size: 9.5px;
+                            font-size: Theme.font_badge;
                             font-weight: 600;
                             color: AppData.ytdlp_history.length > 0 ? Theme.accent_cyan : Theme.text_muted;
                             vertical-alignment: center;
@@ -812,17 +814,24 @@ export component DownloaderTab inherits ScrollView {
                 Rectangle { horizontal-stretch: 1; }
 
                 if AppData.ytdlp_history.length > 0 : ActionButton {
-                    width: 96px;
-                    height: 22px;
-                    title: "Clear History";
+                    width: 110px;
+                    height: Theme.btn_height_sm;
+                    title: root.confirm_clear_history ? "Confirm Clear?" : "Clear History";
                     icon_source: @image-url("../icons/trash.svg");
                     has_icon: true;
                     icon_size: 11px;
-                    fill_color: Theme.btn_neutral_bg;
-                    hover_color: #ef444422;
-                    text_color: Theme.text_secondary;
-                    font_size: 10.5px;
-                    clicked => { AppLogic.ytdlp_clear_history(); }
+                    fill_color: root.confirm_clear_history ? Theme.accent_red : Theme.btn_neutral_bg;
+                    hover_color: root.confirm_clear_history ? Theme.accent_red_hover : Theme.btn_neutral_hover;
+                    text_color: root.confirm_clear_history ? #ffffff : Theme.text_secondary;
+                    font_size: Theme.font_badge;
+                    clicked => {
+                        if root.confirm_clear_history {
+                            root.confirm_clear_history = false;
+                            AppLogic.ytdlp_clear_history();
+                        } else {
+                            root.confirm_clear_history = true;
+                        }
+                    }
                 }
             }
 
@@ -899,9 +908,9 @@ export component DownloaderTab inherits ScrollView {
                                 alignment: center;
                                 Rectangle {
                                     width: 32px;
-                                    height: 32px;
+                                    height: Theme.btn_height_md;
                                     border-radius: 5px;
-                                    background: #0284c718;
+                                    background: Theme.accent_primary.with-alpha(0.09);
                                     border-width: 1px;
                                     border-color: Theme.accent_cyan.with-alpha(0.3);
                                     Image {
@@ -932,7 +941,7 @@ export component DownloaderTab inherits ScrollView {
                                     }
                                     if item.file_size_formatted != "" : Text {
                                         text: "• " + item.file_size_formatted;
-                                        font-size: 10.5px;
+                                        font-size: Theme.font_badge;
                                         color: Theme.accent_cyan;
                                         vertical-alignment: center;
                                     }
@@ -940,7 +949,7 @@ export component DownloaderTab inherits ScrollView {
 
                                 Text {
                                     text: item.file_path;
-                                    font-size: 10px;
+                                    font-size: Theme.font_badge;
                                     color: Theme.text_muted;
                                     overflow: elide;
                                 }
@@ -951,7 +960,7 @@ export component DownloaderTab inherits ScrollView {
                                 alignment: center;
                                 ActionButton {
                                     width: 118px;
-                                    height: 30px;
+                                    height: Theme.btn_height_md;
                                     title: "Show in Folder";
                                     icon_source: @image-url("../icons/folder-open.svg");
                                     has_icon: true;
@@ -969,11 +978,11 @@ export component DownloaderTab inherits ScrollView {
                                 alignment: center;
                                 Rectangle {
                                     width: 30px;
-                                    height: 30px;
+                                    height: Theme.btn_height_md;
                                     border-radius: 5px;
-                                    background: rem_ta.pressed ? #ef444433 : (rem_ta.has-hover ? #ef44441f : Theme.btn_neutral_bg);
+                                    background: rem_ta.pressed ? Theme.accent_red.with-alpha(0.20) : (rem_ta.has-hover ? Theme.accent_red.with-alpha(0.12) : Theme.btn_neutral_bg);
                                     border-width: 1px;
-                                    border-color: rem_ta.has-hover ? #ef444455 : Theme.border_color;
+                                    border-color: rem_ta.has-hover ? Theme.accent_red.with-alpha(0.33) : Theme.border_color;
 
                                     animate background { duration: 100ms; }
                                     animate border-color { duration: 100ms; }

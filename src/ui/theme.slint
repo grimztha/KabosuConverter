@@ -8,6 +8,7 @@ export global Theme {
     out property <color> status_bar_border: #2a2a30;
 
     // Panels & Surfaces
+    out property <color> bg_surface: #09090b;
     out property <color> panel_bg: #0f0f12;
     out property <color> panel_border: #18181c;
     out property <color> card_bg: #131317;
@@ -23,6 +24,8 @@ export global Theme {
     out property <color> control_hover: #2a2a32;
     out property <color> control_border: #2a2a32;
     out property <color> control_pressed: #32323d;
+    out property <color> focus_ring: #38bdf8;
+    out property <color> focus_ring_border: #0284c7;
 
     // Tab Bar (Segmented Control Pill in Header)
     out property <color> tab_container_bg: #141418;
@@ -33,21 +36,77 @@ export global Theme {
     out property <color> tab_inactive_hover: #181820;
     out property <color> tab_inactive_text: #9ca3af;
 
-    // Text & Labels
+    // Text & Labels (Contrast compliant against #131317 and #09090b)
     out property <color> text_primary: #f4f4f5;
-    out property <color> text_secondary: #a1a1aa;
-    out property <color> text_muted: #71717a;
-    out property <color> text_faint: #52525b;
+    out property <color> text_secondary: #d4d4d8;
+    out property <color> text_muted: #9ca3af; // WCAG AA compliant >= 5.2:1
+    out property <color> text_faint: #71717a;
 
-    // Accents
+    // Accents & Status Ramps
+    out property <color> accent_primary: #0284c7;
+    out property <color> accent_primary_hover: #0369a1;
+    out property <color> accent_primary_pressed: #075985;
     out property <color> accent_cyan: #38bdf8;
     out property <color> accent_green: #34d399;
-    out property <color> accent_amber: #fbbf24;
+    out property <color> accent_emerald: #10b981;
+    out property <color> accent_emerald_hover: #059669;
+    out property <color> accent_amber: #f59e0b;
+    out property <color> accent_amber_hover: #d97706;
     out property <color> accent_red: #ef4444;
+    out property <color> accent_red_hover: #dc2626;
     out property <color> accent_purple: #a78bfa;
 
-    // Action Button default neutrals
+    // Action Button Neutrals
     out property <color> btn_neutral_bg: #1c1c22;
     out property <color> btn_neutral_hover: #2a2a32;
+    out property <color> btn_neutral_pressed: #282834;
     out property <color> btn_neutral_text: #d4d4d8;
+
+    // Audio Meter & Visualizer
+    out property <color> meter_bg: #12141e;
+    out property <color> meter_border: #2b2f44;
+    out property <color> meter_green: #22c55e;
+    out property <color> meter_green_dim: #062311;
+    out property <color> meter_yellow: #eab308;
+    out property <color> meter_yellow_dim: #332405;
+    out property <color> meter_red: #ef4444;
+    out property <color> meter_red_dim: #3b070c;
+
+    // Track & Sliders
+    out property <color> slider_track: #2a2a30;
+    out property <color> slider_thumb: #ffffff;
+    out property <color> slider_thumb_active: #38bdf8;
+
+    // Typographic Scale (Floored at 11px to ensure legibility)
+    out property <length> font_title: 18px;
+    out property <length> font_section: 14px;
+    out property <length> font_body: 13px;
+    out property <length> font_caption: 12px;
+    out property <length> font_badge: 11px;
+    out property <string> font_mono: "Consolas";
+
+    // Standard Spacing Scale
+    out property <length> space_xs: 4px;
+    out property <length> space_sm: 8px;
+    out property <length> space_md: 12px;
+    out property <length> space_lg: 16px;
+    out property <length> space_xl: 24px;
+
+    // Standard Interactive Button Heights (Finding #15)
+    out property <length> btn_height_sm: 28px;
+    out property <length> btn_height_md: 34px;
+    out property <length> btn_height_lg: 40px;
+
+    // Concentric Radii Standards (Finding #13: outer = inner + padding)
+    out property <length> radius_sm: 6px;
+    out property <length> radius_md: 10px;
+    out property <length> radius_lg: 14px;
+
+    // Overlay, Mask & Timeline Specific Tokens (Finding #6)
+    out property <color> overlay_mask: #000000aa;
+    out property <color> timeline_track_bg: #09090d;
+    out property <color> timeline_border: #1c1c24;
+    out property <color> trim_in_marker: #10b981;
+    out property <color> trim_out_marker: #f59e0b;
+    out property <color> playhead_marker: #38bdf8;
 }

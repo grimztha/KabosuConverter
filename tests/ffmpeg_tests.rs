@@ -1138,6 +1138,28 @@ fn test_audio_playback_session_drop_safety() {
 }
 
 #[test]
+fn test_audio_playback_session_intentional_kill_prevents_premature_finish() {
+    use another_encoder::ffmpeg::AudioPlaybackSession;
+
+    let mut cmd = std::process::Command::new(if cfg!(windows) { "cmd.exe" } else { "sh" });
+    if cfg!(windows) {
+        cmd.args(["/c", "ping -n 5 127.0.0.1 >nul"]);
+    } else {
+        cmd.args(["-c", "sleep 5"]);
+    }
+    if let Ok(child) = cmd.spawn() {
+        let mut session = AudioPlaybackSession::from_child(child);
+        assert!(!session.is_finished());
+
+        // When intentionally killed (e.g. volume or filter change restart),
+        // is_finished() must NOT report true as natural stream completion.
+        let _ = session.kill();
+        assert!(!session.is_finished());
+        assert!(session.intentional_exit.load(std::sync::atomic::Ordering::Acquire));
+    }
+}
+
+#[test]
 fn test_qsv_and_amf_hardware_command_generation() {
     let ffmpeg_bin = Path::new("ffmpeg.exe");
 

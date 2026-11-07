@@ -4,6 +4,7 @@ export component VolumeBar inherits Rectangle {
     in-out property <float> volume: 1.0;
     in-out property <bool> is_muted: false;
     callback volume_changed(float);
+    callback volume_settled(float);
     callback toggle_mute();
 
     height: 28px;
@@ -60,7 +61,7 @@ export component VolumeBar inherits Rectangle {
                     x: 0px;
                     y: 0px;
                     height: 100%;
-                    width: root.is_muted || root.volume <= 0.0 ? 0px : min(parent.width, (parent.width - 12px) * root.volume.clamp(0.0, 1.0) + 6px);
+                    width: root.is_muted || root.volume <= 0.001 ? 0px : (parent.width * root.volume.clamp(0.0, 1.0));
                     border-radius: 2.5px;
                     background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_cyan 100%);
                 }
@@ -81,28 +82,60 @@ export component VolumeBar inherits Rectangle {
 
             slider_ta := TouchArea {
                 mouse-cursor: pointer;
+                pointer-event(event) => {
+                    if event.kind == PointerEventKind.down && parent.width > 0px {
+                        let val = (self.mouse-x / parent.width).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_changed(val);
+                    }
+                    if event.kind == PointerEventKind.up && parent.width > 0px {
+                        let val = (self.mouse-x / parent.width).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_settled(val);
+                    }
+                }
                 clicked => {
                     if parent.width > 0px {
-                        root.volume_changed((self.mouse-x / parent.width).clamp(0.0, 1.0));
+                        let val = (self.mouse-x / parent.width).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_settled(val);
                     }
                 }
                 moved => {
                     if self.pressed && parent.width > 0px {
-                        root.volume_changed((self.mouse-x / parent.width).clamp(0.0, 1.0));
+                        let val = (self.mouse-x / parent.width).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_changed(val);
                     }
                 }
                 scroll-event(event) => {
                     if event.delta-y > 0px {
-                        root.volume_changed((root.volume + 0.05).clamp(0.0, 1.0));
+                        let val = (root.volume + 0.05).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_settled(val);
                         return accept;
                     }
                     if event.delta-y < 0px {
-                        root.volume_changed((root.volume - 0.05).clamp(0.0, 1.0));
+                        let val = (root.volume - 0.05).clamp(0.0, 1.0);
+                        root.volume = val;
+                        root.volume_settled(val);
                         return accept;
                     }
                     reject
                 }
             }
+        }
+
+        // Percentage Text Readout
+        Text {
+            width: 30px;
+            text: root.is_muted ? "0%" : "\{round(root.volume * 100)}%";
+            font-size: Theme.font_badge;
+            font-weight: 700;
+            font-family: Theme.font_mono;
+            color: root.is_muted ? Theme.accent_red : Theme.text_muted;
+            vertical-alignment: center;
+            horizontal-alignment: right;
         }
     }
 }

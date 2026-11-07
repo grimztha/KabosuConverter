@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
@@ -399,6 +399,7 @@ pub struct AudioPlaybackSession {
     pub child: std::process::Child,
     pub master_clock: Arc<AtomicU64>,
     pub meter_levels: Arc<Mutex<(f32, f32)>>,
+    pub intentional_exit: Arc<AtomicBool>,
 }
 
 impl AudioPlaybackSession {
@@ -408,11 +409,13 @@ impl AudioPlaybackSession {
             child,
             master_clock: Arc::new(AtomicU64::new(u64::MAX)),
             meter_levels: Arc::new(Mutex::new((-60.0, -60.0))),
+            intentional_exit: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// Kills the child process immediately.
+    /// Kills the child process immediately, marking it as intentionally stopped.
     pub fn kill(&mut self) -> std::io::Result<()> {
+        self.intentional_exit.store(true, Ordering::Release);
         let res = self.child.kill();
         let _ = self.child.wait();
         res
@@ -437,14 +440,18 @@ impl AudioPlaybackSession {
         }
     }
 
-    /// Checks if the process has exited.
+    /// Checks if the process has naturally exited (i.e. not intentionally killed by restart/stop).
     pub fn is_finished(&mut self) -> bool {
+        if self.intentional_exit.load(Ordering::Acquire) {
+            return false;
+        }
         matches!(self.child.try_wait(), Ok(Some(_status)))
     }
 }
 
 impl Drop for AudioPlaybackSession {
     fn drop(&mut self) {
+        self.intentional_exit.store(true, Ordering::Release);
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -630,6 +637,7 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
         child,
         master_clock,
         meter_levels,
+        intentional_exit: Arc::new(AtomicBool::new(false)),
     })
 }
 

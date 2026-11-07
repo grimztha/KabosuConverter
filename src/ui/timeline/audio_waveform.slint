@@ -14,6 +14,7 @@ export component AudioWaveformStudio inherits Rectangle {
     in-out property <float> zoom_level: AppData.timeline_zoom;
     in property <int> center_trigger: AppData.center_timeline_trigger;
     callback seek(float);
+    callback scrub(float);
     callback in_point_dragged(float);
     callback out_point_dragged(float);
 
@@ -197,6 +198,14 @@ export component AudioWaveformStudio inherits Rectangle {
                             // Interactive TouchArea over Visual Timeline Track for Scrubbing
                             track_ta := TouchArea {
                                 mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if event.kind == PointerEventKind.down && track.width > 0px && root.duration > 0.0 {
+                                        root.scrub((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                                    }
+                                    if event.kind == PointerEventKind.up && !self.has-hover && track.width > 0px && root.duration > 0.0 {
+                                        root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                                    }
+                                }
                                 clicked => {
                                     if track.width > 0px && root.duration > 0.0 {
                                         root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
@@ -204,7 +213,7 @@ export component AudioWaveformStudio inherits Rectangle {
                                 }
                                 moved => {
                                     if self.pressed && track.width > 0px && root.duration > 0.0 {
-                                        root.seek((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
+                                        root.scrub((self.mouse-x / track.width).clamp(0.0, 1.0) * root.duration);
                                     }
                                 }
                                 scroll-event(event) => {

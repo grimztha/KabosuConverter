@@ -235,6 +235,9 @@ export component PlayerTab inherits VerticalLayout {
                             in_point_sec: AppData.in_point_seconds;
                             out_point_sec: AppData.out_point_seconds;
                             has_trim: AppData.has_active_trim;
+                            scrub(val) => {
+                                AppLogic.player_scrub(val);
+                            }
                             seek(val) => {
                                 AppLogic.player_seek(val);
                             }
@@ -308,6 +311,9 @@ export component PlayerTab inherits VerticalLayout {
                         is_muted: AppData.player_is_muted;
                         volume_changed(val) => {
                             AppLogic.player_volume_changed(val);
+                        }
+                        volume_settled(val) => {
+                            AppLogic.player_volume_settled(val);
                         }
                         toggle_mute() => {
                             AppLogic.player_toggle_mute();
@@ -526,6 +532,9 @@ export component PlayerTab inherits VerticalLayout {
                     in_point_sec: AppData.in_point_seconds;
                     out_point_sec: AppData.out_point_seconds;
                     has_trim: AppData.has_active_trim;
+                    scrub(val) => {
+                        AppLogic.player_scrub(val);
+                    }
                     seek(val) => {
                         AppLogic.player_seek(val);
                     }

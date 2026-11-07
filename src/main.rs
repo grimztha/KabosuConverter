@@ -223,6 +223,7 @@ fn main() -> Result<()> {
         playback_timer,
         meter_timer,
         last_audio_restart,
+        was_playing_before_scrub: Arc::new(AtomicBool::new(false)),
     };
 
     // Register all event callbacks onto the UI

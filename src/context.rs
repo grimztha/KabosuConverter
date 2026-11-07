@@ -53,6 +53,7 @@ pub struct AppContext {
     pub playback_timer: Rc<RefCell<slint::Timer>>,
     pub meter_timer: Rc<RefCell<slint::Timer>>,
     pub last_audio_restart: Arc<Mutex<std::time::Instant>>,
+    pub was_playing_before_scrub: Arc<AtomicBool>,
 }
 
 impl AppContext {
@@ -95,18 +96,32 @@ impl AppContext {
         }
     }
 
-    /// Restart live audio playback preview with updated audio filters (gain, normalization).
+    /// Restart live audio playback preview with updated audio filters (gain, normalization, volume).
     pub fn restart_audio_preview(&self, app_data: &crate::AppData) {
         if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {
             return;
         }
         if let Ok(mut t) = self.last_audio_restart.lock() {
-            if t.elapsed() < std::time::Duration::from_millis(50) {
+            if t.elapsed() < std::time::Duration::from_millis(80) {
                 return;
             }
             *t = std::time::Instant::now();
         }
+        self.do_restart_audio_preview(app_data);
+    }
 
+    /// Immediately restart audio preview, bypassing throttle (e.g. for mute toggle or slider release).
+    pub fn restart_audio_preview_immediate(&self, app_data: &crate::AppData) {
+        if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {
+            return;
+        }
+        if let Ok(mut t) = self.last_audio_restart.lock() {
+            *t = std::time::Instant::now();
+        }
+        self.do_restart_audio_preview(app_data);
+    }
+
+    fn do_restart_audio_preview(&self, app_data: &crate::AppData) {
         let vol_float = if app_data.get_player_is_muted() {
             0.0
         } else {

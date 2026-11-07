@@ -210,10 +210,12 @@ export global AppLogic {
 
     // Player and Trim callbacks
     callback player_seek(float);
+    callback player_scrub(float);
     callback player_play_pause();
     callback player_stop();
     callback player_step(float);
     callback player_volume_changed(float);
+    callback player_volume_settled(float);
     callback player_toggle_mute();
     callback set_in_point_current();
     callback set_out_point_current();

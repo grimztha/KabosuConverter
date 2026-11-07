@@ -3,7 +3,6 @@
 slint::include_modules!();
 
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
@@ -27,6 +26,7 @@ mod win_drag_drop;
 use context::{AppContext, PreviewTask, WaveformTask};
 
 fn main() -> Result<()> {
+    let default_bin_dir = settings::get_app_dir().join("bin");
     let binaries = match FFmpegBinaries::locate() {
         Ok(b) => {
             #[cfg(debug_assertions)]
@@ -42,11 +42,10 @@ fn main() -> Result<()> {
         Err(_e) => {
             #[cfg(debug_assertions)]
             eprintln!("Warning: FFmpeg binaries not found: {}", _e);
-            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             Arc::new(FFmpegBinaries {
-                ffmpeg: cwd.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
-                ffprobe: cwd.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
-                ffplay: None,
+                ffmpeg: default_bin_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
+                ffprobe: default_bin_dir.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
+                ffplay: Some(default_bin_dir.join(if cfg!(windows) { "ffplay.exe" } else { "ffplay" })),
             })
         }
     };
@@ -55,14 +54,16 @@ fn main() -> Result<()> {
     let app_settings = settings::load_settings();
     handlers::settings::apply_settings_to_app_data(&ui.global::<AppData>(), &app_settings);
 
-    // Dynamic engine version badge
-    let (_full_ver, badge_text) = binaries.detect_version();
-    ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
+    // Populate initial engine version and hardware acceleration badges if ffmpeg is already present
+    if binaries.ffmpeg.is_file() {
+        let (_full_ver, badge_text) = binaries.detect_version();
+        ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
 
-    let (hw_accel, has_gpu, gpu_name) = binaries.detect_hardware_accel();
-    another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
-    ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
-    ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
+        let (hw_accel, has_gpu, gpu_name) = binaries.detect_hardware_accel();
+        another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+        ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
+        ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
+    }
 
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
@@ -79,23 +80,30 @@ fn main() -> Result<()> {
     let (waveform_tx, waveform_rx) = std::sync::mpsc::channel::<WaveformTask>();
     let latest_waveform_id = Arc::new(AtomicU64::new(0));
 
-    let ytdlp_binary = Arc::new(ytdlp::find_ytdlp_binary());
+    let found_ytdlp = ytdlp::find_ytdlp_binary();
     #[cfg(debug_assertions)]
-    if let Some(ref p) = *ytdlp_binary {
+    if let Some(ref p) = found_ytdlp {
         println!("yt-dlp engine found at: {:?}", p);
     } else {
         eprintln!("Warning: yt-dlp binary not found in project root path");
     }
 
-    // Dynamic yt-dlp engine version badge
-    let (_ytdlp_ver, ytdlp_badge) = match ytdlp_binary.as_ref() {
-        Some(ref p) => ytdlp::detect_version(p),
-        None => ("2026.10.26".to_string(), "yt-dlp 2026.10.26 (Local Engine)".to_string()),
-    };
-    ui.global::<AppData>().set_ytdlp_version_badge(ytdlp_badge.into());
+    let ytdlp_binary = Arc::new(Some(found_ytdlp.unwrap_or_else(|| {
+        default_bin_dir.join(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" })
+    })));
 
-    // If external dependencies are missing, initiate background auto-download into app-local storage
-    let needs_download = !binaries.ffmpeg.is_file() || ytdlp_binary.is_none();
+    // Populate initial yt-dlp engine version badge if already installed
+    if let Some(ref p) = *ytdlp_binary {
+        if p.is_file() {
+            let (_ytdlp_ver, ytdlp_badge) = ytdlp::detect_version(p);
+            ui.global::<AppData>().set_ytdlp_version_badge(ytdlp_badge.into());
+        }
+    }
+
+    // Download and verify any missing external binaries in the background on first launch
+    let needs_download = !binaries.ffmpeg.is_file()
+        || !binaries.ffprobe.is_file()
+        || ytdlp_binary.as_ref().as_ref().is_none_or(|p| !p.is_file());
     if needs_download {
         let ui_weak = ui.as_weak();
         std::thread::spawn(move || {
@@ -109,7 +117,10 @@ fn main() -> Result<()> {
                         let result = dm.ensure_dependencies(move |name, prog| {
                             let status = match prog {
                                 another_encoder::binaries::DownloadProgress::Started { total_bytes } => {
-                                    format!("Downloading {} ({:?} bytes)...", name, total_bytes)
+                                    match total_bytes {
+                                        Some(total) => format!("Downloading {} ({:.1} MB)...", name, total as f64 / 1_048_576.0),
+                                        None => format!("Downloading {}...", name),
+                                    }
                                 }
                                 another_encoder::binaries::DownloadProgress::Transferred { total_downloaded, .. } => {
                                     format!("Downloading {}: {:.1} MB", name, total_downloaded as f64 / 1_048_576.0)
@@ -132,26 +143,39 @@ fn main() -> Result<()> {
                             });
                         }).await;
 
-                        if let Ok(paths) = result {
-                            let loc = FFmpegBinaries {
-                                ffmpeg: paths.ffmpeg,
-                                ffprobe: paths.ffprobe,
-                                ffplay: paths.ffplay,
-                            };
-                            let (_full_ver, badge_text) = loc.detect_version();
-                            let ui_cb = ui_weak.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_cb.upgrade() {
-                                    ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
-                                    let (hw_accel, has_gpu, gpu_name) = loc.detect_hardware_accel();
-                                    another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
-                                    ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
-                                    ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
-                                    let (_y_ver, y_badge) = ytdlp::detect_version(&paths.yt_dlp);
-                                    ui.global::<AppData>().set_ytdlp_version_badge(y_badge.into());
-                                    ui.global::<AppData>().set_status_summary("Dependencies installed and verified.".into());
-                                }
-                            });
+                        match result {
+                            Ok(paths) => {
+                                let loc = FFmpegBinaries {
+                                    ffmpeg: paths.ffmpeg,
+                                    ffprobe: paths.ffprobe,
+                                    ffplay: paths.ffplay,
+                                };
+                                let (_full_ver, badge_text) = loc.detect_version();
+                                let (hw_accel, has_gpu, gpu_name) = loc.detect_hardware_accel();
+                                another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+                                let (_y_ver, y_badge) = ytdlp::detect_version(&paths.yt_dlp);
+
+                                let ui_cb = ui_weak.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_cb.upgrade() {
+                                        let data = ui.global::<AppData>();
+                                        data.set_ffmpeg_version_badge(badge_text.into());
+                                        data.set_has_gpu_hardware(has_gpu);
+                                        data.set_detected_gpu_name(gpu_name.into());
+                                        data.set_ytdlp_version_badge(y_badge.into());
+                                        data.set_status_summary("Dependencies installed and verified.".into());
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                let msg = format!("Dependency setup failed: {}", e);
+                                let ui_cb = ui_weak.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_cb.upgrade() {
+                                        ui.global::<AppData>().set_status_summary(msg.into());
+                                    }
+                                });
+                            }
                         }
                     }
                 });
@@ -208,6 +232,7 @@ fn main() -> Result<()> {
     let ui_min = ui.as_weak();
     let ui_max = ui.as_weak();
     let ui_close = ui.as_weak();
+    let ctx_close = ctx.clone();
 
     ui.global::<AppLogic>().on_window_minimize(move || {
         if let Some(ui) = ui_min.upgrade() {
@@ -225,16 +250,21 @@ fn main() -> Result<()> {
 
     ui.global::<AppLogic>().on_window_close(move || {
         if let Some(ui) = ui_close.upgrade() {
-            handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
+            let app_data = ui.global::<AppData>();
+            ctx_close.shutdown_all_processes(&app_data);
+            handlers::settings::save_settings_from_app_data(&app_data);
             let _ = ui.window().hide();
         }
         let _ = slint::quit_event_loop();
     });
 
     let ui_close_req = ui.as_weak();
+    let ctx_close_req = ctx.clone();
     ui.window().on_close_requested(move || {
         if let Some(ui) = ui_close_req.upgrade() {
-            handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
+            let app_data = ui.global::<AppData>();
+            ctx_close_req.shutdown_all_processes(&app_data);
+            handlers::settings::save_settings_from_app_data(&app_data);
         }
         slint::CloseRequestResponse::HideWindow
     });
@@ -298,7 +328,9 @@ fn main() -> Result<()> {
     let run_res = ui.run()
         .map_err(|e| anyhow::anyhow!("Platform error: {:?}", e));
 
-    handlers::settings::save_settings_from_app_data(&ui.global::<AppData>());
+    let app_data = ui.global::<AppData>();
+    ctx.shutdown_all_processes(&app_data);
+    handlers::settings::save_settings_from_app_data(&app_data);
 
     run_res
 }

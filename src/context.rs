@@ -82,6 +82,19 @@ impl AppContext {
         app_data.set_player_is_playing(false);
     }
 
+    /// Stops all active playback, encoding, and downloader subprocesses on application exit.
+    pub fn shutdown_all_processes(&self, app_data: &crate::AppData) {
+        self.cancel_flag.store(true, Ordering::SeqCst);
+        self.active_ytdlp_cancel.store(true, Ordering::SeqCst);
+        self.meter_timer.borrow().stop();
+        self.stop_active_playback(app_data);
+        let mut ytdlp_lock = self.active_ytdlp_child.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(mut child) = ytdlp_lock.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
     /// Restart live audio playback preview with updated audio filters (gain, normalization).
     pub fn restart_audio_preview(&self, app_data: &crate::AppData) {
         if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {

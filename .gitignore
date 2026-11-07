@@ -47,4 +47,5 @@ $RECYCLE.BIN/
 .claude/
 scratch/
 tasks/
+WALKTHROUGH.md
 ui.slint

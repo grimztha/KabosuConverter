@@ -544,7 +544,8 @@ mod tests {
 
     #[test]
     fn test_last_opened_dir_updates() {
-        let temp_dir = std::env::temp_dir();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let temp_dir = temp.path().to_path_buf();
         let test_file = temp_dir.join("test_video.mp4");
 
         set_last_opened_dir(&test_file);

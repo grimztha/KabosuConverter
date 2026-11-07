@@ -4,7 +4,7 @@ use std::thread;
 
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer, SharedString};
 
-use another_encoder::ffmpeg::{
+use kabosu_converter::ffmpeg::{
     format_duration_hms, spawn_audio_playback, spawn_ffplay,
     spawn_playback_stream_transformed_with_duration, AudioPlaybackSession,
 };
@@ -797,7 +797,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
     use std::sync::{mpsc, Mutex};
     use std::time::Instant;
-    use another_encoder::ffmpeg::FFmpegBinaries;
+    use kabosu_converter::ffmpeg::FFmpegBinaries;
 
     fn create_test_context() -> AppContext {
         let (preview_tx, _) = mpsc::channel();
@@ -805,7 +805,7 @@ mod tests {
 
         let default_bin_dir = dirs::config_dir()
             .unwrap_or_else(std::env::temp_dir)
-            .join("another_encoder")
+            .join(kabosu_converter::settings::APP_NAME)
             .join("bin");
 
         let binaries = FFmpegBinaries::locate().unwrap_or_else(|_| FFmpegBinaries {

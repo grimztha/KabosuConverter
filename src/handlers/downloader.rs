@@ -4,8 +4,8 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
-use another_encoder::ffmpeg::{format_duration_hms, probe_file};
-use another_encoder::ytdlp;
+use kabosu_converter::ffmpeg::{format_duration_hms, probe_file};
+use kabosu_converter::ytdlp;
 use crate::context::AppContext;
 use crate::handlers::queue::{load_selected_file, process_incoming_paths};
 use crate::utils::{get_clipboard_string, normalize_path_for_explorer, open_folder_in_explorer};

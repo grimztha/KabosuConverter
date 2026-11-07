@@ -5,7 +5,7 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
-use another_encoder::ffmpeg::probe_file;
+use kabosu_converter::ffmpeg::probe_file;
 use crate::context::{AppContext, TaskContext, WaveformTask};
 use crate::handlers::editor::{
     request_current_preview_frame, sync_effective_dimensions_and_viewport,

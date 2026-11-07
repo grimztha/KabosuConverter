@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use another_encoder::ffmpeg::{spawn_audio_playback, AudioPlaybackSession, FFmpegBinaries, VideoRotation};
-use another_encoder::ytdlp;
+use kabosu_converter::ffmpeg::{spawn_audio_playback, AudioPlaybackSession, FFmpegBinaries, VideoRotation};
+use kabosu_converter::ytdlp;
 
 #[derive(Clone, Debug)]
 pub struct PreviewTask {

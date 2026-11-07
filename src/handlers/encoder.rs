@@ -4,7 +4,7 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, SharedString};
 
-use another_encoder::ffmpeg::{
+use kabosu_converter::ffmpeg::{
     format_duration_hms, parse_timecode_to_seconds, AudioCodecChoice, CropRect, DeinterlaceMode,
     EncodeJobConfig, EncoderFunction, FFmpegCommandBuilder, FFmpegRunner, HwAccel, ProResProfile,
     RateControlMode, ResolutionPreset, VideoCodec, VideoRotation,
@@ -407,7 +407,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let total_duration = if item.duration_seconds > 0.0 {
                             item.duration_seconds as f64
                         } else {
-                            match another_encoder::ffmpeg::probe_file(&input_path, &bins.ffprobe) {
+                            match kabosu_converter::ffmpeg::probe_file(&input_path, &bins.ffprobe) {
                                 Ok(m) => m.duration_seconds,
                                 Err(_) => 0.0,
                             }
@@ -575,7 +575,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             .unwrap_or_else(std::time::Instant::now);
 
                         let progress_callback =
-                            move |p: another_encoder::ffmpeg::ProgressUpdate| {
+                            move |p: kabosu_converter::ffmpeg::ProgressUpdate| {
                                 let now = std::time::Instant::now();
                                 if p.percentage < 1.0
                                     && now.duration_since(last_ui_tick).as_millis() < 45

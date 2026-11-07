@@ -54,7 +54,7 @@ pub fn get_clipboard_string() -> Option<String> {
 /// Formats a byte count into a human-readable size string (or `"Unknown size"` when 0).
 pub fn format_bytes_fast(bytes: u64) -> String {
     if bytes > 0 {
-        another_encoder::ffmpeg::format_bytes(bytes)
+        kabosu_converter::ffmpeg::format_bytes(bytes)
     } else {
         "Unknown size".to_string()
     }

@@ -1,5 +1,5 @@
 use std::path::Path;
-use another_encoder::ffmpeg::{
+use kabosu_converter::ffmpeg::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
     RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries,
     VideoRotation, ResolutionPreset, parse_ffmpeg_version
@@ -177,9 +177,9 @@ fn test_binary_locator_workspace() {
     let ffmpeg_str = binaries.ffmpeg.to_string_lossy().to_lowercase();
     let ffprobe_str = binaries.ffprobe.to_string_lossy().to_lowercase();
     let ffplay_str = binaries.ffplay.as_ref().unwrap().to_string_lossy().to_lowercase();
-    assert!(ffmpeg_str.contains("another_encoder"), "ffmpeg must be in another_encoder project root");
-    assert!(ffprobe_str.contains("another_encoder"), "ffprobe must be in another_encoder project root");
-    assert!(ffplay_str.contains("another_encoder"), "ffplay must be in another_encoder project root");
+    assert!(ffmpeg_str.contains("kabosu") || ffmpeg_str.contains("another_encoder"), "ffmpeg must be in project root");
+    assert!(ffprobe_str.contains("kabosu") || ffprobe_str.contains("another_encoder"), "ffprobe must be in project root");
+    assert!(ffplay_str.contains("kabosu") || ffplay_str.contains("another_encoder"), "ffplay must be in project root");
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn test_live_probe_synthetic() {
     let binaries = FFmpegBinaries::locate().unwrap();
     let synth = Path::new("test_synthetic.mp4");
     if synth.exists() {
-        let meta = another_encoder::ffmpeg::probe_file(synth, &binaries.ffprobe).unwrap();
+        let meta = kabosu_converter::ffmpeg::probe_file(synth, &binaries.ffprobe).unwrap();
         assert_eq!(meta.primary_video().unwrap().width, 1280);
         assert_eq!(meta.primary_video().unwrap().height, 720);
         assert_eq!(meta.primary_video().unwrap().codec, "h264");
@@ -221,7 +221,7 @@ fn test_live_transcode_synthetic_hevc() {
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         let mut progress_count = 0;
-        let res = another_encoder::ffmpeg::FFmpegRunner::run_with_progress(
+        let res = kabosu_converter::ffmpeg::FFmpegRunner::run_with_progress(
             &cmd,
             3.0,
             cancel,
@@ -241,7 +241,7 @@ fn test_live_transcode_synthetic_hevc() {
 
 #[test]
 fn test_parse_timecode() {
-    use another_encoder::ffmpeg::parse_timecode_to_seconds;
+    use kabosu_converter::ffmpeg::parse_timecode_to_seconds;
 
     assert_eq!(parse_timecode_to_seconds("00:00:10.000"), Some(10.0));
     assert_eq!(parse_timecode_to_seconds("01:30.500"), Some(90.5));
@@ -254,7 +254,7 @@ fn test_parse_timecode() {
 
 #[test]
 fn test_extract_frame_preview() {
-    use another_encoder::ffmpeg::{extract_frame, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{extract_frame, FFmpegBinaries};
 
     let binaries = FFmpegBinaries::locate().unwrap();
     let synth = Path::new("test_synthetic.mp4");
@@ -275,7 +275,7 @@ fn test_extract_frame_preview() {
 
 #[test]
 fn test_waveform_rgba_extraction() {
-    use another_encoder::ffmpeg::{extract_waveform_rgba, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{extract_waveform_rgba, FFmpegBinaries};
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let test_wav = Path::new("target/test_waveform_input.wav");
@@ -301,7 +301,7 @@ fn test_waveform_rgba_extraction() {
 
 #[test]
 fn test_audio_playback_spawning() {
-    use another_encoder::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         if let Some(ref ffplay) = binaries.ffplay {
@@ -330,7 +330,7 @@ fn test_audio_playback_spawning() {
 
 #[test]
 fn test_parse_ffplay_pts() {
-    use another_encoder::ffmpeg::parse_ffplay_pts;
+    use kabosu_converter::ffmpeg::parse_ffplay_pts;
 
     // Standard playback line
     let line1 = "   3.45 M-A:  0.000 fd=   0 aq=    9KB vq=    0KB sq=    0B";
@@ -363,7 +363,7 @@ fn test_parse_ffplay_pts() {
 
 #[test]
 fn test_ffplay_clock_reader_and_session() {
-    use another_encoder::ffmpeg::preview::read_ffplay_clock;
+    use kabosu_converter::ffmpeg::preview::read_ffplay_clock;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
     use std::io::Cursor;
@@ -386,7 +386,7 @@ fn test_ffplay_clock_reader_and_session() {
 
 #[test]
 fn test_live_audio_clock_tracking() {
-    use another_encoder::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         if let Some(ref ffplay) = binaries.ffplay {
@@ -427,7 +427,7 @@ fn test_live_audio_clock_tracking() {
 
 #[test]
 fn test_av_sync_master_clock_playback() {
-    use another_encoder::ffmpeg::{spawn_audio_playback, spawn_playback_stream_transformed, VideoRotation, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{spawn_audio_playback, spawn_playback_stream_transformed, VideoRotation, FFmpegBinaries};
     use std::io::Read;
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
@@ -497,7 +497,7 @@ fn test_av_sync_master_clock_playback() {
 
 #[test]
 fn test_trimmed_playback_stream_with_duration() {
-    use another_encoder::ffmpeg::{spawn_playback_stream_transformed_with_duration, VideoRotation, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{spawn_playback_stream_transformed_with_duration, VideoRotation, FFmpegBinaries};
     use std::io::Read;
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
@@ -556,7 +556,7 @@ fn test_trimmed_playback_stream_with_duration() {
 
 #[test]
 fn test_extract_frame_rgba_accurate_seeking() {
-    use another_encoder::ffmpeg::{extract_frame_rgba, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{extract_frame_rgba, FFmpegBinaries};
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let test_vid = Path::new("target/test_seek_input.mp4");
@@ -601,7 +601,7 @@ fn test_extract_frame_rgba_accurate_seeking() {
 
 #[test]
 fn test_video_rotation_filters() {
-    use another_encoder::ffmpeg::VideoRotation;
+    use kabosu_converter::ffmpeg::VideoRotation;
 
     assert_eq!(VideoRotation::from_degrees(0), VideoRotation::None);
     assert_eq!(VideoRotation::from_degrees(90), VideoRotation::Rotate90);
@@ -638,7 +638,7 @@ fn test_video_rotation_filters() {
 
 #[test]
 fn test_video_flip_filters() {
-    use another_encoder::ffmpeg::VideoRotation;
+    use kabosu_converter::ffmpeg::VideoRotation;
 
     assert_eq!(
         FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, true, false, None),
@@ -656,7 +656,7 @@ fn test_video_flip_filters() {
 
 #[test]
 fn test_crop_rect_sanitization_and_nudge() {
-    use another_encoder::ffmpeg::CropRect;
+    use kabosu_converter::ffmpeg::CropRect;
 
     // Odd values and out-of-bounds should be clamped and rounded to even numbers
     let raw = CropRect {
@@ -703,7 +703,7 @@ fn test_crop_rect_sanitization_and_nudge() {
 
 #[test]
 fn test_crop_aspect_ratio_presets() {
-    use another_encoder::ffmpeg::CropAspectRatio;
+    use kabosu_converter::ffmpeg::CropAspectRatio;
 
     // 1. 9:16 preset inside 1920x1080 landscape
     let r_9_16 = CropAspectRatio::Ratio9x16.compute_centered_rect(1920, 1080);
@@ -743,7 +743,7 @@ fn test_crop_aspect_ratio_presets() {
 
 #[test]
 fn test_crop_handle_drag_session_free_mode_anchors() {
-    use another_encoder::ffmpeg::{CropAspectRatio, CropHandleDragSession, CropRect};
+    use kabosu_converter::ffmpeg::{CropAspectRatio, CropHandleDragSession, CropRect};
 
     let eff_w = 1920;
     let eff_h = 1080;
@@ -854,7 +854,7 @@ fn test_crop_handle_drag_session_free_mode_anchors() {
 
 #[test]
 fn test_crop_box_drag_session_preserves_dimensions() {
-    use another_encoder::ffmpeg::{CropBoxDragSession, CropRect};
+    use kabosu_converter::ffmpeg::{CropBoxDragSession, CropRect};
 
     let eff_w = 1920;
     let eff_h = 1080;
@@ -883,7 +883,7 @@ fn test_crop_box_drag_session_preserves_dimensions() {
 
 #[test]
 fn test_combined_transform_crop_scale_filter_order() {
-    use another_encoder::ffmpeg::{
+    use kabosu_converter::ffmpeg::{
         CropRect, DeinterlaceMode, ResolutionPreset, VideoRotation,
     };
 
@@ -918,7 +918,7 @@ fn test_combined_transform_crop_scale_filter_order() {
 
 #[test]
 fn test_letterbox_viewport_calculation() {
-    use another_encoder::ffmpeg::compute_letterbox_viewport;
+    use kabosu_converter::ffmpeg::compute_letterbox_viewport;
 
     // 16:9 fills the entire 640x360 preview frame
     let (nx, ny, nw, nh) = compute_letterbox_viewport(1920, 1080);
@@ -937,7 +937,7 @@ fn test_letterbox_viewport_calculation() {
 
 #[test]
 fn test_live_transcode_with_rotation_flip_and_crop() {
-    use another_encoder::ffmpeg::{
+    use kabosu_converter::ffmpeg::{
         probe_file, CropRect, FFmpegBinaries, FFmpegRunner, VideoRotation,
     };
 
@@ -1121,7 +1121,7 @@ fn test_audioless_video_skips_audio_filter_flag() {
 
 #[test]
 fn test_audio_playback_session_drop_safety() {
-    use another_encoder::ffmpeg::AudioPlaybackSession;
+    use kabosu_converter::ffmpeg::AudioPlaybackSession;
 
     // Spawning a harmless dummy process to verify Drop cleans up without panic or hang
     let mut cmd = std::process::Command::new(if cfg!(windows) { "cmd.exe" } else { "sh" });
@@ -1139,7 +1139,7 @@ fn test_audio_playback_session_drop_safety() {
 
 #[test]
 fn test_audio_playback_session_intentional_kill_prevents_premature_finish() {
-    use another_encoder::ffmpeg::AudioPlaybackSession;
+    use kabosu_converter::ffmpeg::AudioPlaybackSession;
 
     let mut cmd = std::process::Command::new(if cfg!(windows) { "cmd.exe" } else { "sh" });
     if cfg!(windows) {
@@ -1434,7 +1434,7 @@ fn test_faststart_case_insensitivity() {
 
 #[test]
 fn test_parse_astats_level() {
-    use another_encoder::ffmpeg::parse_astats_level;
+    use kabosu_converter::ffmpeg::parse_astats_level;
 
     assert_eq!(
         parse_astats_level("lavfi.astats.1.Peak_level=-18.063656"),
@@ -1471,7 +1471,7 @@ fn test_parse_astats_level() {
 fn test_read_ffplay_meter_stream() {
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
-    use another_encoder::ffmpeg::read_ffplay_meter;
+    use kabosu_converter::ffmpeg::read_ffplay_meter;
 
     let meter = Arc::new(Mutex::new((-60.0f32, -60.0f32)));
     let mock_stream = b"frame:0 pts:0\r\nlavfi.astats.1.Peak_level=-14.5\r\nlavfi.astats.2.Peak_level=-20.2\r\n";
@@ -1487,7 +1487,7 @@ fn test_read_ffplay_meter_stream() {
 #[test]
 fn test_live_audio_meter_playback_and_volume_isolation() {
     use std::path::Path;
-    use another_encoder::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
 
     let binaries = FFmpegBinaries::locate().unwrap();
     let ffplay = match binaries.ffplay.as_ref() {

@@ -1,8 +1,8 @@
-# Another Encoder
+# Kabosu Converter
 
 A high-performance, safe, modern video and audio transcoding & processing desktop application built from scratch in **Rust** and **Slint**, powered by local **FFmpeg 7+ / 8+** binaries.
 
-Inspired by the comprehensive capabilities of Shutter Encoder, **Another Encoder** is engineered in native Rust to eliminate Java runtime dependencies, garbage collection stalls, and dated UI paradigms, providing an ultra-responsive Studio Dark interface with real-time hardware encoding, metadata inspection, and lossless stream manipulations.
+Inspired by the comprehensive capabilities of Shutter Encoder, **Kabosu Converter** is engineered in native Rust to eliminate Java runtime dependencies, garbage collection stalls, and dated UI paradigms, providing an ultra-responsive Studio Dark interface with real-time hardware encoding, metadata inspection, and lossless stream manipulations.
 
 ---
 
@@ -64,11 +64,11 @@ Inspired by the comprehensive capabilities of Shutter Encoder, **Another Encoder
 ### 8. Self-Contained Binary Auto-Download Subsystem
 - **Zero-Config Deployment**: The application operates self-sufficiently without bundling bulky external binaries in git.
 - **Three-Tier Discovery**:
-  1. Checks App-Local directory (`%LOCALAPPDATA%\AnotherEncoder\bin` on Windows, `~/Library/Application Support/AnotherEncoder/bin` on macOS, or standalone `./bin`).
+  1. Checks App-Local directory (`%LOCALAPPDATA%\Kabosu\bin` on Windows, `~/Library/Application Support/Kabosu/bin` on macOS, or standalone `./bin`).
   2. Fallback to system `$PATH` for power users maintaining custom builds.
   3. Automatic background streaming download strictly into the app-local folder if missing.
 - **SHA-256 Hash Verification**: All downloads are checked against official release checksum manifests (`SHA2-256SUMS` and `checksums.sha256`) prior to extraction.
-- **Clean Uninstallation**: All settings and downloaded binaries reside together in the OS local app data folder; deleting `%LOCALAPPDATA%\AnotherEncoder` leaves the host machine completely clean.
+- **Clean Uninstallation**: All settings and downloaded binaries reside together in the OS local app data folder; deleting `%LOCALAPPDATA%\Kabosu` leaves the host machine completely clean.
 
 ---
 
@@ -108,4 +108,4 @@ cargo test
 cargo build --release
 ```
 The optimized standalone executable will be located at:
-`target/release/another-encoder.exe`
+`target/release/kabosu-converter.exe`

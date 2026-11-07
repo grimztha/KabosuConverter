@@ -1,4 +1,4 @@
-use another_encoder::ytdlp::{
+use kabosu_converter::ytdlp::{
     build_output_template, detect_version, discover_media, find_ytdlp_binary, sanitize_filename_stem,
     DownloadFormatOption, YtDlpFormatItem, YtDlpMediaInfo,
 };
@@ -10,7 +10,7 @@ fn test_ytdlp_binary_locator() {
     let path = binary.unwrap();
     assert!(path.is_file(), "Located yt-dlp path must be a valid file");
     let path_str = path.to_string_lossy().to_lowercase();
-    assert!(path_str.contains("another_encoder"), "yt-dlp must be located inside the project root");
+    assert!(path_str.contains("kabosu") || path_str.contains("another_encoder"), "yt-dlp must be located inside the project root");
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn test_ytdlp_url_validation_security() {
 
 #[test]
 fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
-    use another_encoder::ytdlp::parse_downloaded_filepath;
+    use kabosu_converter::ytdlp::parse_downloaded_filepath;
     use std::path::{Path, PathBuf};
 
     let dest_dir = Path::new("C:\\Media\\Downloads");

@@ -9,7 +9,7 @@ icons = {
     'sliders.svg': 'sliders-horizontal',
 }
 
-out_dir = r'd:\another_encoder\src\ui\icons'
+out_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src', 'ui', 'icons'))
 os.makedirs(out_dir, exist_ok=True)
 
 for filename, lucide_name in icons.items():

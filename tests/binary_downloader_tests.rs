@@ -3,11 +3,11 @@ use std::io::Write;
 use tempfile::tempdir;
 use zip::write::{SimpleFileOptions, ZipWriter};
 
-use another_encoder::binaries::extract::BinaryExtractor;
-use another_encoder::binaries::fetcher::BinaryFetcher;
-use another_encoder::binaries::manifest::{BinaryMetadata, LocalBinaryManifest};
-use another_encoder::binaries::platform::{ArchiveFormat, PlatformInfo};
-use another_encoder::binaries::DependencyManager;
+use kabosu_converter::binaries::extract::BinaryExtractor;
+use kabosu_converter::binaries::fetcher::BinaryFetcher;
+use kabosu_converter::binaries::manifest::{BinaryMetadata, LocalBinaryManifest};
+use kabosu_converter::binaries::platform::{ArchiveFormat, PlatformInfo};
+use kabosu_converter::binaries::DependencyManager;
 
 #[tokio::test]
 async fn test_manifest_lifecycle() {
@@ -102,7 +102,7 @@ async fn test_archive_extractor_zip_and_permissions() {
 
 #[tokio::test]
 async fn test_dependency_manager_discovery_and_paths() {
-    let dm = DependencyManager::new("AnotherEncoderTestApp").expect("DependencyManager::new");
+    let dm = DependencyManager::new("KabosuTestApp").expect("DependencyManager::new");
     assert_eq!(dm.bin_dir(), dm.app_data_dir().join("bin"));
 
     // Check existing detects workspace binaries

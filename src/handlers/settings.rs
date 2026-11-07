@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use slint::{ComponentHandle, SharedString};
 use crate::context::AppContext;
 use crate::{AppData, AppLogic, MainWindow};
-use another_encoder::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
-use another_encoder::settings::{self, AppSettings};
+use kabosu_converter::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
+use kabosu_converter::settings::{self, AppSettings};
 
 /// Builds an `AppSettings` snapshot from the current Slint `AppData` state.
 pub fn extract_settings_from_app_data(data: &AppData) -> AppSettings {

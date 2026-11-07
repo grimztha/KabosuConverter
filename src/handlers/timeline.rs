@@ -1,6 +1,6 @@
 use slint::{ComponentHandle, SharedString};
 
-use another_encoder::ffmpeg::{format_duration_hms, parse_timecode_to_seconds};
+use kabosu_converter::ffmpeg::{format_duration_hms, parse_timecode_to_seconds};
 use crate::context::AppContext;
 use crate::handlers::editor::request_current_preview_frame;
 use crate::{AppData, AppLogic, MainWindow};

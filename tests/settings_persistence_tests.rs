@@ -1,7 +1,7 @@
 use tempfile::tempdir;
 use slint::ComponentHandle;
-use another_encoder::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
-use another_encoder::settings::AppSettings;
+use kabosu_converter::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
+use kabosu_converter::settings::AppSettings;
 
 slint::include_modules!();
 

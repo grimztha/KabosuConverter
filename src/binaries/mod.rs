@@ -313,13 +313,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_dependency_manager_init() {
-        let dm = DependencyManager::new("AnotherEncoderTest").expect("Init DependencyManager");
+        let dm = DependencyManager::new("KabosuTest").expect("Init DependencyManager");
         assert!(dm.bin_dir().exists());
     }
 
     #[tokio::test]
     async fn test_check_existing_finds_project_binaries() {
-        let dm = DependencyManager::new("AnotherEncoder").expect("Init DependencyManager");
+        let dm = DependencyManager::new("Kabosu").expect("Init DependencyManager");
         let existing = dm.check_existing().await.expect("check_existing");
         // Binaries exist in current project root
         if let Some(paths) = existing {

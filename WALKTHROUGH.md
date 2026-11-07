@@ -1,6 +1,6 @@
-# Another Encoder — Comprehensive Audit
+# Kabosu Converter — Comprehensive Audit
 
-**Project:** Another Encoder (Rust desktop video encoder/editor)
+**Project:** Kabosu Converter (Rust desktop video encoder/editor)
 **Date:** October 2025
 **Auditor:** AI Code Review Agent
 **Scope:** Complete source code, build configuration, dependency selection, architecture

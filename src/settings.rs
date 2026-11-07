@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 
-pub const APP_NAME: &str = "AnotherEncoder";
+pub const APP_NAME: &str = "Kabosu";
+pub const LEGACY_APP_NAMES: &[&str] = &["KabosuConverter", "AnotherEncoder"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -134,9 +135,15 @@ pub fn get_settings_path() -> Result<PathBuf> {
 
     if !local_settings.exists() && !is_standalone_mode() {
         if let Some(config_dir) = dirs::config_dir() {
-            let legacy_path = config_dir.join(APP_NAME).join("settings.json");
-            if legacy_path.exists() {
-                return Ok(legacy_path);
+            let app_path = config_dir.join(APP_NAME).join("settings.json");
+            if app_path.exists() {
+                return Ok(app_path);
+            }
+            for legacy in LEGACY_APP_NAMES {
+                let legacy_path = config_dir.join(legacy).join("settings.json");
+                if legacy_path.exists() {
+                    return Ok(legacy_path);
+                }
             }
         }
     }

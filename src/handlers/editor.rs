@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 
 use slint::{ComponentHandle, SharedString};
 
-use another_encoder::ffmpeg::{
+use kabosu_converter::ffmpeg::{
     compute_letterbox_viewport, CropAspectRatio, CropBoxDragSession, CropHandleDragSession,
     CropRect, VideoRotation,
 };

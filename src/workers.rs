@@ -5,7 +5,7 @@ use std::thread;
 
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer};
 
-use another_encoder::ffmpeg::{extract_frame_rgba_transformed, extract_waveform_rgba};
+use kabosu_converter::ffmpeg::{extract_frame_rgba_transformed, extract_waveform_rgba};
 use crate::context::{PreviewTask, WaveformTask};
 
 /// Background worker that extracts video frames for preview scrubbing.

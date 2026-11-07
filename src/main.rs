@@ -10,9 +10,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
-use another_encoder::ffmpeg::{AudioPlaybackSession, FFmpegBinaries};
-use another_encoder::settings;
-use another_encoder::ytdlp;
+use kabosu_converter::ffmpeg::{AudioPlaybackSession, FFmpegBinaries};
+use kabosu_converter::settings;
+use kabosu_converter::ytdlp;
 
 mod context;
 mod dialogs;
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
 
         let (hw_accel, has_gpu, gpu_name) = binaries.detect_hardware_accel();
-        another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+        kabosu_converter::ffmpeg::set_detected_hardware_accel(hw_accel);
         ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
         ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
     }
@@ -112,26 +112,26 @@ fn main() -> Result<()> {
                 .build();
             if let Ok(rt) = rt {
                 rt.block_on(async move {
-                    if let Ok(dm) = another_encoder::binaries::DependencyManager::new(another_encoder::settings::APP_NAME) {
+                    if let Ok(dm) = kabosu_converter::binaries::DependencyManager::new(kabosu_converter::settings::APP_NAME) {
                         let ui_prog = ui_weak.clone();
                         let result = dm.ensure_dependencies(move |name, prog| {
                             let status = match prog {
-                                another_encoder::binaries::DownloadProgress::Started { total_bytes } => {
+                                kabosu_converter::binaries::DownloadProgress::Started { total_bytes } => {
                                     match total_bytes {
                                         Some(total) => format!("Downloading {} ({:.1} MB)...", name, total as f64 / 1_048_576.0),
                                         None => format!("Downloading {}...", name),
                                     }
                                 }
-                                another_encoder::binaries::DownloadProgress::Transferred { total_downloaded, .. } => {
+                                kabosu_converter::binaries::DownloadProgress::Transferred { total_downloaded, .. } => {
                                     format!("Downloading {}: {:.1} MB", name, total_downloaded as f64 / 1_048_576.0)
                                 }
-                                another_encoder::binaries::DownloadProgress::VerifyingHash => {
+                                kabosu_converter::binaries::DownloadProgress::VerifyingHash => {
                                     format!("Verifying {} SHA-256 integrity...", name)
                                 }
-                                another_encoder::binaries::DownloadProgress::Extracting => {
+                                kabosu_converter::binaries::DownloadProgress::Extracting => {
                                     format!("Extracting {} into app-local storage...", name)
                                 }
-                                another_encoder::binaries::DownloadProgress::Complete => {
+                                kabosu_converter::binaries::DownloadProgress::Complete => {
                                     format!("{} installed successfully.", name)
                                 }
                             };
@@ -152,7 +152,7 @@ fn main() -> Result<()> {
                                 };
                                 let (_full_ver, badge_text) = loc.detect_version();
                                 let (hw_accel, has_gpu, gpu_name) = loc.detect_hardware_accel();
-                                another_encoder::ffmpeg::set_detected_hardware_accel(hw_accel);
+                                kabosu_converter::ffmpeg::set_detected_hardware_accel(hw_accel);
                                 let (_y_ver, y_badge) = ytdlp::detect_version(&paths.yt_dlp);
 
                                 let ui_cb = ui_weak.clone();

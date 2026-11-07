@@ -9,8 +9,8 @@ fn main() {
         let version = env!("CARGO_PKG_VERSION");
         let mut res = winres::WindowsResource::new();
         res.set_icon("assets/icon.ico");
-        res.set("ProductName", "Another Encoder");
-        res.set("FileDescription", "Another Encoder — Professional Media Transcoder");
+        res.set("ProductName", "Kabosu Converter");
+        res.set("FileDescription", "Kabosu Converter — Professional Media Transcoder");
         res.set("ProductVersion", version);
         res.set("FileVersion", version);
         res.set("LegalCopyright", "Copyright (c) SThao");

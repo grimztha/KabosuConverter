@@ -1,4 +1,4 @@
-//! Windows native drag-and-drop support for Another Encoder.
+//! Windows native drag-and-drop support for Kabosu Converter.
 //! Supports both OLE IDropTarget and Shell WM_DROPFILES to ensure dropped files
 //! from Windows Explorer are reliably detected and added to the queue.
 
@@ -481,7 +481,7 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
                 let title = get_window_title(hwnd);
                 let visible = IsWindowVisible(hwnd) != 0;
                 if !is_auxiliary_window_class(&class) {
-                    if title.contains("Another Encoder") {
+                    if title.contains("Kabosu Converter") || title.contains("Another Encoder") {
                         *out = Some(hwnd);
                         return 0;
                     } else if visible && out.is_none() {
@@ -536,7 +536,7 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
     let class = get_window_class(hwnd);
     let visible = IsWindowVisible(hwnd) != 0;
 
-    if visible && title.contains("Another Encoder") && !is_auxiliary_window_class(&class) {
+    if visible && (title.contains("Kabosu Converter") || title.contains("Another Encoder")) && !is_auxiliary_window_class(&class) {
         ATTACHED_REAL_HWND.store(hwnd as usize, Ordering::SeqCst);
         apply_window_rounded_corners(hwnd);
     }

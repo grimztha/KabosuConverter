@@ -36,18 +36,21 @@ impl LocalBinaryManifest {
         Self::default()
     }
 
-    /// Persists the manifest into the directory atomically.
+    /// Saves the manifest to disk via a temporary file first.
     pub fn save(&self, bin_dir: &Path) -> Result<(), BinaryError> {
         fs::create_dir_all(bin_dir)?;
         let manifest_path = bin_dir.join(Self::FILE_NAME);
         let tmp_path = bin_dir.join(format!("{}.tmp", Self::FILE_NAME));
 
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(&tmp_path, content)?;
+        fs::write(&tmp_path, &content)?;
         if manifest_path.exists() {
             let _ = fs::remove_file(&manifest_path);
         }
-        fs::rename(&tmp_path, &manifest_path)?;
+        if fs::rename(&tmp_path, &manifest_path).is_err() {
+            let _ = fs::remove_file(&tmp_path);
+            fs::write(&manifest_path, content)?;
+        }
 
         Ok(())
     }

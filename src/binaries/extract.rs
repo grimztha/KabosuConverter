@@ -1,15 +1,17 @@
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 use super::error::BinaryError;
 use super::platform::{ArchiveFormat, PlatformInfo};
 
+/// Upper bound (512 MiB) per extracted binary to guard against archive bombs.
+const MAX_EXTRACTED_BINARY_BYTES: u64 = 512 * 1024 * 1024;
+
 pub struct BinaryExtractor;
 
 impl BinaryExtractor {
-    /// Safely replaces `dst` with `src`. Attempts an atomic rename first,
-    /// falling back to copy-and-delete if crossing filesystem boundaries.
+    /// Replaces `dst` with `src`, falling back to copy-and-delete across filesystems.
     fn atomic_replace_file(src: &Path, dst: &Path) -> Result<(), BinaryError> {
         if dst.exists() {
             let _ = fs::remove_file(dst);
@@ -19,6 +21,52 @@ impl BinaryExtractor {
             let _ = fs::remove_file(src);
         }
         Ok(())
+    }
+
+    /// Writes a bounded stream into `bin_dir/<out_name>` via a temporary file.
+    fn write_extracted_stream<R: Read>(reader: R, bin_dir: &Path, out_name: &str) -> Result<(), BinaryError> {
+        let out_path = bin_dir.join(out_name);
+        let tmp_out_path = bin_dir.join(format!("{}.extract.tmp", out_name));
+
+        let mut outfile = File::create(&tmp_out_path)?;
+        let mut bounded = reader.take(MAX_EXTRACTED_BINARY_BYTES + 1);
+        let written = io::copy(&mut bounded, &mut outfile)?;
+        if written > MAX_EXTRACTED_BINARY_BYTES {
+            drop(outfile);
+            let _ = fs::remove_file(&tmp_out_path);
+            return Err(BinaryError::ArchiveExtraction(format!(
+                "Extracted entry '{}' exceeded maximum allowed size ({} bytes)",
+                out_name, MAX_EXTRACTED_BINARY_BYTES
+            )));
+        }
+        outfile.flush()?;
+        drop(outfile);
+
+        Self::atomic_replace_file(&tmp_out_path, &out_path)?;
+        Self::apply_permissions_and_attributes(&out_path)?;
+        Ok(())
+    }
+
+    /// Matches an archive entry path against the expected FFmpeg suite filenames.
+    fn match_ffmpeg_entry<'a>(
+        normalized_path: &str,
+        ffmpeg_name: &'a str,
+        ffprobe_name: &'a str,
+        ffplay_name: &'a str,
+        extracted_ffmpeg: &mut bool,
+        extracted_ffprobe: &mut bool,
+    ) -> Option<&'a str> {
+        if normalized_path.ends_with(&format!("/{}", ffmpeg_name)) || normalized_path == ffmpeg_name {
+            *extracted_ffmpeg = true;
+            Some(ffmpeg_name)
+        } else if normalized_path.ends_with(&format!("/{}", ffprobe_name)) || normalized_path == ffprobe_name {
+            *extracted_ffprobe = true;
+            Some(ffprobe_name)
+        } else if normalized_path.ends_with(&format!("/{}", ffplay_name)) || normalized_path == ffplay_name {
+            Some(ffplay_name)
+        } else {
+            None
+        }
     }
 
     /// Extracts or installs downloaded binary assets into `bin_dir`.
@@ -51,7 +99,7 @@ impl BinaryExtractor {
         Ok(())
     }
 
-    /// Extracts matching ffmpeg suite binaries from a .zip archive.
+    /// Extracts matching FFmpeg binaries from a `.zip` archive.
     fn extract_zip(
         archive_path: &Path,
         bin_dir: &Path,
@@ -68,32 +116,18 @@ impl BinaryExtractor {
         let mut extracted_ffprobe = false;
 
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
+            let file = archive.by_index(i)?;
             let raw_name = file.name()?.replace('\\', "/");
 
-            let target_name = if raw_name.ends_with(&format!("/{}", ffmpeg_name)) || raw_name == ffmpeg_name {
-                extracted_ffmpeg = true;
-                Some(ffmpeg_name)
-            } else if raw_name.ends_with(&format!("/{}", ffprobe_name)) || raw_name == ffprobe_name {
-                extracted_ffprobe = true;
-                Some(ffprobe_name)
-            } else if raw_name.ends_with(&format!("/{}", ffplay_name)) || raw_name == ffplay_name {
-                Some(ffplay_name)
-            } else {
-                None
-            };
-
-            if let Some(out_name) = target_name {
-                let out_path = bin_dir.join(out_name);
-                let tmp_out_path = bin_dir.join(format!("{}.extract.tmp", out_name));
-
-                let mut outfile = File::create(&tmp_out_path)?;
-                io::copy(&mut file, &mut outfile)?;
-                outfile.flush()?;
-                drop(outfile);
-
-                Self::atomic_replace_file(&tmp_out_path, &out_path)?;
-                Self::apply_permissions_and_attributes(&out_path)?;
+            if let Some(out_name) = Self::match_ffmpeg_entry(
+                &raw_name,
+                ffmpeg_name,
+                ffprobe_name,
+                ffplay_name,
+                &mut extracted_ffmpeg,
+                &mut extracted_ffprobe,
+            ) {
+                Self::write_extracted_stream(file, bin_dir, out_name)?;
             }
         }
 
@@ -116,7 +150,7 @@ impl BinaryExtractor {
         Ok(())
     }
 
-    /// Extracts matching binaries from a .tar.xz archive.
+    /// Extracts matching FFmpeg binaries from a `.tar.xz` archive.
     fn extract_tar_xz(
         archive_path: &Path,
         bin_dir: &Path,
@@ -138,7 +172,7 @@ impl BinaryExtractor {
         })?;
 
         for entry_res in entries {
-            let mut entry = entry_res.map_err(|e| {
+            let entry = entry_res.map_err(|e| {
                 BinaryError::ArchiveExtraction(format!("Failed to read entry: {}", e))
             })?;
 
@@ -147,29 +181,15 @@ impl BinaryExtractor {
             })?;
             let path_str = entry_path.to_string_lossy().replace('\\', "/");
 
-            let target_name = if path_str.ends_with(&format!("/{}", ffmpeg_name)) || path_str == ffmpeg_name {
-                extracted_ffmpeg = true;
-                Some(ffmpeg_name)
-            } else if path_str.ends_with(&format!("/{}", ffprobe_name)) || path_str == ffprobe_name {
-                extracted_ffprobe = true;
-                Some(ffprobe_name)
-            } else if path_str.ends_with(&format!("/{}", ffplay_name)) || path_str == ffplay_name {
-                Some(ffplay_name)
-            } else {
-                None
-            };
-
-            if let Some(out_name) = target_name {
-                let out_path = bin_dir.join(out_name);
-                let tmp_out_path = bin_dir.join(format!("{}.extract.tmp", out_name));
-
-                let mut outfile = File::create(&tmp_out_path)?;
-                io::copy(&mut entry, &mut outfile)?;
-                outfile.flush()?;
-                drop(outfile);
-
-                Self::atomic_replace_file(&tmp_out_path, &out_path)?;
-                Self::apply_permissions_and_attributes(&out_path)?;
+            if let Some(out_name) = Self::match_ffmpeg_entry(
+                &path_str,
+                ffmpeg_name,
+                ffprobe_name,
+                ffplay_name,
+                &mut extracted_ffmpeg,
+                &mut extracted_ffprobe,
+            ) {
+                Self::write_extracted_stream(entry, bin_dir, out_name)?;
             }
         }
 
@@ -192,7 +212,7 @@ impl BinaryExtractor {
         Ok(())
     }
 
-    /// Sets POSIX 0o755 execution permissions on Unix and removes macOS quarantine attributes.
+    /// Marks the binary as executable (`0o755`) on Unix and strips the macOS quarantine attribute.
     pub fn apply_permissions_and_attributes(path: &Path) -> Result<(), BinaryError> {
         #[cfg(unix)]
         {

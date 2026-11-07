@@ -30,13 +30,8 @@ pub struct DependencyManager {
 }
 
 impl DependencyManager {
-    /// Initializes DependencyManager for the specified application name.
-    /// Follows OS conventions:
-    /// - Standalone / portable: executable's parent directory (`<exe_dir>/bin`)
-    /// - Standard installation: OS local app data folder
-    ///   - Windows: `%LOCALAPPDATA%\<app_name>\bin`
-    ///   - macOS: `~/Library/Application Support/<app_name>/bin`
-    ///   - Linux: `~/.local/share/<app_name>/bin`
+    /// Sets up the binary manager for `app_name`.
+    /// Uses `<exe_dir>/bin` in portable mode, or the OS local app data `bin` folder otherwise.
     pub fn new(app_name: &str) -> Result<Self, BinaryError> {
         let platform = PlatformInfo::current()?;
         let (app_data_dir, is_standalone) = Self::determine_app_data_dir(app_name);
@@ -64,12 +59,8 @@ impl DependencyManager {
         self.is_standalone
     }
 
-    /// Checks whether required binaries (ffmpeg, ffprobe, yt-dlp) are already present
-    /// and runnable locally, without performing any downloads or network requests.
-    ///
-    /// Resolution order:
-    /// 1. App-local folder (%LOCALAPPDATA%\<app_name>\bin or portable `<exe_dir>/bin`)
-    /// 2. Project root / executable directory
+    /// Checks if `ffmpeg`, `ffprobe`, and `yt-dlp` already exist locally and run cleanly.
+    /// Does not make any network requests.
     pub async fn check_existing(&self) -> Result<Option<BinaryPaths>, BinaryError> {
         let ffmpeg = self.resolve_binary(self.platform.ffmpeg_filename(), "-version").await;
         let ffprobe = self.resolve_binary(self.platform.ffprobe_filename(), "-version").await;
@@ -88,8 +79,7 @@ impl DependencyManager {
         Ok(None)
     }
 
-    /// Resolves binary paths, downloading and hash-verifying any missing binaries into
-    /// the app-local folder.
+    /// Finds local binaries or downloads, hash-verifies, and extracts any missing ones.
     pub async fn ensure_dependencies<F>(&self, on_progress: F) -> Result<BinaryPaths, BinaryError>
     where
         F: Fn(&str, DownloadProgress) + Send + Sync + 'static,
@@ -97,7 +87,7 @@ impl DependencyManager {
         let fetcher = fetcher::BinaryFetcher::new()?;
         let mut manifest = manifest::LocalBinaryManifest::load(&self.bin_dir);
 
-        // 1. Resolve or Download FFmpeg suite
+        // Locate or download the FFmpeg suite
         let ffmpeg_existing = self.resolve_binary(self.platform.ffmpeg_filename(), "-version").await;
         let ffprobe_existing = self.resolve_binary(self.platform.ffprobe_filename(), "-version").await;
 
@@ -110,14 +100,12 @@ impl DependencyManager {
                 let target = self.platform.ffmpeg_target();
                 let progress_name = "ffmpeg";
 
-                // Step A: Download with simultaneous SHA-256 calculation
                 let (tmp_file, calculated_hash) = fetcher
                     .download_with_hash(&target, &self.bin_dir, &|prog| {
                         on_progress(progress_name, prog);
                     })
                     .await?;
 
-                // Step B: Verify SHA-256 against official release checksum manifest
                 on_progress(progress_name, DownloadProgress::VerifyingHash);
                 let verified_hash = match fetcher.verify_checksum(&target, &calculated_hash).await {
                     Ok(hash) => hash,
@@ -127,7 +115,6 @@ impl DependencyManager {
                     }
                 };
 
-                // Step C: Extract archive into app-local bin directory
                 on_progress(progress_name, DownloadProgress::Extracting);
                 extract::BinaryExtractor::extract(&tmp_file, &self.bin_dir, &target.format, &self.platform)?;
 
@@ -135,11 +122,9 @@ impl DependencyManager {
                 let ffprobe = self.bin_dir.join(self.platform.ffprobe_filename());
                 let ffplay = self.bin_dir.join(self.platform.ffplay_filename());
 
-                // Step D: Verify executable smoke test
                 let ver_output = Self::verify_binary_executable(&ffmpeg, "-version").await?;
                 let _ = Self::verify_binary_executable(&ffprobe, "-version").await?;
 
-                // Step E: Persist metadata
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -163,21 +148,19 @@ impl DependencyManager {
             }
         };
 
-        // 2. Resolve or Download yt-dlp
+        // Locate or download yt-dlp
         let ytdlp_path = match self.resolve_binary(self.platform.ytdlp_filename(), "--version").await {
             Some(p) => p,
             None => {
                 let target = self.platform.ytdlp_target();
                 let progress_name = "yt-dlp";
 
-                // Step A: Download with simultaneous SHA-256 calculation
                 let (tmp_file, calculated_hash) = fetcher
                     .download_with_hash(&target, &self.bin_dir, &|prog| {
                         on_progress(progress_name, prog);
                     })
                     .await?;
 
-                // Step B: Verify SHA-256 against official release SHA2-256SUMS
                 on_progress(progress_name, DownloadProgress::VerifyingHash);
                 let verified_hash = match fetcher.verify_checksum(&target, &calculated_hash).await {
                     Ok(hash) => hash,
@@ -187,16 +170,13 @@ impl DependencyManager {
                     }
                 };
 
-                // Step C: Atomically install raw executable into app-local bin directory
                 on_progress(progress_name, DownloadProgress::Extracting);
                 extract::BinaryExtractor::extract(&tmp_file, &self.bin_dir, &target.format, &self.platform)?;
 
                 let ytdlp = self.bin_dir.join(self.platform.ytdlp_filename());
 
-                // Step D: Verify executable smoke test
                 let ver_output = Self::verify_binary_executable(&ytdlp, "--version").await?;
 
-                // Step E: Persist metadata
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -227,17 +207,13 @@ impl DependencyManager {
         })
     }
 
-    /// Resolves an individual binary across designated locations in priority order:
-    /// 1. App-local folder (%LOCALAPPDATA%\<app_name>\bin or portable `<exe_dir>/bin`)
-    /// 2. Project root / executable directory
+    /// Searches for `filename` in the app-local `bin` folder first, then in the project/exe root.
     pub async fn resolve_binary(&self, filename: &str, test_arg: &str) -> Option<PathBuf> {
-        // First check the app-local bin directory
         let local_path = self.bin_dir.join(filename);
         if local_path.is_file() && Self::verify_binary_executable(&local_path, test_arg).await.is_ok() {
             return Some(local_path.canonicalize().unwrap_or(local_path));
         }
 
-        // Next check the application executable directory and workspace root
         let exe_dir = env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -261,7 +237,7 @@ impl DependencyManager {
         None
     }
 
-    /// Runs smoke test `<binary> <arg>` with a 2-second timeout to verify executable integrity.
+    /// Runs `<binary> <arg>` with a 2-second timeout to confirm the binary is valid and runnable.
     pub async fn verify_binary_executable(path: &Path, arg: &str) -> Result<String, BinaryError> {
         if !path.is_file() {
             return Err(BinaryError::ExecutionFailed {
@@ -309,16 +285,11 @@ impl DependencyManager {
         }
     }
 
-    /// Determines primary application data directory:
-    /// - Standalone / portable if marker or local config is detected next to the exe
-    /// - Otherwise, OS standard local app data folder
+    /// Resolves the app data directory and whether standalone mode is active.
     fn determine_app_data_dir(app_name: &str) -> (PathBuf, bool) {
-        if let Ok(exe_path) = env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                if exe_dir.join("portable").exists()
-                    || exe_dir.join(".standalone").exists()
-                    || exe_dir.join("settings.json").exists()
-                {
+        if crate::settings::is_standalone_mode() {
+            if let Ok(exe_path) = env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
                     return (exe_dir.to_path_buf(), true);
                 }
             }

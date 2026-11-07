@@ -22,7 +22,8 @@ pub fn find_ytdlp_binary() -> Option<PathBuf> {
 
     let mut search_dirs = Vec::new();
 
-    // 1. App-Local OS folder (e.g. %LOCALAPPDATA%\AnotherEncoder\bin)
+    // 1. Primary app directory (portable `<exe_dir>/bin` or `%LOCALAPPDATA%\AnotherEncoder\bin`)
+    search_dirs.push(crate::settings::get_app_dir().join("bin"));
     if let Some(local_app) = dirs::data_local_dir() {
         search_dirs.push(local_app.join(crate::settings::APP_NAME).join("bin"));
     }

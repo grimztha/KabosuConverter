@@ -62,16 +62,24 @@ impl MediaMetadata {
     }
 
     pub fn file_size_formatted(&self) -> String {
-        let bytes = self.file_size_bytes as f64;
-        if bytes >= 1024.0 * 1024.0 * 1024.0 {
-            format!("{:.2} GB", bytes / (1024.0 * 1024.0 * 1024.0))
-        } else if bytes >= 1024.0 * 1024.0 {
-            format!("{:.1} MB", bytes / (1024.0 * 1024.0))
-        } else if bytes >= 1024.0 {
-            format!("{:.0} KB", bytes / 1024.0)
-        } else {
-            format!("{} B", self.file_size_bytes)
-        }
+        format_bytes(self.file_size_bytes)
+    }
+}
+
+/// Formats a byte count into a compact human-readable string (e.g. `"14.2 MB"`, `"1.50 GB"`).
+pub fn format_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    let b = bytes as f64;
+    if b >= GB {
+        format!("{:.2} GB", b / GB)
+    } else if b >= MB {
+        format!("{:.1} MB", b / MB)
+    } else if b >= KB {
+        format!("{:.0} KB", b / KB)
+    } else {
+        format!("{} B", bytes)
     }
 }
 

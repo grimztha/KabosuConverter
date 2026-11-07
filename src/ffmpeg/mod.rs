@@ -7,7 +7,7 @@ pub mod runner;
 pub mod preview;
 
 pub use locator::{FFmpegBinaries, parse_ffmpeg_version};
-pub use probe::{probe_file, format_duration_hms, MediaMetadata, VideoStreamInfo, AudioStreamInfo};
+pub use probe::{probe_file, format_duration_hms, format_bytes, MediaMetadata, VideoStreamInfo, AudioStreamInfo};
 pub use builder::{
     FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
     RateControlMode, AudioCodecChoice, ResolutionPreset, DeinterlaceMode, ProResProfile,

@@ -1,15 +1,30 @@
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 use serde::{Deserialize, Serialize};
 
-static DETECTED_HW: OnceLock<HwAccel> = OnceLock::new();
+static DETECTED_HW: AtomicU8 = AtomicU8::new(1); // Default: HwAccel::Cpu (1)
 
 pub fn set_detected_hardware_accel(accel: HwAccel) {
-    let _ = DETECTED_HW.set(accel);
+    let code = match accel {
+        HwAccel::Auto => 0,
+        HwAccel::Cpu => 1,
+        HwAccel::Nvenc => 2,
+        HwAccel::Qsv => 3,
+        HwAccel::Amf => 4,
+        HwAccel::VideoToolbox => 5,
+    };
+    DETECTED_HW.store(code, Ordering::SeqCst);
 }
 
 pub fn get_detected_hardware_accel() -> HwAccel {
-    *DETECTED_HW.get().unwrap_or(&HwAccel::Cpu)
+    match DETECTED_HW.load(Ordering::SeqCst) {
+        0 => HwAccel::Auto,
+        2 => HwAccel::Nvenc,
+        3 => HwAccel::Qsv,
+        4 => HwAccel::Amf,
+        5 => HwAccel::VideoToolbox,
+        _ => HwAccel::Cpu,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -20,8 +35,6 @@ pub enum EncoderFunction {
     LosslessCut,
     ExtractVideo,
     ExtractAudio,
-    ReplaceAudio,
-    Merge,
     AudioNormalize,
     ExtractSubtitles,
 }
@@ -35,8 +48,35 @@ pub enum VideoCodec {
     VP9,
     AppleProRes,
     AvidDNxHD,
-    MPEG2,
     Copy,
+}
+
+impl VideoCodec {
+    /// Maps the UI function/codec dropdown index to the corresponding video codec.
+    pub fn from_function_index(idx: i32) -> Self {
+        match idx {
+            0 => Self::H264,
+            1 => Self::H265,
+            2 => Self::AV1,
+            3 => Self::AppleProRes,
+            4 => Self::AvidDNxHD,
+            5 => Self::VP9,
+            6 | 7 | 11 => Self::Copy,
+            _ => Self::H264,
+        }
+    }
+
+    pub fn to_function_index(self) -> i32 {
+        match self {
+            Self::H264 => 0,
+            Self::H265 => 1,
+            Self::AV1 => 2,
+            Self::AppleProRes => 3,
+            Self::AvidDNxHD => 4,
+            Self::VP9 => 5,
+            Self::Copy => 6,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -50,12 +90,47 @@ pub enum HwAccel {
     VideoToolbox,
 }
 
+impl HwAccel {
+    pub fn from_index(idx: i32) -> Self {
+        match idx {
+            0 => Self::Auto,
+            1 => Self::Nvenc,
+            2 => Self::Qsv,
+            3 => Self::Amf,
+            4 => Self::VideoToolbox,
+            5 => Self::Cpu,
+            _ => Self::Auto,
+        }
+    }
+
+    pub fn to_index(self) -> i32 {
+        match self {
+            Self::Auto => 0,
+            Self::Nvenc => 1,
+            Self::Qsv => 2,
+            Self::Amf => 3,
+            Self::VideoToolbox => 4,
+            Self::Cpu => 5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RateControlMode {
     #[default]
     CRF,
     CBR,
     VBR,
+}
+
+impl RateControlMode {
+    pub fn from_index(idx: i32) -> Self {
+        match idx {
+            1 => Self::CBR,
+            2 => Self::VBR,
+            _ => Self::CRF,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -71,6 +146,58 @@ pub enum AudioCodecChoice {
     Copy,
 }
 
+impl AudioCodecChoice {
+    pub fn from_index(idx: i32) -> Self {
+        match idx {
+            1 => Self::MP3,
+            2 => Self::Opus,
+            3 => Self::FLAC,
+            4 => Self::WavPCM24,
+            5 => Self::WavPCM16,
+            6 => Self::AC3,
+            7 => Self::Copy,
+            _ => Self::AAC,
+        }
+    }
+
+    pub fn to_index(self) -> i32 {
+        match self {
+            Self::AAC => 0,
+            Self::MP3 => 1,
+            Self::Opus => 2,
+            Self::FLAC => 3,
+            Self::WavPCM24 => 4,
+            Self::WavPCM16 => 5,
+            Self::AC3 => 6,
+            Self::Copy => 7,
+        }
+    }
+
+    /// Maps the UI audio bitrate dropdown index to kbps.
+    pub fn bitrate_from_index(idx: i32) -> u32 {
+        match idx {
+            0 => 320,
+            1 => 256,
+            2 => 192,
+            3 => 128,
+            4 => 96,
+            _ => 64,
+        }
+    }
+
+    /// Maps an audio bitrate in kbps back to its UI dropdown index.
+    pub fn bitrate_to_index(kbps: u32) -> i32 {
+        match kbps {
+            320 => 0,
+            256 => 1,
+            192 => 2,
+            128 => 3,
+            96 => 4,
+            _ => 5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ResolutionPreset {
     #[default]
@@ -83,6 +210,18 @@ pub enum ResolutionPreset {
 }
 
 impl ResolutionPreset {
+    pub fn from_index(idx: i32) -> Self {
+        match idx {
+            0 => Self::Original,
+            1 => Self::UHD4K,
+            2 => Self::QHD1440p,
+            3 => Self::FHD1080p,
+            4 => Self::HD720p,
+            5 => Self::SD480p,
+            _ => Self::Original,
+        }
+    }
+
     pub fn dimensions(&self) -> Option<(u32, u32)> {
         match self {
             Self::Original => None,
@@ -101,6 +240,17 @@ pub enum DeinterlaceMode {
     None,
     Yadif,
     Bwdif,
+}
+
+impl DeinterlaceMode {
+    pub fn from_index(idx: i32) -> Self {
+        match idx {
+            0 => Self::None,
+            1 => Self::Yadif,
+            2 => Self::Bwdif,
+            _ => Self::None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -130,15 +280,6 @@ impl VideoRotation {
             -90 | 270 => Self::RotateNeg90,
             180 | -180 => Self::Rotate180,
             _ => Self::None,
-        }
-    }
-
-    pub fn degrees(&self) -> i32 {
-        match self {
-            Self::None => 0,
-            Self::Rotate90 => 90,
-            Self::RotateNeg90 => -90,
-            Self::Rotate180 => 180,
         }
     }
 
@@ -601,7 +742,6 @@ impl CropBoxDragSession {
 pub struct EncodeJobConfig {
     pub function: EncoderFunction,
     pub input_path: String,
-    pub secondary_input_path: Option<String>, // for replace audio or merge
     pub output_path: String,
 
     // Video Options
@@ -643,7 +783,6 @@ impl Default for EncodeJobConfig {
         Self {
             function: EncoderFunction::Transcode,
             input_path: String::new(),
-            secondary_input_path: None,
             output_path: String::new(),
 
             video_codec: VideoCodec::H264,
@@ -709,12 +848,6 @@ impl FFmpegCommandBuilder {
             }
             EncoderFunction::ExtractAudio => {
                 Self::build_extract_audio(config, &mut args);
-            }
-            EncoderFunction::ReplaceAudio => {
-                Self::build_replace_audio(config, &mut args);
-            }
-            EncoderFunction::Merge => {
-                Self::build_merge(config, &mut args);
             }
             EncoderFunction::AudioNormalize => {
                 Self::build_normalize(config, &mut args);
@@ -1143,12 +1276,6 @@ impl FFmpegCommandBuilder {
                 args.push("-pix_fmt".to_string());
                 args.push("yuv422p".to_string());
             }
-            VideoCodec::MPEG2 => {
-                args.push("-c:v".to_string());
-                args.push("mpeg2video".to_string());
-                args.push("-b:v".to_string());
-                args.push(format!("{}k", config.video_bitrate_kbps.max(25000)));
-            }
             VideoCodec::Copy => {
                 args.push("-c:v".to_string());
                 args.push("copy".to_string());
@@ -1162,14 +1289,20 @@ impl FFmpegCommandBuilder {
             args.push("+faststart".to_string());
         }
 
-        // Audio filters
+        Self::append_audio_filters(config, None, args);
+        Self::apply_audio_encoder(config, args);
+
+        args.push(config.output_path.clone());
+    }
+
+    fn append_audio_filters(config: &EncodeJobConfig, fallback_lufs: Option<f32>, args: &mut Vec<String>) {
         let mut af_filters: Vec<String> = Vec::new();
         if let Some(gain) = config.audio_gain_db {
             if gain.abs() > 0.05 {
                 af_filters.push(format!("volume={:.1}dB", gain));
             }
         }
-        if let Some(lufs) = config.normalize_lufs {
+        if let Some(lufs) = config.normalize_lufs.or(fallback_lufs) {
             af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
         }
 
@@ -1177,12 +1310,6 @@ impl FFmpegCommandBuilder {
             args.push("-af".to_string());
             args.push(af_filters.join(","));
         }
-
-        // Audio Encoder
-        Self::apply_audio_encoder(config, args);
-
-        // Output file
-        args.push(config.output_path.clone());
     }
 
     fn apply_audio_encoder(config: &EncodeJobConfig, args: &mut Vec<String>) {
@@ -1236,7 +1363,7 @@ impl FFmpegCommandBuilder {
             }
         }
 
-        if config.audio_codec != AudioCodecChoice::Copy {
+        if effective_codec != AudioCodecChoice::Copy {
             if let Some(sr) = config.audio_sample_rate {
                 args.push("-ar".to_string());
                 args.push(sr.to_string());
@@ -1304,22 +1431,7 @@ impl FFmpegCommandBuilder {
         args.push("-vn".to_string());
         args.push("-sn".to_string());
 
-        // Audio filters
-        let mut af_filters: Vec<String> = Vec::new();
-        if let Some(gain) = config.audio_gain_db {
-            if gain.abs() > 0.05 {
-                af_filters.push(format!("volume={:.1}dB", gain));
-            }
-        }
-        if let Some(lufs) = config.normalize_lufs {
-            af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
-        }
-
-        if !af_filters.is_empty() {
-            args.push("-af".to_string());
-            args.push(af_filters.join(","));
-        }
-
+        Self::append_audio_filters(config, None, args);
         Self::apply_audio_encoder(config, args);
 
         args.push("-map".to_string());
@@ -1340,67 +1452,16 @@ impl FFmpegCommandBuilder {
         args.push(config.output_path.clone());
     }
 
-    fn build_replace_audio(config: &EncodeJobConfig, args: &mut Vec<String>) {
-        args.push("-i".to_string());
-        args.push(config.input_path.clone()); // Video source
-
-        if let Some(audio_in) = &config.secondary_input_path {
-            args.push("-i".to_string());
-            args.push(audio_in.clone()); // Audio source
-        }
-
-        args.push("-c:v".to_string());
-        args.push("copy".to_string());
-
-        Self::apply_audio_encoder(config, args);
-
-        args.push("-map".to_string());
-        args.push("0:v:0".to_string());
-        args.push("-map".to_string());
-        args.push("1:a:0".to_string());
-
-        args.push("-shortest".to_string());
-        args.push(config.output_path.clone());
-    }
-
-    fn build_merge(config: &EncodeJobConfig, args: &mut Vec<String>) {
-        // Concat demuxer
-        args.push("-f".to_string());
-        args.push("concat".to_string());
-        args.push("-safe".to_string());
-        args.push("0".to_string());
-        args.push("-i".to_string());
-        args.push(config.input_path.clone()); // Points to generated concat text file
-
-        args.push("-c".to_string());
-        args.push("copy".to_string());
-        args.push("-map".to_string());
-        args.push("0".to_string());
-
-        args.push(config.output_path.clone());
-    }
-
     fn build_normalize(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
         args.push("-i".to_string());
         args.push(config.input_path.clone());
 
-        // Copy video without touching it
+        // Copy video stream without re-encoding
         args.push("-c:v".to_string());
         args.push("copy".to_string());
 
-        let mut af_filters: Vec<String> = Vec::new();
-        if let Some(gain) = config.audio_gain_db {
-            if gain.abs() > 0.05 {
-                af_filters.push(format!("volume={:.1}dB", gain));
-            }
-        }
-        let lufs = config.normalize_lufs.unwrap_or(-23.0);
-        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
-
-        args.push("-af".to_string());
-        args.push(af_filters.join(","));
-
+        Self::append_audio_filters(config, Some(-23.0), args);
         Self::apply_audio_encoder(config, args);
 
         args.push(config.output_path.clone());

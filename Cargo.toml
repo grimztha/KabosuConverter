@@ -1,6 +1,6 @@
 [package]
 name = "kabosu-converter"
-version = "0.14.4"
+version = "0.14.5"
 authors = ["grimztha"]
 description = "Kabosu Converter — A modern media transcoder and universal video downloader built with Rust and Slint"
 edition = "2021"

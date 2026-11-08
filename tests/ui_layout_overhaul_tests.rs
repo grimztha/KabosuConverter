@@ -1,3 +1,4 @@
+mod common;
 slint::include_modules!();
 
 slint::slint! {
@@ -66,6 +67,7 @@ slint::slint! {
 
 #[test]
 fn test_ui_layout_overhaul_lifecycle() {
+    common::init_test_backend();
     let helper = TestUIOverhaulHelper::new().unwrap();
 
     // 1. Typography Scale and Floor Verification (Finding #8)

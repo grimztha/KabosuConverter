@@ -418,6 +418,7 @@ mod tests {
 
     #[test]
     fn test_del_key_removes_selected_file_from_queue() {
+        super::super::init_test_backend();
         let ui = match MainWindow::new() {
             Ok(u) => u,
             Err(_) => return, // Slint event loop cannot be re-initialized on concurrent test threads

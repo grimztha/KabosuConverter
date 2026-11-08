@@ -257,7 +257,7 @@ impl DependencyManager {
         cmd.creation_flags(crate::CREATE_NO_WINDOW);
 
         let output_fut = cmd.output();
-        let timeout_fut = timeout(Duration::from_secs(2), output_fut);
+        let timeout_fut = timeout(Duration::from_secs(5), output_fut);
 
         match timeout_fut.await {
             Ok(Ok(output)) if output.status.success() => {

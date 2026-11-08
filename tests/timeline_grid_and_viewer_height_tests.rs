@@ -1,3 +1,4 @@
+mod common;
 slint::include_modules!();
 
 slint::slint! {
@@ -63,6 +64,7 @@ slint::slint! {
 
 #[test]
 fn test_timeline_grid_and_viewer_height_lifecycle() {
+    common::init_test_backend();
     let helper = TestTimelineGridHelper::new().unwrap();
 
     assert_eq!(helper.invoke_test_get_nice_step(0.08), 0.1);

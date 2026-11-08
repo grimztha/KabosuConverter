@@ -845,6 +845,7 @@ mod tests {
 
     #[test]
     fn test_playback_scrub_and_volume_lifecycle() {
+        super::super::init_test_backend();
         let ui = match MainWindow::new() {
             Ok(u) => u,
             Err(_) => return, // Slint Winit backend allows only one EventLoop per test process

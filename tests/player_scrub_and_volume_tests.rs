@@ -1,3 +1,4 @@
+mod common;
 slint::include_modules!();
 
 slint::slint! {
@@ -33,6 +34,7 @@ slint::slint! {
 
 #[test]
 fn test_volumebar_component_properties_and_callbacks() {
+    common::init_test_backend();
     let harness = TestVolumeBarHarness::new().unwrap();
     assert_eq!(harness.get_vol(), 1.0);
     assert!(!harness.get_muted());

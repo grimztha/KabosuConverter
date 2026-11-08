@@ -1,3 +1,4 @@
+mod common;
 use slint::ComponentHandle;
 use slint::platform::{PointerEventButton, WindowEvent};
 use slint::LogicalPosition;
@@ -146,6 +147,7 @@ slint::slint! {
 
 #[test]
 fn test_timeline_scrollbar_full_lifecycle() {
+    common::init_test_backend();
     // 1. Verify MainWindow global zoom binding
     let ui = MainWindow::new().expect("MainWindow should instantiate successfully");
     let app_data = ui.global::<AppData>();

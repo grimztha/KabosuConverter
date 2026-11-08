@@ -1,3 +1,4 @@
+mod common;
 use tempfile::tempdir;
 use slint::ComponentHandle;
 use kabosu_converter::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
@@ -83,6 +84,7 @@ fn test_settings_disk_save_and_reload_roundtrip() {
 
 #[test]
 fn test_ui_app_data_settings_sync_lifecycle() {
+    common::init_test_backend();
     let ui = MainWindow::new().expect("MainWindow must instantiate");
     let app_data = ui.global::<AppData>();
 

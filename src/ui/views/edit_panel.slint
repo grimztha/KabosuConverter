@@ -727,13 +727,13 @@ export component EditPanel inherits HorizontalLayout {
 
                                             // Quick Preset dB Scale (-12dB to +12dB)
                                             HorizontalLayout {
-                                                spacing: 3px;
+                                                spacing: 4px;
 
                                                 ActionButton {
                                                     horizontal-stretch: 1;
                                                     height: 24px;
                                                     btn_radius: 4px;
-                                                    pad_horizontal: 2px;
+                                                    pad_horizontal: 3px;
                                                     title: "-12dB";
                                                     fill_color: AppData.audio_gain_db == -12.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                     hover_color: AppData.audio_gain_db == -12.0 ? Theme.accent_primary_hover : Theme.slider_track;
@@ -746,7 +746,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     horizontal-stretch: 1;
                                                     height: 24px;
                                                     btn_radius: 4px;
-                                                    pad_horizontal: 2px;
+                                                    pad_horizontal: 3px;
                                                     title: "-6dB";
                                                     fill_color: AppData.audio_gain_db == -6.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                     hover_color: AppData.audio_gain_db == -6.0 ? Theme.accent_primary_hover : Theme.slider_track;
@@ -759,7 +759,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     horizontal-stretch: 1;
                                                     height: 24px;
                                                     btn_radius: 4px;
-                                                    pad_horizontal: 2px;
+                                                    pad_horizontal: 3px;
                                                     title: "0 dB";
                                                     fill_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                     hover_color: (AppData.audio_gain_db > -0.05 && AppData.audio_gain_db < 0.05) ? Theme.accent_primary_hover : Theme.slider_track;
@@ -772,20 +772,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     horizontal-stretch: 1;
                                                     height: 24px;
                                                     btn_radius: 4px;
-                                                    pad_horizontal: 2px;
-                                                    title: "+3dB";
-                                                    fill_color: AppData.audio_gain_db == 3.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
-                                                    hover_color: AppData.audio_gain_db == 3.0 ? Theme.accent_primary_hover : Theme.slider_track;
-                                                    text_color: AppData.audio_gain_db == 3.0 ? #ffffff : Theme.btn_neutral_text;
-                                                    font_size: 10px;
-                                                    clicked => { AppLogic.set_audio_gain_db(3.0); }
-                                                }
-
-                                                ActionButton {
-                                                    horizontal-stretch: 1;
-                                                    height: 24px;
-                                                    btn_radius: 4px;
-                                                    pad_horizontal: 2px;
+                                                    pad_horizontal: 3px;
                                                     title: "+6dB";
                                                     fill_color: AppData.audio_gain_db == 6.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                     hover_color: AppData.audio_gain_db == 6.0 ? Theme.accent_primary_hover : Theme.slider_track;
@@ -798,7 +785,7 @@ export component EditPanel inherits HorizontalLayout {
                                                     horizontal-stretch: 1;
                                                     height: 24px;
                                                     btn_radius: 4px;
-                                                    pad_horizontal: 2px;
+                                                    pad_horizontal: 3px;
                                                     title: "+12dB";
                                                     fill_color: AppData.audio_gain_db == 12.0 ? Theme.accent_primary : Theme.btn_neutral_bg;
                                                     hover_color: AppData.audio_gain_db == 12.0 ? Theme.accent_primary_hover : Theme.slider_track;

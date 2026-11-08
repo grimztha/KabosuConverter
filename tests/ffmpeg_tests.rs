@@ -19,6 +19,7 @@ fn test_h264_command_generation() {
         input_path: "input.mov".to_string(),
         output_path: "output.mp4".to_string(),
         video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Cpu,
         rate_control: RateControlMode::CRF,
         crf: 18,
         preset: "slow".to_string(),
@@ -50,6 +51,7 @@ fn test_h265_apple_compat_tag() {
         input_path: "input.mkv".to_string(),
         output_path: "output.mp4".to_string(),
         video_codec: VideoCodec::H265,
+        hw_accel: HwAccel::Cpu,
         crf: 22,
         ..Default::default()
     };
@@ -69,6 +71,7 @@ fn test_prores_profile_generation() {
         input_path: "raw.mov".to_string(),
         output_path: "master_hq.mov".to_string(),
         video_codec: VideoCodec::AppleProRes,
+        hw_accel: HwAccel::Cpu,
         prores_profile: ProResProfile::HQ,
         audio_codec: AudioCodecChoice::WavPCM24,
         ..Default::default()
@@ -1077,6 +1080,7 @@ fn test_video_filter_forces_reencode_when_copy_selected() {
         output_path: "test_auto_h264.mp4".to_string(),
         rotation: VideoRotation::Rotate90,
         video_codec: VideoCodec::Copy, // User selected Copy, but rotation filter requires re-encoding
+        hw_accel: HwAccel::Cpu,
         ..Default::default()
     };
 
@@ -1589,3 +1593,21 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
 
 
 
+
+#[test]
+#[cfg(target_os = "macos")]
+fn test_macos_auto_hw_accel_routes_to_videotoolbox() {
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mov".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Auto,
+        ..Default::default()
+    };
+    let ffmpeg_bin = Path::new("ffmpeg");
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+    assert!(cmd.contains(&"-hwaccel".to_string()));
+    assert!(cmd.contains(&"videotoolbox".to_string()));
+    assert!(cmd.contains(&"h264_videotoolbox".to_string()));
+}

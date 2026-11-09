@@ -17,19 +17,17 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            target: x86_64-windows
+            rust_target: x86_64-pc-windows-msvc
             binary: kabosu-converter.exe
             archive_ext: zip
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            binary: kabosu-converter
-            archive_ext: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: kabosu-converter
             archive_ext: tar.gz
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-26.04
+            target: ubuntu-26.04-x86_64
+            rust_target: x86_64-unknown-linux-gnu
             binary: kabosu-converter
             archive_ext: tar.gz
 
@@ -57,20 +55,21 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_target || matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.rust_target || matrix.target }}
 
       - name: Package Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $TAG = "${{ github.ref_name }}"
+          $RUST_TARGET = if ("${{ matrix.rust_target }}") { "${{ matrix.rust_target }}" } else { "${{ matrix.target }}" }
           $ARCHIVE = "kabosu-converter-$TAG-${{ matrix.target }}.zip"
           $STAGE = "stage-$TAG-${{ matrix.target }}"
           New-Item -ItemType Directory -Path $STAGE
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" -Destination "$STAGE/"
+          Copy-Item "target/$RUST_TARGET/release/${{ matrix.binary }}" -Destination "$STAGE/"
           Compress-Archive -Path "$STAGE/*" -DestinationPath $ARCHIVE
           (Get-FileHash -Algorithm SHA256 $ARCHIVE).Hash.ToLower() + "  $ARCHIVE" | Out-File -FilePath "$ARCHIVE.sha256" -Encoding ascii
           echo "ASSET=$ARCHIVE" >> $env:GITHUB_ENV
@@ -80,10 +79,11 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           TAG="${{ github.ref_name }}"
+          RUST_TARGET="${{ matrix.rust_target || matrix.target }}"
           ARCHIVE="kabosu-converter-$TAG-${{ matrix.target }}.tar.gz"
           STAGE="stage-$TAG-${{ matrix.target }}"
           mkdir -p "$STAGE"
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "$STAGE/"
+          cp "target/$RUST_TARGET/release/${{ matrix.binary }}" "$STAGE/"
           tar -czvf "$ARCHIVE" -C "$STAGE" .
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           echo "ASSET=$ARCHIVE" >> $GITHUB_ENV

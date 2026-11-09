@@ -45,9 +45,9 @@ Built with **Rust** for native performance and memory safety, **Slint** for a fl
 ### Download & Run (Prebuilt)
 
 1. Download the latest release for your platform from [**Releases**](https://github.com/grimztha/KabosuConverter/releases):
-   - **Windows**: `kabosu-converter-v*-x86_64-pc-windows-msvc.zip`
-   - **macOS**: `kabosu-converter-v*-apple-darwin.tar.gz` (Apple Silicon or Intel)
-   - **Linux**: `kabosu-converter-v*-x86_64-unknown-linux-gnu.tar.gz`
+   - **Windows**: `kabosu-converter-v*-x86_64-windows.zip`
+   - **macOS (Apple Silicon)**: `kabosu-converter-v*-aarch64-apple-darwin.tar.gz`
+   - **Linux (Ubuntu 26.04+)**: `kabosu-converter-v*-ubuntu-26.04-x86_64.tar.gz`
 2. Extract the archive and launch `kabosu-converter` (or `kabosu-converter.exe` on Windows).
 3. **Zero-Config Setup**: Required external media tools (`FFmpeg`, `yt-dlp`) are automatically provisioned and verified into your local user data folder on first run if not already present on your machine.
 

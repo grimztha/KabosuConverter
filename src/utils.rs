@@ -81,7 +81,8 @@ pub fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<Path
     }
 }
 
-/// Normalizes a path for Windows Explorer (strips extended-length `\\?\` prefixes and trailing slashes).
+/// Normalizes a path for the system file manager.
+/// On Windows, strips extended-length `\\?\` prefixes and unifies separators.
 pub fn normalize_path_for_explorer(path: &Path) -> PathBuf {
     let abs = if path.is_absolute() {
         path.to_path_buf()
@@ -91,19 +92,26 @@ pub fn normalize_path_for_explorer(path: &Path) -> PathBuf {
             .join(path)
     };
     let resolved = std::fs::canonicalize(&abs).unwrap_or(abs);
-    let s = resolved.to_string_lossy();
-    let stripped = if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{}", unc)
-    } else if let Some(local) = s.strip_prefix(r"\\?\") {
-        local.to_string()
-    } else {
-        s.to_string()
-    };
-    let mut clean = stripped.replace('/', r"\");
-    while clean.len() > 3 && clean.ends_with('\\') {
-        clean.pop();
+    #[cfg(windows)]
+    {
+        let s = resolved.to_string_lossy();
+        let stripped = if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{}", unc)
+        } else if let Some(local) = s.strip_prefix(r"\\?\") {
+            local.to_string()
+        } else {
+            s.to_string()
+        };
+        let mut clean = stripped.replace('/', r"\");
+        while clean.len() > 3 && clean.ends_with('\\') {
+            clean.pop();
+        }
+        PathBuf::from(clean)
     }
-    PathBuf::from(clean)
+    #[cfg(not(windows))]
+    {
+        resolved
+    }
 }
 
 /// Opens a folder in the OS file manager.
@@ -116,7 +124,13 @@ pub fn open_folder_in_explorer(folder: &Path) {
             .arg(&clean_dir)
             .spawn();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg(&clean_dir)
+            .spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let _ = std::process::Command::new("xdg-open")
             .arg(&clean_dir)
@@ -135,6 +149,18 @@ pub fn reveal_in_explorer(file_path: &Path) {
             // Explorer expects `/select,"PATH"` without quoting the `/select` switch itself.
             let spawned = std::process::Command::new("explorer")
                 .raw_arg(format!("/select,\"{}\"", path_str))
+                .spawn();
+            if spawned.is_ok() {
+                return;
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if clean.exists() && clean.is_file() {
+            let spawned = std::process::Command::new("open")
+                .arg("-R")
+                .arg(&clean)
                 .spawn();
             if spawned.is_ok() {
                 return;

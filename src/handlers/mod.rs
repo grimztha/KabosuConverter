@@ -27,7 +27,6 @@ pub fn init_test_backend() {
             i_slint_backend_testing::TestingBackendOptions {
                 mock_time: false,
                 threading: true,
-                ..Default::default()
             },
         ),
     ));

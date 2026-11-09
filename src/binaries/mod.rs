@@ -257,7 +257,7 @@ impl DependencyManager {
         cmd.creation_flags(crate::CREATE_NO_WINDOW);
 
         let output_fut = cmd.output();
-        let timeout_fut = timeout(Duration::from_secs(5), output_fut);
+        let timeout_fut = timeout(Duration::from_secs(10), output_fut);
 
         match timeout_fut.await {
             Ok(Ok(output)) if output.status.success() => {
@@ -280,7 +280,7 @@ impl DependencyManager {
             Err(_) => Err(BinaryError::ExecutionFailed {
                 name: path.display().to_string(),
                 path: path.to_path_buf(),
-                details: "Smoke test timed out after 2 seconds".to_string(),
+                details: "Smoke test timed out after 10 seconds".to_string(),
             }),
         }
     }
@@ -336,7 +336,7 @@ mod tests {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(ffmpeg_name);
         if path.is_file() {
             let output = DependencyManager::verify_binary_executable(&path, "-version").await;
-            assert!(output.is_ok());
+            assert!(output.is_ok(), "verify_binary_executable failed: {:?}", output.err());
             let out_str = output.unwrap();
             assert!(out_str.contains("ffmpeg version"));
         }

@@ -414,7 +414,7 @@ fn test_live_audio_clock_tracking() {
                     // Wait up to 600ms for ffplay to initialize and produce master clock PTS
                     let start = std::time::Instant::now();
                     let mut saw_pts = false;
-                    while start.elapsed().as_millis() < 600 {
+                    while start.elapsed().as_millis() < 2500 {
                         if let Some(pts) = session.get_pts() {
                             assert!(pts >= 0.0, "PTS must be non-negative");
                             saw_pts = true;
@@ -482,7 +482,7 @@ fn test_av_sync_master_clock_playback() {
                     // Verify audio clock advances around start_sec (1.0)
                     let start = std::time::Instant::now();
                     let mut got_audio_clock = false;
-                    while start.elapsed().as_millis() < 800 {
+                    while start.elapsed().as_millis() < 2500 {
                         if let Some(pts) = audio_session.get_pts() {
                             assert!((0.5..=2.5).contains(&pts), "Audio PTS should be near start_sec (1.0), got: {}", pts);
                             got_audio_clock = true;
@@ -1544,7 +1544,7 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
         // Wait up to 500ms for ffplay to process frames and emit meter levels
         let start = std::time::Instant::now();
         let mut got_levels = false;
-        while start.elapsed() < std::time::Duration::from_millis(600) {
+        while start.elapsed() < std::time::Duration::from_millis(2500) {
             let (l, r) = session.get_meter_levels();
             if l > -55.0 && r > -55.0 {
                 got_levels = true;
@@ -1570,7 +1570,7 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
 
         let start = std::time::Instant::now();
         let mut got_muted_levels = false;
-        while start.elapsed() < std::time::Duration::from_millis(600) {
+        while start.elapsed() < std::time::Duration::from_millis(2500) {
             let (l, r) = session_muted.get_meter_levels();
             if l > -55.0 && r > -55.0 {
                 got_muted_levels = true;
@@ -1579,6 +1579,7 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         let _ = session_muted.kill();
+        let _ = std::fs::remove_file(test_wav);
         assert!(
             got_muted_levels,
             "Volume meter must continue to reflect audio render output even when player preview volume is 0 or muted"

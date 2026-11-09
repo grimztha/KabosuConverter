@@ -542,8 +542,11 @@ pub fn pick_folder_async<F>(
 mod tests {
     use super::*;
 
+    static TEST_DIR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_last_opened_dir_updates() {
+        let _guard = TEST_DIR_MUTEX.lock().unwrap();
         let temp = tempfile::tempdir().expect("tempdir");
         let temp_dir = temp.path().to_path_buf();
         let test_file = temp_dir.join("test_video.mp4");
@@ -555,10 +558,15 @@ mod tests {
         set_last_opened_dir(&temp_dir);
         let resolved_dir = get_last_opened_dir().expect("last opened dir should match temp_dir");
         assert_eq!(resolved_dir, temp_dir);
+
+        if let Ok(mut lock) = LAST_OPENED_DIR.lock() {
+            *lock = None;
+        }
     }
 
     #[test]
     fn test_working_directory_preservation() {
+        let _guard = TEST_DIR_MUTEX.lock().unwrap();
         let original_cwd = std::env::current_dir().expect("get current dir");
 
         let dummy_path = original_cwd.join("assets").join("icon.ico");
@@ -566,6 +574,10 @@ mod tests {
 
         let current_cwd = std::env::current_dir().expect("get current dir again");
         assert_eq!(original_cwd, current_cwd, "Process working directory must never be altered");
+
+        if let Ok(mut lock) = LAST_OPENED_DIR.lock() {
+            *lock = None;
+        }
     }
 
     #[cfg(windows)]

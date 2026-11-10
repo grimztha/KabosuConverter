@@ -840,6 +840,7 @@ mod tests {
             meter_timer: Rc::new(RefCell::new(slint::Timer::default())),
             last_audio_restart: Arc::new(Mutex::new(Instant::now())),
             was_playing_before_scrub: Arc::new(AtomicBool::new(false)),
+            latest_release: Arc::new(Mutex::new(None)),
         }
     }
 

@@ -1157,7 +1157,7 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "An open-source, high-performance media transcoder and universal video downloader";
+                                text: "A high-performance media transcoder and universal video downloader by SThao";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -1167,11 +1167,98 @@ export component TranscoderTab inherits ScrollView {
                             alignment: center;
                             HorizontalLayout {
                                 alignment: end;
+                                spacing: 6px;
+
+                                // Current Application Version Display
                                 Text {
-                                    text: "Version 0.14.0 • Up to date";
+                                    text: "Version " + AppData.app_version;
                                     font-size: Theme.font_badge;
                                     font-weight: 500;
                                     color: Theme.text_muted;
+                                    vertical-alignment: center;
+                                }
+
+                                Text {
+                                    text: "•";
+                                    font-size: Theme.font_badge;
+                                    font-weight: 500;
+                                    color: Theme.text_muted;
+                                    vertical-alignment: center;
+                                }
+
+                                // Interactive Clickable Update Status / Download Button Pill
+                                Rectangle {
+                                    border-radius: 4px;
+                                    background: update_ta.has-hover ?
+                                        (AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.2) : Theme.card_secondary_bg) :
+                                        (AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.12) : #00000000);
+                                    border-width: AppData.update_status == 3 ? 1px : 0px;
+                                    border-color: AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.4) : #00000000;
+
+                                    animate background { duration: 120ms; }
+
+                                    HorizontalLayout {
+                                        padding-left: AppData.update_status == 3 ? 8px : 4px;
+                                        padding-right: AppData.update_status == 3 ? 8px : 4px;
+                                        padding-top: 3px;
+                                        padding-bottom: 3px;
+                                        spacing: 5px;
+                                        alignment: center;
+
+                                        // Subtle status indicator dot or icon
+                                        if AppData.update_status == 1 : VerticalLayout {
+                                            alignment: center;
+                                            Rectangle {
+                                                width: 6px;
+                                                height: 6px;
+                                                border-radius: 3px;
+                                                background: Theme.accent_amber;
+                                            }
+                                        }
+                                        if AppData.update_status == 2 : VerticalLayout {
+                                            alignment: center;
+                                            Rectangle {
+                                                width: 6px;
+                                                height: 6px;
+                                                border-radius: 3px;
+                                                background: Theme.accent_green;
+                                            }
+                                        }
+                                        if AppData.update_status == 3 : VerticalLayout {
+                                            alignment: center;
+                                            Image {
+                                                source: @image-url("../icons/download.svg");
+                                                width: 11px;
+                                                height: 11px;
+                                                colorize: Theme.accent_green;
+                                            }
+                                        }
+
+                                        Text {
+                                            text: AppData.update_status_text;
+                                            font-size: Theme.font_badge;
+                                            font-weight: (AppData.update_status == 3 || update_ta.has-hover) ? 600 : 500;
+                                            color: AppData.update_status == 3 ? Theme.accent_green :
+                                                   (AppData.update_status == 1 ? Theme.accent_amber :
+                                                   (AppData.update_status == 5 ? Theme.accent_green :
+                                                   (AppData.update_status == 6 ? Theme.accent_red :
+                                                   (update_ta.has-hover ? Theme.text_primary : Theme.text_muted))));
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    update_ta := TouchArea {
+                                        mouse-cursor: (AppData.update_status == 1 || AppData.update_status == 4) ? wait : pointer;
+                                        clicked => {
+                                            if AppData.update_status == 3 {
+                                                AppLogic.download_update();
+                                            } else if AppData.update_status == 5 {
+                                                AppLogic.open_downloaded_update();
+                                            } else if AppData.update_status != 1 && AppData.update_status != 4 {
+                                                AppLogic.check_for_updates();
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

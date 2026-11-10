@@ -1,6 +1,7 @@
 pub mod binaries;
 pub mod ffmpeg;
 pub mod settings;
+pub mod updater;
 pub mod ytdlp;
 
 /// Windows CREATE_NO_WINDOW creation flag to hide console windows for spawned processes.

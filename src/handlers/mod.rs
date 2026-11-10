@@ -5,6 +5,7 @@ pub mod playback;
 pub mod queue;
 pub mod settings;
 pub mod timeline;
+pub mod updater;
 
 use crate::context::AppContext;
 use crate::MainWindow;
@@ -18,6 +19,7 @@ pub fn register_all(ui: &MainWindow, ctx: &AppContext) {
     downloader::register(ui, ctx);
     encoder::register(ui, ctx);
     settings::register(ui, ctx);
+    updater::register(ui, ctx);
 }
 
 #[cfg(test)]

@@ -54,6 +54,7 @@ pub struct AppContext {
     pub meter_timer: Rc<RefCell<slint::Timer>>,
     pub last_audio_restart: Arc<Mutex<std::time::Instant>>,
     pub was_playing_before_scrub: Arc<AtomicBool>,
+    pub latest_release: Arc<Mutex<Option<kabosu_converter::updater::GithubRelease>>>,
 }
 
 impl AppContext {

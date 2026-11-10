@@ -65,6 +65,9 @@ fn main() -> Result<()> {
         ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
     }
 
+    ui.global::<AppData>().set_app_version(env!("CARGO_PKG_VERSION").into());
+    ui.global::<AppData>().set_update_status_text("Up to date".into());
+
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
 
@@ -224,6 +227,7 @@ fn main() -> Result<()> {
         meter_timer,
         last_audio_restart,
         was_playing_before_scrub: Arc::new(AtomicBool::new(false)),
+        latest_release: Arc::new(Mutex::new(None)),
     };
 
     // Register all event callbacks onto the UI

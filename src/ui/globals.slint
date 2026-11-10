@@ -17,6 +17,14 @@ export global AppData {
     in-out property <bool> show_logs: false;
     in-out property <string> ffmpeg_version_badge: "FFmpeg 8.x Engine";
     in-out property <string> ytdlp_version_badge: "yt-dlp 2026.10.26 (Local Engine)";
+    in-out property <string> app_version: "0.15.0";
+    // Release Update state: 0 = idle, 1 = checking, 2 = up to date, 3 = update available, 4 = downloading, 5 = downloaded, 6 = error
+    in-out property <int> update_status: 0;
+    in-out property <string> update_status_text: "Up to date";
+    in-out property <string> update_latest_version: "";
+    in-out property <string> update_release_url: "";
+    in-out property <float> update_download_progress: 0.0;
+    in-out property <string> update_downloaded_path: "";
     in-out property <bool> is_window_maximized: false;
     in-out property <bool> open_folder_on_finish: true;
     in-out property <bool> play_sound_on_finish: false;
@@ -280,4 +288,9 @@ export global AppLogic {
     callback set_play_sound_on_finish(bool);
     callback set_faststart(bool);
     callback save_settings();
+
+    // Release Update Callbacks
+    callback check_for_updates();
+    callback download_update();
+    callback open_downloaded_update();
 }

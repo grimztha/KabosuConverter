@@ -250,6 +250,8 @@ fn main() -> Result<()> {
             let is_max = ui.window().is_maximized();
             ui.window().set_maximized(!is_max);
             ui.global::<AppData>().set_is_window_maximized(!is_max);
+            #[cfg(windows)]
+            win_drag_drop::clean_drag_state();
         }
     });
 
@@ -318,9 +320,14 @@ fn main() -> Result<()> {
             let ui_weak = ui_double.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(ui) = ui_weak.upgrade() {
-                    let is_max = ui.window().is_maximized();
-                    ui.window().set_maximized(!is_max);
-                    ui.global::<AppData>().set_is_window_maximized(!is_max);
+                    let target_max = win_drag_drop::is_window_maximized_os()
+                        .unwrap_or_else(|| !ui.window().is_maximized());
+                    if ui.window().is_maximized() != target_max {
+                        ui.window().set_maximized(target_max);
+                    }
+                    if ui.global::<AppData>().get_is_window_maximized() != target_max {
+                        ui.global::<AppData>().set_is_window_maximized(target_max);
+                    }
                 }
             });
         });
@@ -328,9 +335,13 @@ fn main() -> Result<()> {
         let ui_hit = ui.as_weak();
         win_drag_drop::set_titlebar_hit_test(move |x_logical| {
             if let Some(ui) = ui_hit.upgrade() {
-                let expanded = ui.global::<AppData>().get_queue_panel_expanded();
-                let tabs_start = if expanded { 320.0 } else { 58.0 };
-                let tabs_end = tabs_start + 340.0;
+                let mut tabs_start = ui.get_tabs_hit_start();
+                let mut tabs_end = ui.get_tabs_hit_end();
+                if tabs_end <= tabs_start {
+                    let expanded = ui.global::<AppData>().get_queue_panel_expanded();
+                    tabs_start = if expanded { 320.0 } else { 58.0 };
+                    tabs_end = tabs_start + 340.0;
+                }
                 // If inside tabs pill, return false so tab switching is not blocked
                 if x_logical >= tabs_start && x_logical <= tabs_end {
                     return false;

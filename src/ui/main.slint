@@ -24,12 +24,14 @@ export component MainWindow inherits Window {
     preferred-height: 850px;
     background: transparent;
     no-frame: true;
-    resize-border-width: 6px;
+    resize-border-width: AppData.is_window_maximized ? 0px : 6px;
     maximized <=> AppData.is_window_maximized;
 
     forward-focus: fs;
 
     property <length> queue_panel_width: AppData.queue_panel_expanded ? 300px : 38px;
+    out property <float> tabs_hit_start: tabs_nav_layout.x / 1px;
+    out property <float> tabs_hit_end: (tabs_nav_layout.x + tabs_nav_layout.width) / 1px;
 
     Rectangle {
         border-radius: AppData.is_window_maximized ? 0px : 12px;
@@ -81,24 +83,25 @@ export component MainWindow inherits Window {
                 height: 42px;
                 background: Theme.header_bg;
 
-                WindowMoveArea {
-                    width: 100%;
-                    height: 100%;
+                HorizontalLayout {
+                    padding-left: 0px;
+                    padding-right: 0px;
+                    spacing: 0px;
 
-                    HorizontalLayout {
-                        padding-left: 0px;
-                        padding-right: 0px;
-                        spacing: 0px;
+                    // Left Section (Above QueuePanel): Brand Identity & Title Bar Text
+                    Rectangle {
+                        min-width: root.queue_panel_width + 1px;
+                        max-width: root.queue_panel_width + 1px;
+                        horizontal-stretch: 0;
+                        clip: true;
 
-                        // Left Section (Above QueuePanel): Brand Identity & Title Bar Text
-                        Rectangle {
-                            min-width: root.queue_panel_width + 1px;
-                            max-width: root.queue_panel_width + 1px;
-                            horizontal-stretch: 0;
-                            clip: true;
+                        animate min-width { duration: 160ms; easing: ease-out; }
+                        animate max-width { duration: 160ms; easing: ease-out; }
 
-                            animate min-width { duration: 160ms; easing: ease-out; }
-                            animate max-width { duration: 160ms; easing: ease-out; }
+                        WindowMoveArea {
+                            width: 100%;
+                            height: 100%;
+                            enabled: !AppData.is_window_maximized;
 
                             HorizontalLayout {
                                 padding-left: AppData.queue_panel_expanded ? 14px : 9px;
@@ -127,16 +130,23 @@ export component MainWindow inherits Window {
                                 }
                             }
                         }
+                    }
 
-                        // Spacer aligning Tabs with middle panel content (20px padding)
-                        Rectangle {
-                            min-width: 20px;
-                            max-width: 20px;
-                            horizontal-stretch: 0;
+                    // Spacer aligning Tabs with middle panel content (20px padding)
+                    Rectangle {
+                        min-width: 20px;
+                        max-width: 20px;
+                        horizontal-stretch: 0;
+
+                        WindowMoveArea {
+                            width: 100%;
+                            height: 100%;
+                            enabled: !AppData.is_window_maximized;
                         }
+                    }
 
                         // Center-Left: Workspace Navigation Tabs (Segmented Control Pill, static left-aligned with middle panel)
-                        VerticalLayout {
+                        tabs_nav_layout := VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 0;
 
@@ -306,15 +316,20 @@ export component MainWindow inherits Window {
                             }
                         }
 
-                        // Flexible Draggable Space (Right of Tabs)
-                        Rectangle {
-                            horizontal-stretch: 1;
-                        }
+                    // Flexible Draggable Space (Right of Tabs)
+                    Rectangle {
+                        horizontal-stretch: 1;
 
-                        // Right: Windows Native-Style Control Buttons (Minimize, Maximize/Restore, Close)
-                        WindowControls {
+                        WindowMoveArea {
+                            width: 100%;
                             height: 100%;
+                            enabled: !AppData.is_window_maximized;
                         }
+                    }
+
+                    // Right: Windows Native-Style Control Buttons (Minimize, Maximize/Restore, Close)
+                    WindowControls {
+                        height: 100%;
                     }
                 }
             }

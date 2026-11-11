@@ -63,7 +63,43 @@ fn test_titlebar_drag_and_window_controls() {
     assert_eq!(max_invocations.load(Ordering::SeqCst), 2);
     assert!(!app_data.get_is_window_maximized(), "Window should now be restored");
 
-    // 3. Verify tab switching interaction
+    // 3. Verify drag continues to function properly AFTER restoring from maximized
+    let drag_after_restore_start = LogicalPosition::new(900.0, 20.0);
+    w.dispatch_event(WindowEvent::PointerMoved { position: drag_after_restore_start });
+    w.dispatch_event(WindowEvent::PointerPressed {
+        position: drag_after_restore_start,
+        button: PointerEventButton::Left,
+    });
+    std::thread::sleep(Duration::from_millis(20));
+
+    let drag_after_restore_end = LogicalPosition::new(960.0, 20.0);
+    w.dispatch_event(WindowEvent::PointerMoved { position: drag_after_restore_end });
+    std::thread::sleep(Duration::from_millis(20));
+
+    w.dispatch_event(WindowEvent::PointerReleased {
+        position: drag_after_restore_end,
+        button: PointerEventButton::Left,
+    });
+
+    // Also test drag on the brand section (x = 30.0, y = 20.0)
+    let brand_drag_start = LogicalPosition::new(30.0, 20.0);
+    w.dispatch_event(WindowEvent::PointerMoved { position: brand_drag_start });
+    w.dispatch_event(WindowEvent::PointerPressed {
+        position: brand_drag_start,
+        button: PointerEventButton::Left,
+    });
+    std::thread::sleep(Duration::from_millis(20));
+
+    let brand_drag_end = LogicalPosition::new(80.0, 20.0);
+    w.dispatch_event(WindowEvent::PointerMoved { position: brand_drag_end });
+    std::thread::sleep(Duration::from_millis(20));
+
+    w.dispatch_event(WindowEvent::PointerReleased {
+        position: brand_drag_end,
+        button: PointerEventButton::Left,
+    });
+
+    // 4. Verify tab switching interaction
     assert_eq!(app_data.get_active_tab(), 0, "Initial tab should be Downloader (0)");
     let tab_invocations = Arc::new(AtomicUsize::new(0));
     let tab_inv_clone = tab_invocations.clone();
@@ -82,4 +118,19 @@ fn test_titlebar_drag_and_window_controls() {
     app_logic.invoke_switch_tab(2);
     assert_eq!(app_data.get_active_tab(), 2, "Tab should switch to Transcoder (2)");
     assert_eq!(tab_invocations.load(Ordering::SeqCst), 2);
+
+    // 5. Verify dynamic titlebar hit-test bounds for the tabs pill
+    let tabs_start_expanded = ui.get_tabs_hit_start();
+    let tabs_end_expanded = ui.get_tabs_hit_end();
+    assert!(
+        tabs_end_expanded > tabs_start_expanded,
+        "Tabs pill hit-test end ({}) must be greater than start ({})",
+        tabs_end_expanded,
+        tabs_start_expanded
+    );
+    assert!(
+        tabs_start_expanded >= 300.0 && tabs_start_expanded <= 330.0,
+        "When queue panel is expanded, tabs should start around 321px (got {})",
+        tabs_start_expanded
+    );
 }

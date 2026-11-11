@@ -47,11 +47,20 @@ const WM_COPYGLOBALDATA: u32 = 0x004A;
 const MSGFLT_ALLOW: u32 = 1;
 const GWL_EXSTYLE: i32 = -20;
 const WS_EX_ACCEPTFILES: isize = 0x00000010;
-const WM_LBUTTONDOWN: u32 = 0x0201;
-const WM_LBUTTONDBLCLK: u32 = 0x0203;
+const WM_NCHITTEST: u32 = 0x0084;
+const WM_NCMOUSEMOVE: u32 = 0x00A0;
+const WM_NCLBUTTONDOWN: u32 = 0x00A1;
+const WM_NCLBUTTONUP: u32 = 0x00A2;
 const WM_NCLBUTTONDBLCLK: u32 = 0x00A3;
-const SM_CXDOUBLECLK: i32 = 36;
-const SM_CYDOUBLECLK: i32 = 37;
+const WM_MOUSEMOVE: u32 = 0x0200;
+const WM_ENTERSIZEMOVE: u32 = 0x0231;
+const WM_EXITSIZEMOVE: u32 = 0x0232;
+const WM_SIZE: u32 = 0x0005;
+const SIZE_RESTORED: usize = 0;
+const SIZE_MAXIMIZED: usize = 2;
+const HTCAPTION: usize = 2;
+const SW_MAXIMIZE: i32 = 3;
+const SW_RESTORE: i32 = 9;
 const GCL_STYLE: i32 = -26;
 const CS_DBLCLKS: usize = 0x0008;
 
@@ -367,10 +376,24 @@ extern "system" {
     fn GetWindowTextW(hWnd: *mut std::ffi::c_void, lpString: *mut u16, nMaxCount: i32) -> i32;
     fn GetClassNameW(hWnd: *mut std::ffi::c_void, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     fn GetClientRect(hWnd: *mut std::ffi::c_void, lpRect: *mut RECT) -> i32;
-    fn GetDoubleClickTime() -> u32;
-    fn GetSystemMetrics(nIndex: i32) -> i32;
+    fn ScreenToClient(hWnd: *mut std::ffi::c_void, lpPoint: *mut POINT) -> i32;
+    fn DefWindowProcW(
+        hWnd: *mut std::ffi::c_void,
+        Msg: u32,
+        wParam: usize,
+        lParam: isize,
+    ) -> isize;
     fn GetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32) -> usize;
     fn SetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32, dwNewLong: usize) -> usize;
+    fn IsZoomed(hWnd: *mut std::ffi::c_void) -> i32;
+    fn ShowWindow(hWnd: *mut std::ffi::c_void, nCmdShow: i32) -> i32;
+    fn PostMessageW(
+        hWnd: *mut std::ffi::c_void,
+        Msg: u32,
+        wParam: usize,
+        lParam: isize,
+    ) -> i32;
+    fn ReleaseCapture() -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -515,7 +538,14 @@ pub unsafe fn get_window_dpi(hwnd: *mut std::ffi::c_void) -> u32 {
 }
 
 pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bool {
-    if y < 0 {
+    let mut rect = RECT::default();
+    if GetClientRect(hwnd, &mut rect) == 0 {
+        return false;
+    }
+    let client_width = rect.right - rect.left;
+    let client_height = rect.bottom - rect.top;
+
+    if x < 0 || y < 0 || x >= client_width || y >= client_height {
         return false;
     }
 
@@ -527,11 +557,14 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
         return false;
     }
 
-    let mut rect = RECT::default();
-    if GetClientRect(hwnd, &mut rect) == 0 {
-        return false;
+    // When unmaximized, preserve the 6px logical top and left resize border so
+    // Slint/Winit North, NorthWest, and West window edge resizing works normally.
+    if IsZoomed(hwnd) == 0 {
+        let resize_border = (6.0 * scale) as i32;
+        if y < resize_border || x < resize_border {
+            return false;
+        }
     }
-    let client_width = rect.right - rect.left;
 
     // Window controls (minimize, maximize, close) are at the right edge:
     // 3 buttons * 46px = 138px (+ a small buffer of 4px = 142px)
@@ -561,14 +594,7 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
     false
 }
 
-#[derive(Copy, Clone, Debug)]
-struct LastClickState {
-    time: Instant,
-    x: i32,
-    y: i32,
-}
-
-static LAST_LBUTTON: Mutex<Option<LastClickState>> = Mutex::new(None);
+static IN_SIZE_MOVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 unsafe extern "system" fn drop_subclass_proc(
     hwnd: *mut std::ffi::c_void,
@@ -591,41 +617,78 @@ unsafe extern "system" fn drop_subclass_proc(
         return 0;
     }
 
-    if msg == WM_LBUTTONDBLCLK || msg == WM_NCLBUTTONDBLCLK {
-        let x = ((lparam as i32) << 16) >> 16;
-        let y = (lparam as i32) >> 16;
-        if is_titlebar_hit(hwnd, x, y) {
-            log_dd(&format!("WM_LBUTTONDBLCLK on titlebar ({}, {})", x, y));
-            let mut last = LAST_LBUTTON.lock().unwrap();
-            *last = None;
-            trigger_titlebar_double_click();
-            return 0;
-        }
+    if msg == WM_ENTERSIZEMOVE {
+        IN_SIZE_MOVE.store(true, Ordering::SeqCst);
+        return DefSubclassProc(hwnd, msg, wparam, lparam);
     }
 
-    if msg == WM_LBUTTONDOWN {
-        let now = Instant::now();
-        let x = ((lparam as i32) << 16) >> 16;
-        let y = (lparam as i32) >> 16;
+    if msg == WM_EXITSIZEMOVE {
+        IN_SIZE_MOVE.store(false, Ordering::SeqCst);
+        return DefSubclassProc(hwnd, msg, wparam, lparam);
+    }
 
-        let mut last = LAST_LBUTTON.lock().unwrap();
-        let is_double_click = if let Some(prev) = last.take() {
-            let d_time = now.duration_since(prev.time).as_millis() as u32;
-            let max_time = GetDoubleClickTime();
-            let cx = GetSystemMetrics(SM_CXDOUBLECLK);
-            let cy = GetSystemMetrics(SM_CYDOUBLECLK);
-            d_time <= max_time && (x - prev.x).abs() <= cx && (y - prev.y).abs() <= cy
-        } else {
-            false
-        };
-
-        if is_double_click && is_titlebar_hit(hwnd, x, y) {
-            log_dd(&format!("Double-click detected on titlebar ({}, {})", x, y));
-            trigger_titlebar_double_click();
-            return 0;
-        } else if is_titlebar_hit(hwnd, x, y) {
-            *last = Some(LastClickState { time: now, x, y });
+    if msg == WM_NCHITTEST {
+        let real_hwnd = ATTACHED_REAL_HWND.load(Ordering::SeqCst);
+        if real_hwnd == 0 || real_hwnd == hwnd as usize {
+            let x_screen = ((lparam as i32) << 16) >> 16;
+            let y_screen = (lparam as i32) >> 16;
+            let mut pt = POINT {
+                x: x_screen,
+                y: y_screen,
+            };
+            if ScreenToClient(hwnd, &mut pt) != 0 && is_titlebar_hit(hwnd, pt.x, pt.y) {
+                return HTCAPTION as isize;
+            }
         }
+        return DefSubclassProc(hwnd, msg, wparam, lparam);
+    }
+
+    if msg == WM_NCMOUSEMOVE {
+        let x_screen = ((lparam as i32) << 16) >> 16;
+        let y_screen = (lparam as i32) >> 16;
+        let mut pt = POINT {
+            x: x_screen,
+            y: y_screen,
+        };
+        if ScreenToClient(hwnd, &mut pt) != 0 {
+            let client_lparam =
+                (((pt.y as i16 as u16 as usize) << 16) | (pt.x as i16 as u16 as usize)) as isize;
+            DefSubclassProc(hwnd, WM_MOUSEMOVE, 0, client_lparam);
+        }
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
+
+    if msg == WM_NCLBUTTONDOWN && wparam == HTCAPTION {
+        // Call DefWindowProcW directly to bypass Winit's WM_NCLBUTTONDOWN handler
+        // (which posts a dummy WM_MOUSEMOVE(0, 0) that cancels the native modal drag loop)
+        // and to avoid Slint's 8px WindowMoveArea deadzone and Winit's drag_window() bugs.
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
+
+    if msg == WM_NCLBUTTONUP && wparam == HTCAPTION {
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
+
+    if msg == WM_NCLBUTTONDBLCLK && wparam == HTCAPTION {
+        log_dd("WM_NCLBUTTONDBLCLK on HTCAPTION");
+        let was_zoomed = IsZoomed(hwnd) != 0;
+        let res = DefWindowProcW(hwnd, msg, wparam, lparam);
+        let now_zoomed = IsZoomed(hwnd) != 0;
+        if was_zoomed == now_zoomed {
+            ShowWindow(hwnd, if was_zoomed { SW_RESTORE } else { SW_MAXIMIZE });
+        }
+        trigger_titlebar_double_click();
+        return res;
+    }
+
+    if msg == WM_SIZE
+        && (wparam == SIZE_RESTORED || wparam == SIZE_MAXIMIZED)
+        && !IN_SIZE_MOVE.load(Ordering::SeqCst)
+    {
+        let res = DefSubclassProc(hwnd, msg, wparam, lparam);
+        PostMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
+        trigger_titlebar_double_click();
+        return res;
     }
 
     DefSubclassProc(hwnd, msg, wparam, lparam)
@@ -709,6 +772,34 @@ pub fn is_attached() -> bool {
     ATTACHED_REAL_HWND.load(Ordering::SeqCst) != 0
 }
 
+pub fn get_attached_hwnd() -> Option<*mut std::ffi::c_void> {
+    let val = ATTACHED_REAL_HWND.load(Ordering::SeqCst);
+    if val != 0 {
+        Some(val as *mut std::ffi::c_void)
+    } else {
+        None
+    }
+}
+
+/// Queries the native OS maximized (`IsZoomed`) state of the attached application window.
+pub fn is_window_maximized_os() -> Option<bool> {
+    get_attached_hwnd()
+        .or_else(find_app_window)
+        .map(|hwnd| unsafe { IsZoomed(hwnd) != 0 })
+}
+
+/// Dispatches WM_EXITSIZEMOVE to the window to ensure Winit clears its internal `state.dragging` flag
+/// if a drag attempt was aborted or happened across a maximize/restore transition.
+pub fn clean_drag_state() {
+    let hwnd = get_attached_hwnd().or_else(find_app_window);
+    if let Some(hwnd) = hwnd {
+        unsafe {
+            ReleaseCapture();
+            PostMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
+        }
+    }
+}
+
 pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut DropTargetCom) {
     if hwnd.is_null() {
         return;
@@ -778,6 +869,40 @@ pub fn reapply_drop_target() {
                     attach_to_hwnd(real_hwnd, raw_com_ptr);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_drag_state_does_not_panic() {
+        // Calling clean_drag_state with or without an attached HWND must be completely safe
+        clean_drag_state();
+    }
+
+    #[test]
+    fn test_titlebar_callbacks_lifecycle() {
+        use std::sync::atomic::AtomicBool;
+        let called = std::sync::Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+
+        set_titlebar_double_click_handler(move || {
+            called_clone.store(true, Ordering::SeqCst);
+        });
+
+        trigger_titlebar_double_click();
+        assert!(called.load(Ordering::SeqCst), "Double-click handler should be executed");
+
+        set_titlebar_hit_test(|x| x < 100.0 || x > 500.0);
+        {
+            let guard = TITLEBAR_HIT_TEST_CB.lock().unwrap();
+            let hit_fn = guard.as_ref().unwrap();
+            assert!(hit_fn(50.0), "Brand area should hit titlebar");
+            assert!(!hit_fn(250.0), "Tabs area should not hit titlebar");
+            assert!(hit_fn(600.0), "Flexible area should hit titlebar");
         }
     }
 }

@@ -47,6 +47,23 @@ const WM_COPYGLOBALDATA: u32 = 0x004A;
 const MSGFLT_ALLOW: u32 = 1;
 const GWL_EXSTYLE: i32 = -20;
 const WS_EX_ACCEPTFILES: isize = 0x00000010;
+const WM_LBUTTONDOWN: u32 = 0x0201;
+const WM_LBUTTONDBLCLK: u32 = 0x0203;
+const WM_NCLBUTTONDBLCLK: u32 = 0x00A3;
+const SM_CXDOUBLECLK: i32 = 36;
+const SM_CYDOUBLECLK: i32 = 37;
+const GCL_STYLE: i32 = -26;
+const CS_DBLCLKS: usize = 0x0008;
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct RECT {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
 
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -349,6 +366,17 @@ extern "system" {
     fn SetWindowLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32, dwNewLong: isize) -> isize;
     fn GetWindowTextW(hWnd: *mut std::ffi::c_void, lpString: *mut u16, nMaxCount: i32) -> i32;
     fn GetClassNameW(hWnd: *mut std::ffi::c_void, lpClassName: *mut u16, nMaxCount: i32) -> i32;
+    fn GetClientRect(hWnd: *mut std::ffi::c_void, lpRect: *mut RECT) -> i32;
+    fn GetDoubleClickTime() -> u32;
+    fn GetSystemMetrics(nIndex: i32) -> i32;
+    fn GetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32) -> usize;
+    fn SetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32, dwNewLong: usize) -> usize;
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetModuleHandleA(lpModuleName: *const u8) -> *mut std::ffi::c_void;
+    fn GetProcAddress(hModule: *mut std::ffi::c_void, lpProcName: *const u8) -> *mut std::ffi::c_void;
 }
 
 #[link(name = "dwmapi")]
@@ -433,6 +461,115 @@ pub unsafe fn parse_hdrop(hdrop: *mut std::ffi::c_void) -> Vec<PathBuf> {
     paths
 }
 
+pub type TitlebarDoubleClickHandler = Box<dyn Fn() + Send + Sync + 'static>;
+pub type TitlebarHitTestHandler = Box<dyn Fn(f32) -> bool + Send + Sync + 'static>;
+
+static TITLEBAR_DOUBLE_CLICK_CB: Mutex<Option<TitlebarDoubleClickHandler>> = Mutex::new(None);
+static TITLEBAR_HIT_TEST_CB: Mutex<Option<TitlebarHitTestHandler>> = Mutex::new(None);
+
+pub fn set_titlebar_double_click_handler<F>(f: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let mut guard = TITLEBAR_DOUBLE_CLICK_CB.lock().unwrap();
+    *guard = Some(Box::new(f));
+}
+
+pub fn set_titlebar_hit_test<F>(f: F)
+where
+    F: Fn(f32) -> bool + Send + Sync + 'static,
+{
+    let mut guard = TITLEBAR_HIT_TEST_CB.lock().unwrap();
+    *guard = Some(Box::new(f));
+}
+
+pub fn trigger_titlebar_double_click() {
+    let guard = TITLEBAR_DOUBLE_CLICK_CB.lock().unwrap();
+    if let Some(ref cb) = *guard {
+        cb();
+    }
+}
+
+pub unsafe fn get_window_dpi(hwnd: *mut std::ffi::c_void) -> u32 {
+    type GetDpiForWindowFn = unsafe extern "system" fn(*mut std::ffi::c_void) -> u32;
+    static DPI_FN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
+    let mut ptr = DPI_FN.load(Ordering::Relaxed);
+    if ptr == usize::MAX {
+        let mod_user32 = GetModuleHandleA(b"user32.dll\0".as_ptr());
+        let sym = if !mod_user32.is_null() {
+            GetProcAddress(mod_user32, b"GetDpiForWindow\0".as_ptr())
+        } else {
+            std::ptr::null_mut()
+        };
+        ptr = sym as usize;
+        DPI_FN.store(ptr, Ordering::Relaxed);
+    }
+    if ptr != 0 {
+        let func: GetDpiForWindowFn = std::mem::transmute(ptr);
+        let dpi = func(hwnd);
+        if dpi > 0 {
+            return dpi;
+        }
+    }
+    96
+}
+
+pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bool {
+    if y < 0 {
+        return false;
+    }
+
+    let dpi = get_window_dpi(hwnd);
+    let scale = if dpi > 0 { dpi as f32 / 96.0 } else { 1.0 };
+    let header_height = (42.0 * scale) as i32;
+
+    if y > header_height {
+        return false;
+    }
+
+    let mut rect = RECT::default();
+    if GetClientRect(hwnd, &mut rect) == 0 {
+        return false;
+    }
+    let client_width = rect.right - rect.left;
+
+    // Window controls (minimize, maximize, close) are at the right edge:
+    // 3 buttons * 46px = 138px (+ a small buffer of 4px = 142px)
+    let controls_width = (142.0 * scale) as i32;
+    if x >= client_width - controls_width {
+        return false;
+    }
+
+    let x_logical = x as f32 / scale;
+
+    // Consult the registered hit test predicate if available
+    let custom_hit = {
+        let guard = TITLEBAR_HIT_TEST_CB.lock().unwrap();
+        guard.as_ref().map(|f| f(x_logical))
+    };
+
+    if let Some(hit) = custom_hit {
+        return hit;
+    }
+
+    // Default heuristic if no predicate registered:
+    // Brand identity (< 55px) and flexible area (> 670px) are always titlebar.
+    if x_logical < 55.0 || x_logical > 670.0 {
+        return true;
+    }
+
+    false
+}
+
+#[derive(Copy, Clone, Debug)]
+struct LastClickState {
+    time: Instant,
+    x: i32,
+    y: i32,
+}
+
+static LAST_LBUTTON: Mutex<Option<LastClickState>> = Mutex::new(None);
+
 unsafe extern "system" fn drop_subclass_proc(
     hwnd: *mut std::ffi::c_void,
     msg: u32,
@@ -453,6 +590,44 @@ unsafe extern "system" fn drop_subclass_proc(
         }
         return 0;
     }
+
+    if msg == WM_LBUTTONDBLCLK || msg == WM_NCLBUTTONDBLCLK {
+        let x = ((lparam as i32) << 16) >> 16;
+        let y = (lparam as i32) >> 16;
+        if is_titlebar_hit(hwnd, x, y) {
+            log_dd(&format!("WM_LBUTTONDBLCLK on titlebar ({}, {})", x, y));
+            let mut last = LAST_LBUTTON.lock().unwrap();
+            *last = None;
+            trigger_titlebar_double_click();
+            return 0;
+        }
+    }
+
+    if msg == WM_LBUTTONDOWN {
+        let now = Instant::now();
+        let x = ((lparam as i32) << 16) >> 16;
+        let y = (lparam as i32) >> 16;
+
+        let mut last = LAST_LBUTTON.lock().unwrap();
+        let is_double_click = if let Some(prev) = last.take() {
+            let d_time = now.duration_since(prev.time).as_millis() as u32;
+            let max_time = GetDoubleClickTime();
+            let cx = GetSystemMetrics(SM_CXDOUBLECLK);
+            let cy = GetSystemMetrics(SM_CYDOUBLECLK);
+            d_time <= max_time && (x - prev.x).abs() <= cx && (y - prev.y).abs() <= cy
+        } else {
+            false
+        };
+
+        if is_double_click && is_titlebar_hit(hwnd, x, y) {
+            log_dd(&format!("Double-click detected on titlebar ({}, {})", x, y));
+            trigger_titlebar_double_click();
+            return 0;
+        } else if is_titlebar_hit(hwnd, x, y) {
+            *last = Some(LastClickState { time: now, x, y });
+        }
+    }
+
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
@@ -507,6 +682,12 @@ unsafe fn register_hwnd_drop_hooks(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mu
     DragAcceptFiles(hwnd, 1);
     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_ACCEPTFILES);
+
+    // Enable double-clicks on the window class so Windows generates WM_LBUTTONDBLCLK
+    let style = GetClassLongPtrW(hwnd, GCL_STYLE);
+    if (style & CS_DBLCLKS) == 0 {
+        SetClassLongPtrW(hwnd, GCL_STYLE, style | CS_DBLCLKS);
+    }
 
     SetWindowSubclass(hwnd, drop_subclass_proc, 1001, raw_com_ptr as usize);
     let hr = RegisterDragDrop(hwnd, raw_com_ptr as *mut std::ffi::c_void);

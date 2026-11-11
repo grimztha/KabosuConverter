@@ -313,6 +313,34 @@ fn main() -> Result<()> {
             );
         });
 
+        let ui_double = ui.as_weak();
+        win_drag_drop::set_titlebar_double_click_handler(move || {
+            let ui_weak = ui_double.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let is_max = ui.window().is_maximized();
+                    ui.window().set_maximized(!is_max);
+                    ui.global::<AppData>().set_is_window_maximized(!is_max);
+                }
+            });
+        });
+
+        let ui_hit = ui.as_weak();
+        win_drag_drop::set_titlebar_hit_test(move |x_logical| {
+            if let Some(ui) = ui_hit.upgrade() {
+                let expanded = ui.global::<AppData>().get_queue_panel_expanded();
+                let tabs_start = if expanded { 320.0 } else { 58.0 };
+                let tabs_end = tabs_start + 340.0;
+                // If inside tabs pill, return false so tab switching is not blocked
+                if x_logical >= tabs_start && x_logical <= tabs_end {
+                    return false;
+                }
+                true
+            } else {
+                true
+            }
+        });
+
         // Ensure the timer stops once attached or after reaching the attempt limit
         let check_timer = Rc::new(RefCell::new(slint::Timer::default()));
         let check_timer_clone = check_timer.clone();

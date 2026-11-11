@@ -256,7 +256,11 @@ pub fn process_incoming_paths(
                                 updated.id = r as i32;
                                 model.set_row_data(r, updated.clone());
                                 if app_data.get_selected_file_path() == updated.file_path {
+                                    let prev_tab = app_data.get_active_tab();
                                     load_selected_file(&app_data, &updated, &ctx_row);
+                                    if prev_tab == 0 {
+                                        app_data.set_active_tab(0);
+                                    }
                                 }
                             }
                         }

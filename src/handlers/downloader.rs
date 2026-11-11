@@ -592,6 +592,37 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
+    // Handle yt-dlp Add History Item to Input Queue
+    {
+        let ui_handle = ui.as_weak();
+        let task_ctx = ctx.task_context();
+
+        ui.global::<AppLogic>().on_ytdlp_add_history_item_to_queue(move |idx| {
+            if let Some(ui) = ui_handle.upgrade() {
+                let app_data = ui.global::<AppData>();
+                let history = app_data.get_ytdlp_history();
+                let idx = idx as usize;
+                if idx < history.row_count() {
+                    if let Some(item) = history.row_data(idx) {
+                        let path = PathBuf::from(item.file_path.as_str());
+                        if path.exists() {
+                            process_incoming_paths(vec![path], ui_handle.clone(), task_ctx.clone());
+                            app_data.set_status_summary(SharedString::from(format!(
+                                "Added '{}' to queue",
+                                item.file_name
+                            )));
+                        } else {
+                            app_data.set_status_summary(SharedString::from(format!(
+                                "File not found: {}",
+                                item.file_path
+                            )));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Handle yt-dlp Open History Item in Explorer (with file selected)
     {
         let ui_handle = ui.as_weak();
@@ -664,6 +695,76 @@ pub fn add_item_to_history(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use slint::ComponentHandle;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::atomic::{AtomicBool, AtomicU64};
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    fn create_test_context() -> AppContext {
+        let (preview_tx, _) = std::sync::mpsc::channel();
+        let (waveform_tx, _) = std::sync::mpsc::channel();
+        let binaries = kabosu_converter::ffmpeg::FFmpegBinaries {
+            ffmpeg: PathBuf::from("ffmpeg"),
+            ffprobe: PathBuf::from("ffprobe"),
+            ffplay: None,
+        };
+        AppContext {
+            binaries: Arc::new(binaries),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            active_player_child: Arc::new(Mutex::new(None)),
+            active_playback_child: Arc::new(Mutex::new(None)),
+            playback_session_id: Arc::new(AtomicU64::new(0)),
+            preview_tx,
+            latest_preview_id: Arc::new(AtomicU64::new(0)),
+            waveform_tx,
+            latest_waveform_id: Arc::new(AtomicU64::new(0)),
+            ytdlp_binary: Arc::new(None),
+            ytdlp_discovered_options: Arc::new(Mutex::new(Vec::new())),
+            active_ytdlp_child: Arc::new(Mutex::new(None)),
+            active_ytdlp_cancel: Arc::new(AtomicBool::new(false)),
+            playback_timer: Rc::new(RefCell::new(slint::Timer::default())),
+            meter_timer: Rc::new(RefCell::new(slint::Timer::default())),
+            last_audio_restart: Arc::new(Mutex::new(Instant::now())),
+            was_playing_before_scrub: Arc::new(AtomicBool::new(false)),
+            latest_release: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    #[test]
+    fn test_ytdlp_add_history_item_to_queue() {
+        super::super::init_test_backend();
+        let ui = match MainWindow::new() {
+            Ok(ui) => ui,
+            Err(_) => return,
+        };
+        let app_data = ui.global::<AppData>();
+        let app_logic = ui.global::<AppLogic>();
+        let ctx = create_test_context();
+
+        register(&ui, &ctx);
+
+        // Case 1: Non-existent file
+        let mut history = Vec::new();
+        add_item_to_history(&mut history, "missing.mp4", "C:/non_existent_path/missing.mp4", "10 MB");
+        app_data.set_ytdlp_history(ModelRc::new(VecModel::from(history)));
+
+        app_logic.invoke_ytdlp_add_history_item_to_queue(0);
+        assert!(app_data.get_status_summary().as_str().contains("File not found"));
+
+        // Case 2: Real temporary file
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_file = temp_dir.path().join("downloaded_sample.mp4");
+        std::fs::write(&temp_file, b"fake video content").expect("write temp file");
+
+        let mut history2 = Vec::new();
+        add_item_to_history(&mut history2, "downloaded_sample.mp4", &temp_file.to_string_lossy(), "18 B");
+        app_data.set_ytdlp_history(ModelRc::new(VecModel::from(history2)));
+
+        app_logic.invoke_ytdlp_add_history_item_to_queue(0);
+        assert!(app_data.get_status_summary().as_str().contains("downloaded_sample.mp4"));
+    }
 
     #[test]
     fn test_add_item_to_history_prepends_latest_to_top() {

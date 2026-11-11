@@ -120,7 +120,8 @@ export component DownloaderTab inherits ScrollView {
                         Badge { label: "Bilibili"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_bilibili; height: 19px; }
                         Badge { label: "SoundCloud"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_amber; height: 19px; }
                         Badge { label: "X / Twitter"; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_primary; height: 19px; }
-                        Badge { label: "HLS / M3U8 Livestreams"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_green; height: 19px; }
+                        Badge { label: "Instagram"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_instagram; height: 19px; }
+                        Badge { label: "Facebook"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_facebook; height: 19px; }
                     }
                 }
             }
@@ -924,27 +925,18 @@ export component DownloaderTab inherits ScrollView {
                                 }
                             }
 
-                            // Details (File Name + Size on top row, Saved Path on bottom row)
+                            // Details (File Name on top row, Saved Path on bottom row)
                             VerticalLayout {
                                 alignment: center;
                                 horizontal-stretch: 1;
                                 spacing: 2px;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text {
-                                        text: item.file_name;
-                                        font-size: 11.5px;
-                                        font-weight: 600;
-                                        color: Theme.text_primary;
-                                        overflow: elide;
-                                    }
-                                    if item.file_size_formatted != "" : Text {
-                                        text: "• " + item.file_size_formatted;
-                                        font-size: Theme.font_badge;
-                                        color: Theme.accent_cyan;
-                                        vertical-alignment: center;
-                                    }
+                                Text {
+                                    text: item.file_name;
+                                    font-size: 11.5px;
+                                    font-weight: 600;
+                                    color: Theme.text_primary;
+                                    overflow: elide;
                                 }
 
                                 Text {
@@ -952,6 +944,35 @@ export component DownloaderTab inherits ScrollView {
                                     font-size: Theme.font_badge;
                                     color: Theme.text_muted;
                                     overflow: elide;
+                                }
+                            }
+
+                            // File Size formatted (right-aligned before Action buttons)
+                            if item.file_size_formatted != "" : VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "• " + item.file_size_formatted;
+                                    font-size: Theme.font_badge;
+                                    color: Theme.accent_cyan;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            // Action: Add to Input Queue
+                            VerticalLayout {
+                                alignment: center;
+                                ActionButton {
+                                    width: 140px;
+                                    height: Theme.btn_height_md;
+                                    title: "Add to Input Queue";
+                                    icon_source: @image-url("../icons/plus.svg");
+                                    has_icon: true;
+                                    icon_size: 12px;
+                                    fill_color: Theme.btn_neutral_bg;
+                                    hover_color: Theme.btn_neutral_hover;
+                                    text_color: Theme.accent_cyan;
+                                    font_size: 11px;
+                                    clicked => { AppLogic.ytdlp_add_history_item_to_queue(idx); }
                                 }
                             }
 

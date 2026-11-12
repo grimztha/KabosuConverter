@@ -153,7 +153,7 @@ impl AudioCodecChoice {
             2 => Self::Opus,
             3 => Self::FLAC,
             4 => Self::WavPCM24,
-            5 => Self::WavPCM16,
+            5 => Self::Copy,
             6 => Self::AC3,
             7 => Self::Copy,
             _ => Self::AAC,
@@ -166,10 +166,9 @@ impl AudioCodecChoice {
             Self::MP3 => 1,
             Self::Opus => 2,
             Self::FLAC => 3,
-            Self::WavPCM24 => 4,
-            Self::WavPCM16 => 5,
+            Self::WavPCM24 | Self::WavPCM16 => 4,
+            Self::Copy => 5,
             Self::AC3 => 6,
-            Self::Copy => 7,
         }
     }
 
@@ -1314,7 +1313,15 @@ impl FFmpegCommandBuilder {
 
     fn apply_audio_encoder(config: &EncodeJobConfig, args: &mut Vec<String>) {
         let has_af = config.audio_gain_db.is_some_and(|g| g.abs() > 0.05) || config.normalize_lufs.is_some();
+        let out_lower = config.output_path.to_lowercase();
+        let is_mp4_like = out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v");
+
         let effective_codec = if has_af && config.audio_codec == AudioCodecChoice::Copy {
+            AudioCodecChoice::AAC
+        } else if is_mp4_like && matches!(config.audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus) {
+            // Guard: MP3 and Opus inside MP4/MOV containers violate mobile & messenger standards
+            // (Apple AVFoundation, Facebook Messenger, Signal, and Android MediaExtractor drop audio).
+            // Automatically promote to standard AAC for 100% universal compatibility.
             AudioCodecChoice::AAC
         } else {
             config.audio_codec
@@ -1371,6 +1378,11 @@ impl FFmpegCommandBuilder {
             if let Some(ch) = config.audio_channels {
                 args.push("-ac".to_string());
                 args.push(ch.to_string());
+            } else if is_mp4_like {
+                // Default to stereo (2 channels) for universal mobile & web playback compatibility
+                // (prevents 5.1/surround center channel dropout on mobile phone speakers).
+                args.push("-ac".to_string());
+                args.push("2".to_string());
             }
         }
     }

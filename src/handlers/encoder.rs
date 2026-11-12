@@ -225,7 +225,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     1 => ".mp3",
                                     2 => ".opus",
                                     3 => ".flac",
-                                    4 | 5 => ".wav",
+                                    4 => ".wav",
                                     _ => ".m4a",
                                 },
                             }
@@ -381,7 +381,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             _ => ProResProfile::Standard,
                         };
 
-                        let audio_codec = AudioCodecChoice::from_index(audio_codec_idx);
+                        let mut audio_codec = AudioCodecChoice::from_index(audio_codec_idx);
                         let audio_bitrate_kbps = AudioCodecChoice::bitrate_from_index(audio_br_idx);
 
                         let audio_sample_rate = match audio_sr_idx {
@@ -390,6 +390,23 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             3 => Some(96000),
                             _ => None,
                         };
+
+                        // Intelligent safety guard: For MP4/MOV containers, enforce mobile/messenger compatible audio (AAC).
+                        // MP3, Opus, or copying non-AAC streams (e.g. from VP9/AV1 WebM) causes silent playback
+                        // on Facebook Messenger, Signal, iOS (AVFoundation), and Android.
+                        let is_mp4_like = out_container == ".mp4" || out_container == ".mov" || out_container == ".m4v";
+                        if is_mp4_like {
+                            if matches!(audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus) {
+                                audio_codec = AudioCodecChoice::AAC;
+                            } else if audio_codec == AudioCodecChoice::Copy {
+                                // If source audio is not already AAC or ALAC, copying into MP4 will fail or play silently on mobile.
+                                let source_codecs = item.codecs.to_lowercase();
+                                let is_source_aac = source_codecs.contains("a: aac") || source_codecs.contains("a: alac");
+                                if !is_source_aac {
+                                    audio_codec = AudioCodecChoice::AAC;
+                                }
+                            }
+                        }
 
                         let in_point = if is_selected_or_single && !in_point_str.trim().is_empty() {
                             Some(in_point_str.clone())
@@ -522,7 +539,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             audio_codec,
                             audio_bitrate_kbps,
                             audio_sample_rate,
-                            audio_channels: None,
+                            audio_channels: if is_mp4_like { Some(2) } else { None },
                             audio_gain_db: final_gain_opt,
                             normalize_lufs: final_norm_opt,
 

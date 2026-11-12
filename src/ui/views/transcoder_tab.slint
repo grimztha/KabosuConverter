@@ -902,7 +902,7 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Compression format for exported audio tracks";
+                                text: "Compression format for exported audio tracks (AAC is universal for MP4)";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -916,8 +916,8 @@ export component TranscoderTab inherits ScrollView {
                                     width: 230px;
                                     height: Theme.btn_height_md;
                                     model: [
-                                        "AAC (High Quality Standard)",
-                                        "MP3 (Universal Compatibility)",
+                                        "AAC (Universal MP4 Standard - Recommended)",
+                                        "MP3 (Audio Files & Legacy AVI Only)",
                                         "Opus (Low Latency / High Fidelity)",
                                         "FLAC (Lossless Studio)",
                                         "WAV (Linear PCM Uncompressed)",

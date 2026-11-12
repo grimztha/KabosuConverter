@@ -1612,3 +1612,77 @@ fn test_macos_auto_hw_accel_routes_to_videotoolbox() {
     assert!(cmd.contains(&"videotoolbox".to_string()));
     assert!(cmd.contains(&"h264_videotoolbox".to_string()));
 }
+
+#[test]
+fn test_mp4_audio_guard_promotes_mp3_and_opus_to_aac() {
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+
+    // 1. MP3 in MP4 container -> guarded to AAC + stereo
+    let config_mp3 = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.webm".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        audio_codec: AudioCodecChoice::MP3,
+        audio_bitrate_kbps: 192,
+        ..Default::default()
+    };
+    let cmd_mp3 = FFmpegCommandBuilder::build(&config_mp3, ffmpeg_bin);
+    let ca_idx = cmd_mp3.iter().position(|r| r == "-c:a").expect("-c:a must be present");
+    assert_eq!(cmd_mp3[ca_idx + 1], "aac", "MP3 in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility");
+    assert!(cmd_mp3.contains(&"-ac".to_string()));
+    let ac_idx = cmd_mp3.iter().position(|r| r == "-ac").expect("-ac must be present");
+    assert_eq!(cmd_mp3[ac_idx + 1], "2", "-ac must default to 2 for stereo compatibility in .mp4");
+
+    // 2. Opus in MP4 container -> guarded to AAC + stereo
+    let config_opus = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.webm".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        audio_codec: AudioCodecChoice::Opus,
+        audio_bitrate_kbps: 192,
+        ..Default::default()
+    };
+    let cmd_opus = FFmpegCommandBuilder::build(&config_opus, ffmpeg_bin);
+    let ca_idx = cmd_opus.iter().position(|r| r == "-c:a").expect("-c:a must be present");
+    assert_eq!(cmd_opus[ca_idx + 1], "aac", "Opus in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility");
+    assert!(cmd_opus.contains(&"-ac".to_string()));
+    let ac_idx = cmd_opus.iter().position(|r| r == "-ac").expect("-ac must be present");
+    assert_eq!(cmd_opus[ac_idx + 1], "2");
+}
+
+#[test]
+fn test_audio_only_mp3_keeps_libmp3lame() {
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let config = EncodeJobConfig {
+        function: EncoderFunction::ExtractAudio,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp3".to_string(),
+        audio_codec: AudioCodecChoice::MP3,
+        audio_bitrate_kbps: 320,
+        ..Default::default()
+    };
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+    let ca_idx = cmd.iter().position(|r| r == "-c:a").expect("-c:a must be present");
+    assert_eq!(cmd[ca_idx + 1], "libmp3lame", "Audio-only .mp3 export must keep libmp3lame");
+}
+
+#[test]
+fn test_audio_codec_choice_index_mapping() {
+    assert_eq!(AudioCodecChoice::from_index(0), AudioCodecChoice::AAC);
+    assert_eq!(AudioCodecChoice::from_index(1), AudioCodecChoice::MP3);
+    assert_eq!(AudioCodecChoice::from_index(2), AudioCodecChoice::Opus);
+    assert_eq!(AudioCodecChoice::from_index(3), AudioCodecChoice::FLAC);
+    assert_eq!(AudioCodecChoice::from_index(4), AudioCodecChoice::WavPCM24);
+    assert_eq!(AudioCodecChoice::from_index(5), AudioCodecChoice::Copy);
+    assert_eq!(AudioCodecChoice::from_index(7), AudioCodecChoice::Copy);
+
+    assert_eq!(AudioCodecChoice::AAC.to_index(), 0);
+    assert_eq!(AudioCodecChoice::MP3.to_index(), 1);
+    assert_eq!(AudioCodecChoice::Opus.to_index(), 2);
+    assert_eq!(AudioCodecChoice::FLAC.to_index(), 3);
+    assert_eq!(AudioCodecChoice::WavPCM24.to_index(), 4);
+    assert_eq!(AudioCodecChoice::WavPCM16.to_index(), 4);
+    assert_eq!(AudioCodecChoice::Copy.to_index(), 5);
+}

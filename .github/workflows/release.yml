@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -89,10 +91,82 @@ jobs:
           echo "ASSET=$ARCHIVE" >> $GITHUB_ENV
           echo "CHECKSUM=$ARCHIVE.sha256" >> $GITHUB_ENV
 
+      - name: Generate release notes
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          RUN_ID="${{ github.run_id }}"
+
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+
+          TAG_CONTENTS=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          CUSTOM_TAG_NOTES=""
+
+          if [ -n "$TAG_CONTENTS" ]; then
+              while IFS= read -r line; do
+                  trimmed=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                  [ -z "$trimmed" ] && continue
+                  if echo "$trimmed" | grep -iE '^(release\s+v?|version\s+v?|v[0-9])' >/dev/null 2>&1; then
+                      after_colon=$(echo "$trimmed" | sed -E 's/^(release|version)\s+v?[0-9.]+:\s*//i')
+                      if [ "$after_colon" != "$trimmed" ] && [ -n "$after_colon" ]; then
+                          CUSTOM_TAG_NOTES="${CUSTOM_TAG_NOTES}${after_colon}"$'\n'
+                      fi
+                      continue
+                  fi
+                  CUSTOM_TAG_NOTES="${CUSTOM_TAG_NOTES}${trimmed}"$'\n'
+              done <<< "$TAG_CONTENTS"
+          fi
+
+          BODY_NOTES=""
+          if [ -n "$CUSTOM_TAG_NOTES" ]; then
+              while IFS= read -r note; do
+                  [ -z "$note" ] && continue
+                  if [[ "$note" =~ ^[-*] ]]; then
+                      BODY_NOTES="${BODY_NOTES}${note}"$'\n'
+                  else
+                      BODY_NOTES="${BODY_NOTES}- ${note}"$'\n'
+                  fi
+              done <<< "$CUSTOM_TAG_NOTES"
+          else
+              if [ -n "$PREV_TAG" ]; then
+                  RAW_COMMITS=$(git log "${PREV_TAG}..${TAG}" --no-merges --reverse --pretty=format:"%s")
+              else
+                  RAW_COMMITS=$(git log -n 10 --no-merges --reverse --pretty=format:"%s")
+              fi
+
+              while IFS= read -r commit_msg; do
+                  [ -z "$commit_msg" ] && continue
+                  if echo "$commit_msg" | grep -iE '^(chore|bump)(\(release\))?:?\s*bump\s+version' >/dev/null 2>&1; then
+                      continue
+                  fi
+                  cleaned=$(echo "$commit_msg" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^\)]+\))?!?:?\s*//I')
+                  if [ -n "$cleaned" ]; then
+                      BODY_NOTES="${BODY_NOTES}- ${cleaned}"$'\n'
+                  fi
+              done <<< "$RAW_COMMITS"
+          fi
+
+          if [ -z "$BODY_NOTES" ]; then
+              BODY_NOTES="- Release ${TAG}"$'\n'
+          fi
+
+          BRANCH=$(git branch -r --contains "$TAG" 2>/dev/null | sed 's# *origin/##' | grep -v 'HEAD' | head -n 1)
+          [ -z "$BRANCH" ] && BRANCH="${{ github.event.repository.default_branch || 'main' }}"
+          [ -z "$BRANCH" ] && BRANCH="main"
+
+          SHORT_SHA=$(git rev-parse --short "${TAG}^{commit}" 2>/dev/null || git rev-parse --short HEAD)
+
+          FOOTER="- Release are built, signed and notarized by GitHub Actions
+Built from ${BRANCH} at ${SHORT_SHA} by (https://github.com/${REPO}/actions/runs/${RUN_ID})"
+
+          printf "%s\n%s\n" "$BODY_NOTES" "$FOOTER" > release_notes.md
+          cat release_notes.md
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ env.ASSET }}
             ${{ env.CHECKSUM }}
-          generate_release_notes: true
+          body_path: release_notes.md

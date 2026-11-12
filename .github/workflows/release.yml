@@ -152,15 +152,15 @@ jobs:
           fi
 
           BRANCH=$(git branch -r --contains "$TAG" 2>/dev/null | sed 's# *origin/##' | grep -v 'HEAD' | head -n 1)
-          [ -z "$BRANCH" ] && BRANCH="${{ github.event.repository.default_branch || 'main' }}"
           [ -z "$BRANCH" ] && BRANCH="main"
 
           SHORT_SHA=$(git rev-parse --short "${TAG}^{commit}" 2>/dev/null || git rev-parse --short HEAD)
 
-          FOOTER="- Release are built, signed and notarized by GitHub Actions
-Built from ${BRANCH} at ${SHORT_SHA} by (https://github.com/${REPO}/actions/runs/${RUN_ID})"
-
-          printf "%s\n%s\n" "$BODY_NOTES" "$FOOTER" > release_notes.md
+          {
+              printf "%s\n" "$BODY_NOTES"
+              echo "- Release are built, signed and notarized by GitHub Actions"
+              echo "Built from ${BRANCH} at ${SHORT_SHA} by (https://github.com/${REPO}/actions/runs/${RUN_ID})"
+          } > release_notes.md
           cat release_notes.md
 
       - name: Upload Release Assets

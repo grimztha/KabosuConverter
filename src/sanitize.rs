@@ -145,15 +145,34 @@ pub fn validate_path<P: AsRef<Path>>(path: P) -> Result<(), SanitizeError> {
         return Err(SanitizeError::ControlCharacters);
     }
 
-    // Check components for Windows reserved device names
-    for comp in p.components() {
-        let comp_str = comp.as_os_str().to_string_lossy();
-        if is_windows_reserved_name(&comp_str) {
-            return Err(SanitizeError::ReservedWindowsName(comp_str.to_string()));
+    // Check components for Windows reserved device names across both '/' and '\\' separators.
+    // On Unix systems, '\\' is treated as a normal character by Path::components(),
+    // so splitting on both separators ensures consistent cross-platform protection.
+    for part in s.split(['/', '\\']) {
+        let trimmed = part.trim();
+        if !trimmed.is_empty() && is_windows_reserved_name(trimmed) {
+            return Err(SanitizeError::ReservedWindowsName(trimmed.to_string()));
         }
     }
 
     Ok(())
+}
+
+/// Determines if a path is absolute across platforms.
+///
+/// On Windows, checks standard Windows prefix rules. On Unix, checks standard POSIX root `/`
+/// as well as Windows drive letters (e.g., `C:\` or `C:/`) so that cross-platform paths
+/// are recognized consistently.
+pub fn is_absolute_path(path: &Path) -> bool {
+    if path.is_absolute() {
+        return true;
+    }
+    let s = path.to_string_lossy();
+    let bytes = s.as_bytes();
+    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes[2] == b'/' || bytes[2] == b'\\') {
+        return true;
+    }
+    false
 }
 
 /// Ensures an output path is strictly contained within the allowed output directory,
@@ -162,16 +181,34 @@ pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathB
     validate_path(target)?;
     validate_path(allowed_dir)?;
 
-    let abs_target = if target.is_absolute() {
-        target.to_path_buf()
+    #[cfg(not(windows))]
+    let (target_buf, allowed_buf): (PathBuf, PathBuf) = {
+        let t_str = target.to_string_lossy();
+        let a_str = allowed_dir.to_string_lossy();
+        (
+            if t_str.contains('\\') { PathBuf::from(t_str.replace('\\', "/")) } else { target.to_path_buf() },
+            if a_str.contains('\\') { PathBuf::from(a_str.replace('\\', "/")) } else { allowed_dir.to_path_buf() },
+        )
+    };
+    #[cfg(windows)]
+    let (target_buf, allowed_buf) = (target.to_path_buf(), allowed_dir.to_path_buf());
+
+    let abs_allowed = if is_absolute_path(&allowed_buf) {
+        allowed_buf.clone()
     } else {
-        allowed_dir.join(target)
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(&allowed_buf)
     };
 
-    let abs_allowed = if allowed_dir.is_absolute() {
-        allowed_dir.to_path_buf()
+    let abs_target = if is_absolute_path(&target_buf) {
+        target_buf
+    } else if target_buf.starts_with(&allowed_buf) {
+        if is_absolute_path(&allowed_buf) {
+            target_buf
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(target_buf)
+        }
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(allowed_dir)
+        abs_allowed.join(target_buf)
     };
 
     // Normalize paths by removing `.` and evaluating `..` lexically
@@ -189,9 +226,24 @@ pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathB
 }
 
 /// Normalizes path components lexically without touching the filesystem.
+///
+/// On Unix, treats `\\` as a path separator so that Windows-style paths (e.g. from configs
+/// or cross-platform tests) are decomposed and normalized identically across platforms.
 pub fn normalize_lexically(path: &Path) -> PathBuf {
+    #[cfg(not(windows))]
+    let normalized = {
+        let s = path.to_string_lossy();
+        if s.contains('\\') {
+            PathBuf::from(s.replace('\\', "/"))
+        } else {
+            path.to_path_buf()
+        }
+    };
+    #[cfg(windows)]
+    let normalized = path.to_path_buf();
+
     let mut out = PathBuf::new();
-    for comp in path.components() {
+    for comp in normalized.components() {
         match comp {
             std::path::Component::CurDir => {}
             std::path::Component::ParentDir => {
@@ -541,16 +593,34 @@ mod tests {
         assert!(validate_path("a\0b").is_err());
         assert!(validate_path("con.mp4").is_err());
         assert!(validate_path("C:\\folder\\aux\\test.mp4").is_err());
+        assert!(validate_path("/var/log/aux/output.mp4").is_err());
     }
 
     #[test]
     fn test_ensure_path_within_dir() {
-        let base = Path::new("C:\\Users\\test\\output");
-        let safe = Path::new("C:\\Users\\test\\output\\video.mp4");
-        assert!(ensure_path_within_dir(safe, base).is_ok());
+        // Windows-style paths
+        let base_win = Path::new("C:\\Users\\test\\output");
+        let safe_win = Path::new("C:\\Users\\test\\output\\video.mp4");
+        assert!(ensure_path_within_dir(safe_win, base_win).is_ok());
 
-        let traversal = Path::new("C:\\Users\\test\\output\\..\\windows\\system32.exe");
-        assert!(ensure_path_within_dir(traversal, base).is_err());
+        let traversal_win = Path::new("C:\\Users\\test\\output\\..\\windows\\system32.exe");
+        assert!(ensure_path_within_dir(traversal_win, base_win).is_err());
+
+        // Unix-style paths
+        let base_unix = Path::new("/home/user/output");
+        let safe_unix = Path::new("/home/user/output/video.mp4");
+        assert!(ensure_path_within_dir(safe_unix, base_unix).is_ok());
+
+        let traversal_unix = Path::new("/home/user/output/../system/secret");
+        assert!(ensure_path_within_dir(traversal_unix, base_unix).is_err());
+
+        // Relative paths
+        let base_rel = Path::new("output_folder");
+        let safe_rel = Path::new("output_folder/video.mp4");
+        assert!(ensure_path_within_dir(safe_rel, base_rel).is_ok());
+
+        let traversal_rel = Path::new("output_folder/../secret.txt");
+        assert!(ensure_path_within_dir(traversal_rel, base_rel).is_err());
     }
 
     #[test]

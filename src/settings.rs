@@ -151,19 +151,44 @@ pub fn get_settings_path() -> Result<PathBuf> {
     Ok(local_settings)
 }
 
+/// Maximum allowed size for settings file (256 KB) to prevent memory or stack exhaustion.
+pub const MAX_SETTINGS_FILE_SIZE: u64 = 256 * 1024;
+
 /// Loads saved settings from disk, or returns defaults if the file is missing or unreadable.
+/// Enforces file size boundaries and streams reading with a size limiter to prevent JSON bombs.
 pub fn load_settings() -> AppSettings {
     if let Ok(path) = get_settings_path() {
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(settings) = serde_json::from_str(&content) {
-                return settings;
+        let bak_path = path.with_extension("json.bak");
+        let target_path = if path.exists() {
+            path
+        } else if bak_path.exists() {
+            bak_path
+        } else {
+            return AppSettings::default();
+        };
+
+        if let Ok(file) = fs::File::open(&target_path) {
+            if let Ok(meta) = file.metadata() {
+                if meta.len() <= MAX_SETTINGS_FILE_SIZE {
+                    use std::io::Read;
+                    let limited_reader = file.take(MAX_SETTINGS_FILE_SIZE);
+                    let buf_reader = std::io::BufReader::new(limited_reader);
+                    if let Ok(settings) = serde_json::from_reader(buf_reader) {
+                        return settings;
+                    }
+                } else {
+                    eprintln!(
+                        "[settings] File exceeds maximum size ({} bytes), resetting to defaults",
+                        meta.len()
+                    );
+                }
             }
         }
     }
     AppSettings::default()
 }
 
-/// Writes settings to a temp file first, then swaps it into place to avoid half-written files.
+/// Writes settings to a temp file first, then swaps it into place safely without losing existing settings.
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
     let path = get_settings_path()?;
     if let Some(parent) = path.parent() {
@@ -171,15 +196,35 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
     }
     let content = serde_json::to_string_pretty(settings)?;
     let tmp_path = path.with_extension("json.tmp");
+    let bak_path = path.with_extension("json.bak");
+
+    // Write full content to temporary file first
     fs::write(&tmp_path, &content)?;
 
-    // Windows rename fails if the target already exists, so remove it first.
+    // To prevent TOCTOU window where destination file is empty/missing on Windows:
+    // 1. Move existing path -> bak_path (so old data is preserved if interrupted)
+    // 2. Move tmp_path -> path
+    // 3. Remove bak_path
+    // If step 2 fails, restore bak_path -> path.
     if path.exists() {
-        let _ = fs::remove_file(&path);
-    }
-    if fs::rename(&tmp_path, &path).is_err() {
-        let _ = fs::remove_file(&tmp_path);
-        fs::write(&path, content)?;
+        if bak_path.exists() {
+            let _ = fs::remove_file(&bak_path);
+        }
+        if fs::rename(&path, &bak_path).is_ok() {
+            if let Err(e) = fs::rename(&tmp_path, &path) {
+                // Restore backup if atomic rename failed
+                let _ = fs::rename(&bak_path, &path);
+                let _ = fs::remove_file(&tmp_path);
+                return Err(anyhow::anyhow!("Failed to atomically replace settings: {}", e));
+            }
+            let _ = fs::remove_file(&bak_path);
+        } else {
+            // Fallback: direct write if rename is locked
+            let _ = fs::remove_file(&tmp_path);
+            fs::write(&path, content)?;
+        }
+    } else {
+        fs::rename(&tmp_path, &path)?;
     }
     Ok(())
 }

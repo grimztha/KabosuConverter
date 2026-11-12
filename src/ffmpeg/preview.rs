@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
+use crate::sanitize::validate_path;
 
 /// Computes the normalized `(vx, vy, vw, vh)` active video sub-rectangle inside a `640x360`
 /// preview buffer when `force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2` is used.
@@ -101,6 +102,9 @@ pub fn extract_frame<P: AsRef<Path>, B: AsRef<Path>>(
     time_seconds: f64,
     out_img_path: P,
 ) -> Result<()> {
+    validate_path(media_path)?;
+    validate_path(out_img_path.as_ref())?;
+
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = time_seconds.max(0.0);
     if target > 2.0 {
@@ -160,6 +164,8 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
     audio_only: bool,
     volume: Option<i32>,
 ) -> Result<std::process::Child> {
+    validate_path(media_path)?;
+
     let mut cmd = Command::new(ffplay_bin.as_ref());
     if let Some(vol) = volume {
         cmd.arg("-volume").arg(vol.clamp(0, 100).to_string());
@@ -219,6 +225,8 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     flip_h: bool,
     flip_v: bool,
 ) -> Result<Vec<u8>> {
+    validate_path(media_path)?;
+
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = time_seconds.max(0.0);
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
@@ -329,6 +337,8 @@ pub fn spawn_playback_stream_transformed_with_duration<B: AsRef<Path>>(
     flip_h: bool,
     flip_v: bool,
 ) -> Result<std::process::Child> {
+    validate_path(media_path)?;
+
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let target = start_seconds.max(0.0);
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
@@ -566,6 +576,8 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     gain_db: Option<f32>,
     normalize: Option<f32>,
 ) -> Result<AudioPlaybackSession> {
+    validate_path(media_path)?;
+
     let mut cmd = Command::new(ffplay_bin.as_ref());
     cmd.arg("-nodisp");
     cmd.arg("-autoexit");
@@ -648,6 +660,8 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>> {
+    validate_path(media_path)?;
+
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let filter = if height >= 100 {
         format!(

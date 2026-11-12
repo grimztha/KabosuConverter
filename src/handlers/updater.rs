@@ -54,11 +54,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     if let Some(ui) = ui_dispatch.upgrade() {
                                         let data = ui.global::<AppData>();
                                         if is_newer {
+                                            data.set_has_update_available(true);
                                             data.set_update_status(3); // Update Available
                                             data.set_update_latest_version(SharedString::from(&remote_ver));
                                             data.set_update_release_url(SharedString::from(&release.html_url));
                                             data.set_update_status_text(SharedString::from(format!("Update to {}", remote_ver)));
                                         } else {
+                                            data.set_has_update_available(false);
                                             data.set_update_status(2); // Up to date
                                             data.set_update_status_text("Up to date".into());
                                         }
@@ -70,6 +72,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(ui) = ui_dispatch.upgrade() {
                                         let data = ui.global::<AppData>();
+                                        data.set_has_update_available(false);
                                         data.set_update_status(6); // Error
                                         data.set_update_status_text("Check failed (Click to retry)".into());
                                     }
@@ -152,9 +155,16 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let download_url = asset.browser_download_url.clone();
                         let ui_prog = ui_cb.clone();
 
+                        let client = reqwest::Client::builder()
+                            .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
+                            .build()
+                            .unwrap_or_default();
+                        let expected_hash = updater::fetch_release_checksum(&client, &release.assets, &asset.name).await;
+
                         let res = updater::download_release_asset(
                             &download_url,
                             &dest_path,
+                            expected_hash.as_deref(),
                             move |ratio, downloaded, total| {
                                 let percent = (ratio * 100.0).clamp(0.0, 100.0);
                                 let status_str = if total > 0 {

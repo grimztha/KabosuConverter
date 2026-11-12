@@ -1,5 +1,6 @@
 pub mod binaries;
 pub mod ffmpeg;
+pub mod sanitize;
 pub mod settings;
 pub mod updater;
 pub mod ytdlp;

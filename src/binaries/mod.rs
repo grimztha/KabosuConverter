@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 pub use error::BinaryError;
-pub use fetcher::DownloadProgress;
+pub use fetcher::{BinaryFetcher, DownloadProgress};
 pub use platform::PlatformInfo;
 
 #[derive(Debug, Clone)]

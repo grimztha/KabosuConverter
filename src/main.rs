@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     }
 
     ui.global::<AppData>().set_app_version(env!("CARGO_PKG_VERSION").into());
-    ui.global::<AppData>().set_update_status_text("Up to date".into());
+    ui.global::<AppData>().set_update_status_text("Checking for updates...".into());
 
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
@@ -278,6 +278,9 @@ fn main() -> Result<()> {
 
     ui.show()
         .map_err(|e| anyhow::anyhow!("Failed to show window: {:?}", e))?;
+
+    // Automatically check for version updates on application launch
+    ui.global::<AppLogic>().invoke_check_for_updates();
 
     #[cfg(windows)]
     {

@@ -830,6 +830,24 @@ pub struct FFmpegCommandBuilder;
 
 impl FFmpegCommandBuilder {
     pub fn build(config: &EncodeJobConfig, ffmpeg_bin: &Path) -> Vec<String> {
+        // Validate input path
+        crate::sanitize::validate_path(&config.input_path)
+            .expect("Invalid input path for FFmpeg");
+
+        // Validate output path
+        crate::sanitize::validate_path(&config.output_path)
+            .expect("Invalid output path for FFmpeg");
+
+        // Validate timecode points
+        if let Some(ref in_pt) = config.in_point {
+            crate::sanitize::validate_timecode(in_pt)
+                .expect("Invalid in-point timecode");
+        }
+        if let Some(ref out_pt) = config.out_point {
+            crate::sanitize::validate_timecode(out_pt)
+                .expect("Invalid out-point timecode");
+        }
+
         let mut args: Vec<String> = Vec::new();
         args.push(ffmpeg_bin.to_string_lossy().to_string());
         args.push("-y".to_string()); // overwrite output without prompt

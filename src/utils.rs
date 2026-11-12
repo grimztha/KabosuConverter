@@ -204,20 +204,27 @@ pub fn play_notification_sound() {
     }
 }
 
-/// Opens a web URL in the default system browser.
+/// Opens a web URL in the default system browser after validating protocol and safe characters.
 pub fn open_url(url: &str) {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
+        return;
+    }
+    if trimmed.chars().any(|c| c.is_control() || ['&', '|', ';', '`', '^', '%', '"', '\''].contains(&c)) {
+        return;
+    }
     #[cfg(windows)]
     {
         let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
+            .args(["/C", "start", "", trimmed])
             .spawn();
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("open").arg(url).spawn();
+        let _ = std::process::Command::new("open").arg(trimmed).spawn();
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+        let _ = std::process::Command::new("xdg-open").arg(trimmed).spawn();
     }
 }

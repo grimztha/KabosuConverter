@@ -9,6 +9,7 @@ use kabosu_converter::ffmpeg::{
     EncodeJobConfig, EncoderFunction, FFmpegCommandBuilder, FFmpegRunner, HwAccel, ProResProfile,
     RateControlMode, ResolutionPreset, VideoCodec, VideoRotation,
 };
+use kabosu_converter::sanitize::{ensure_path_within_dir, sanitize_filename_stem, validate_path};
 use crate::context::AppContext;
 use crate::handlers::editor::rotation_from_index;
 use crate::utils::open_folder_in_explorer;
@@ -257,18 +258,84 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     .map(|p| p.to_path_buf())
                                     .unwrap_or_else(|| PathBuf::from("."))
                             };
+
+                        // Validate output directory path
+                        if let Err(e) = validate_path(&parent_dir) {
+                            any_errors = true;
+                            let ui_err = ui_weak.clone();
+                            let msg = format!("Invalid dir: {}", e);
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_err.upgrade() {
+                                    let model = ui.global::<AppData>().get_queue();
+                                    if let Some(mut row) = model.row_data(item_idx) {
+                                        row.status = SharedString::from(msg);
+                                        model.set_row_data(item_idx, row);
+                                    }
+                                }
+                            });
+                            continue;
+                        }
+
                         let _ = std::fs::create_dir_all(&parent_dir);
 
                         let stem = in_p.file_stem().unwrap_or_default().to_string_lossy();
+                        // Sanitize stem and validate length to prevent path truncation and reserved name issues
+                        let safe_stem = sanitize_filename_stem(&stem);
+
                         let mut output_path =
-                            parent_dir.join(format!("{}_encoded{}", stem, out_container));
+                            parent_dir.join(format!("{}_encoded{}", safe_stem, out_container));
+
+                        // Validate output filename length
+                        let output_filename = output_path.file_name().unwrap_or_default().to_string_lossy();
+                        if output_filename.len() > 255 {
+                            any_errors = true;
+                            let ui_err = ui_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_err.upgrade() {
+                                    let model = ui.global::<AppData>().get_queue();
+                                    if let Some(mut row) = model.row_data(item_idx) {
+                                        row.status = SharedString::from("Filename exceeds 255 chars");
+                                        model.set_row_data(item_idx, row);
+                                    }
+                                }
+                            });
+                            continue;
+                        }
 
                         // Avoid overwriting existing output or input file by appending counter if needed
                         let mut counter = 1;
-                        while output_path.exists() {
-                            output_path = parent_dir
-                                .join(format!("{}_encoded_{}{}", stem, counter, out_container));
+                        let base_output_path = output_path.clone();
+                        loop {
+                            let candidate_path = if counter == 1 {
+                                base_output_path.clone()
+                            } else {
+                                parent_dir.join(format!("{}_encoded_{}{}", safe_stem, counter, out_container))
+                            };
+                            output_path = candidate_path;
+                            if !output_path.exists() {
+                                break;
+                            }
                             counter += 1;
+                            if counter > 1000 {
+                                break;
+                            }
+                        }
+
+                        // Validate final output path and ensure it is strictly within parent_dir (prevents traversal)
+                        if let Err(e) = ensure_path_within_dir(&output_path, &parent_dir) {
+                            any_errors = true;
+                            let ui_err = ui_weak.clone();
+                            let msg = format!("Invalid path: {}", e);
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_err.upgrade() {
+                                    let model = ui.global::<AppData>().get_queue();
+                                    if let Some(mut row) = model.row_data(item_idx) {
+                                        row.status = SharedString::from(msg);
+                                        model.set_row_data(item_idx, row);
+                                    }
+                                }
+                            });
+                            continue;
                         }
 
                         // Clip-specific edits (crop, rotation, mirror flip) are only applied to the

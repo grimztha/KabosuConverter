@@ -104,6 +104,15 @@ The optimized standalone binary will be generated at:
 
 ---
 
+## Security & Privacy
+
+- **Zero Telemetry / Local-Only Logging**: Kabosu Converter does not transmit logs, analytics, media metadata, stream URLs, or file paths to any external server. All diagnostic logging is confined strictly to local memory and the on-screen console. Sensitive query parameters (tokens, signatures, keys) are automatically redacted from logs.
+- **Subprocess Argument & Path Sanitization**: All user-provided paths, filename templates, timecodes, and stream URLs undergo rigorous sanitization and validation (`src/sanitize.rs`) before invocation of external binaries (`FFmpeg`, `yt-dlp`). Directory traversal protections ensure outputs remain strictly within user-designated target folders.
+- **Cryptographic Verification**: Auto-provisioned binaries and software updates verify SHA-256 integrity checksums against remote release manifests prior to installation or execution.
+- **Atomic File Operations**: Settings and temporary downloads employ atomic write and replacement patterns to protect against TOCTOU race conditions and file corruption.
+
+---
+
 ## License
 
 This project is open-source software licensed under the **[GNU General Public License v3.0](LICENSE)**.

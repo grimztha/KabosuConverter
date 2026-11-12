@@ -1157,9 +1157,11 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "A high-performance media transcoder and universal video downloader by SThao";
+                                text: AppData.update_status == 3 ?
+                                    ("New version " + AppData.update_latest_version + " available! See notification below.") :
+                                    "A high-performance media transcoder and universal video downloader by SThao";
                                 font-size: Theme.font_badge;
-                                color: Theme.text_muted;
+                                color: AppData.update_status == 3 ? Theme.accent_green : Theme.text_muted;
                             }
                         }
 
@@ -1176,6 +1178,24 @@ export component TranscoderTab inherits ScrollView {
                                     font-weight: 500;
                                     color: Theme.text_muted;
                                     vertical-alignment: center;
+                                }
+
+                                if AppData.update_status == 3 : Rectangle {
+                                    border-radius: 4px;
+                                    background: Theme.accent_green.with-alpha(0.18);
+                                    HorizontalLayout {
+                                        padding-left: 6px;
+                                        padding-right: 6px;
+                                        padding-top: 2px;
+                                        padding-bottom: 2px;
+                                        Text {
+                                            text: "New: " + AppData.update_latest_version;
+                                            font-size: Theme.font_badge;
+                                            font-weight: 700;
+                                            color: Theme.accent_green;
+                                            vertical-alignment: center;
+                                        }
+                                    }
                                 }
 
                                 Text {
@@ -1257,6 +1277,241 @@ export component TranscoderTab inherits ScrollView {
                                             } else if AppData.update_status != 1 && AppData.update_status != 4 {
                                                 AppLogic.check_for_updates();
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Update Notification Banner (Status 3: Update Available)
+                    if AppData.update_status == 3 : Rectangle {
+                        border-radius: 6px;
+                        background: Theme.accent_green.with-alpha(0.08);
+                        border-width: 1px;
+                        border-color: Theme.accent_green.with-alpha(0.3);
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            padding-top: 10px;
+                            padding-bottom: 10px;
+                            spacing: 12px;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 30px;
+                                    height: 30px;
+                                    border-radius: 6px;
+                                    background: Theme.accent_green.with-alpha(0.18);
+                                    Image {
+                                        source: @image-url("../icons/download.svg");
+                                        width: 16px;
+                                        height: 16px;
+                                        colorize: Theme.accent_green;
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                    }
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                spacing: 2px;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Text {
+                                        text: "New Version Update Available!";
+                                        font-size: Theme.font_body;
+                                        font-weight: 700;
+                                        color: Theme.accent_green;
+                                    }
+                                    Rectangle {
+                                        border-radius: 3px;
+                                        background: Theme.accent_green.with-alpha(0.2);
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            padding-top: 1px;
+                                            padding-bottom: 1px;
+                                            Text {
+                                                text: AppData.update_latest_version;
+                                                font-size: Theme.font_badge;
+                                                font-weight: 700;
+                                                color: Theme.accent_green;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    text: "A new release (" + AppData.update_latest_version + ") of Kabosu Converter is available. Installed version: v" + AppData.app_version + ".";
+                                    font-size: Theme.font_badge;
+                                    color: Theme.text_secondary;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    border-radius: 6px;
+                                    background: btn_update_ta.has-hover ? Theme.accent_green : Theme.accent_green.with-alpha(0.85);
+
+                                    HorizontalLayout {
+                                        padding-left: 14px;
+                                        padding-right: 14px;
+                                        padding-top: 7px;
+                                        padding-bottom: 7px;
+                                        spacing: 6px;
+
+                                        Image {
+                                            source: @image-url("../icons/download.svg");
+                                            width: 13px;
+                                            height: 13px;
+                                            colorize: #ffffff;
+                                        }
+
+                                        Text {
+                                            text: "Download Update";
+                                            font-size: Theme.font_body;
+                                            font-weight: 600;
+                                            color: #ffffff;
+                                        }
+                                    }
+
+                                    btn_update_ta := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => {
+                                            AppLogic.download_update();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Update Downloading Banner (Status 4: Downloading)
+                    if AppData.update_status == 4 : Rectangle {
+                        border-radius: 6px;
+                        background: Theme.accent_amber.with-alpha(0.08);
+                        border-width: 1px;
+                        border-color: Theme.accent_amber.with-alpha(0.3);
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            padding-top: 10px;
+                            padding-bottom: 10px;
+                            spacing: 12px;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/download.svg");
+                                    width: 16px;
+                                    height: 16px;
+                                    colorize: Theme.accent_amber;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                spacing: 4px;
+
+                                Text {
+                                    text: "Downloading New Version: " + AppData.update_status_text;
+                                    font-size: Theme.font_body;
+                                    font-weight: 600;
+                                    color: Theme.accent_amber;
+                                }
+
+                                Rectangle {
+                                    height: 4px;
+                                    border-radius: 2px;
+                                    background: Theme.control_bg;
+
+                                    Rectangle {
+                                        x: 0px;
+                                        width: parent.width * AppData.update_download_progress;
+                                        height: 100%;
+                                        border-radius: 2px;
+                                        background: Theme.accent_amber;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Update Ready Banner (Status 5: Downloaded)
+                    if AppData.update_status == 5 : Rectangle {
+                        border-radius: 6px;
+                        background: Theme.accent_green.with-alpha(0.08);
+                        border-width: 1px;
+                        border-color: Theme.accent_green.with-alpha(0.3);
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            padding-top: 10px;
+                            padding-bottom: 10px;
+                            spacing: 12px;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/zap.svg");
+                                    width: 16px;
+                                    height: 16px;
+                                    colorize: Theme.accent_green;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                spacing: 2px;
+
+                                Text {
+                                    text: "Update Ready to Install!";
+                                    font-size: Theme.font_body;
+                                    font-weight: 700;
+                                    color: Theme.accent_green;
+                                }
+                                Text {
+                                    text: "New release package downloaded. Click 'Open Update' to install.";
+                                    font-size: Theme.font_badge;
+                                    color: Theme.text_secondary;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    border-radius: 6px;
+                                    background: btn_open_ta.has-hover ? Theme.accent_green : Theme.accent_green.with-alpha(0.85);
+
+                                    HorizontalLayout {
+                                        padding-left: 14px;
+                                        padding-right: 14px;
+                                        padding-top: 7px;
+                                        padding-bottom: 7px;
+
+                                        Text {
+                                            text: "Open Update";
+                                            font-size: Theme.font_body;
+                                            font-weight: 600;
+                                            color: #ffffff;
+                                        }
+                                    }
+
+                                    btn_open_ta := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => {
+                                            AppLogic.open_downloaded_update();
                                         }
                                     }
                                 }

@@ -305,6 +305,17 @@ export component MainWindow inherits Window {
                                                     color: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
+
+                                            // Notification dot when an update is available
+                                            if AppData.update_status == 3 : VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 6px;
+                                                    height: 6px;
+                                                    border-radius: 3px;
+                                                    background: Theme.accent_green;
+                                                }
+                                            }
                                         }
 
                                         t2_ta := TouchArea {

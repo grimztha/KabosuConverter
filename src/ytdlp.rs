@@ -9,6 +9,8 @@ use std::thread;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
+pub use crate::sanitize::{validate_stream_url, validate_youtube_url};
+
 /// Finds the bundled or local yt-dlp binary.
 /// Checks the app's local data directory, the current working directory, and the project root.
 pub fn find_ytdlp_binary() -> Option<PathBuf> {
@@ -116,15 +118,7 @@ pub struct DownloadFormatOption {
 #[allow(clippy::vec_init_then_push)]
 pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Vec<DownloadFormatOption>)> {
     let trimmed = url.trim();
-    if trimmed.is_empty() {
-        return Err(anyhow!("Stream URL cannot be empty"));
-    }
-    if trimmed.starts_with('-') {
-        return Err(anyhow!("Invalid stream URL: input cannot begin with a command flag"));
-    }
-    if trimmed.chars().any(|c| c.is_control()) {
-        return Err(anyhow!("Invalid stream URL: input cannot contain control characters"));
-    }
+    crate::sanitize::validate_stream_url(trimmed)?;
 
     let mut cmd = Command::new(ytdlp_bin);
     cmd.arg("--dump-single-json")
@@ -231,8 +225,16 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
         for f in formats.iter().rev() {
             if let Some(h) = f.height {
                 if h >= 360 && seen_heights.insert(h) {
+                    // Security check: validate format_id contains only safe yt-dlp selector characters
+                    if !crate::sanitize::validate_ytdlp_format_spec(&f.format_id) {
+                        continue;
+                    }
+
                     let vcodec = f.vcodec.as_deref().unwrap_or("video");
-                    let ext = f.ext.as_deref().unwrap_or("mp4");
+                    let ext = match f.ext.as_deref() {
+                        Some("mp4") | Some("mkv") | Some("webm") | Some("mov") | Some("avi") => f.ext.as_deref().unwrap(),
+                        _ => "mp4",
+                    };
                     let fps_str = f.fps.map(|fps| format!("{}fps", fps.round())).unwrap_or_default();
                     let label = format!("[Video] Stream {}p {} ({}) — Format ID {}", h, fps_str, vcodec, f.format_id);
                     options.push(DownloadFormatOption {
@@ -265,13 +267,7 @@ pub struct DownloadJob {
 
 /// Sanitize filename characters forbidden in Windows / NTFS filesystems.
 pub fn sanitize_filename_stem(name: &str) -> String {
-    let mut sanitized = name.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_");
-    sanitized = sanitized.trim_matches(|c: char| c.is_whitespace() || c == '.').to_string();
-    if sanitized.is_empty() {
-        "downloaded_media".to_string()
-    } else {
-        sanitized
-    }
+    crate::sanitize::sanitize_filename_stem(name)
 }
 
 /// Builds the output template for yt-dlp.
@@ -339,15 +335,20 @@ pub fn start_download(
     on_complete: impl Fn(Result<PathBuf>) + Send + 'static,
 ) -> Result<DownloadJob> {
     let trimmed_url = url.trim();
-    if trimmed_url.is_empty() {
-        return Err(anyhow!("Stream URL cannot be empty"));
+    crate::sanitize::validate_stream_url(trimmed_url)?;
+
+    // Validate format specifier
+    if !format_opt.is_audio_only && !crate::sanitize::validate_ytdlp_format_spec(&format_opt.format_spec) {
+        return Err(anyhow!("Invalid yt-dlp format specification: {}", format_opt.format_spec));
     }
-    if trimmed_url.starts_with('-') {
-        return Err(anyhow!("Invalid stream URL: input cannot begin with a command flag"));
+
+    // Validate custom filename if provided
+    if let Some(cf) = custom_filename {
+        crate::sanitize::validate_subprocess_arg(cf)?;
     }
-    if trimmed_url.chars().any(|c| c.is_control()) {
-        return Err(anyhow!("Invalid stream URL: input cannot contain control characters"));
-    }
+
+    // Validate destination path
+    crate::sanitize::validate_path(dest_dir)?;
 
     // Ensure the destination folder exists on disk before starting
     let _ = std::fs::create_dir_all(dest_dir);
@@ -557,4 +558,40 @@ pub fn start_download(
         cancel_flag,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_youtube_url() {
+        assert!(validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(validate_youtube_url("https://youtu.be/dQw4w9WgXcQ"));
+        assert!(!validate_youtube_url("https://example.com/not_youtube"));
+        assert!(!validate_youtube_url("http://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+    }
+
+    #[test]
+    fn test_validate_stream_url() {
+        assert!(validate_stream_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ").is_ok());
+        assert!(validate_stream_url("https://example.com/stream.m3u8").is_ok());
+        assert!(validate_stream_url("-h").is_err());
+        assert!(validate_stream_url("https://example.com/video;calc.exe").is_err());
+    }
+
+    #[test]
+    fn test_validate_format_spec() {
+        assert!(crate::sanitize::validate_ytdlp_format_spec("bv*+ba/b"));
+        assert!(crate::sanitize::validate_ytdlp_format_spec("137+140"));
+        assert!(!crate::sanitize::validate_ytdlp_format_spec("bv; reboot"));
+    }
+
+    #[test]
+    fn test_sanitize_filename_stem() {
+        assert_eq!(sanitize_filename_stem("My Video: Title"), "My Video_ Title");
+        assert_eq!(sanitize_filename_stem("CON"), "_CON");
+        assert_eq!(sanitize_filename_stem(""), "downloaded_media");
+    }
+}
+
 

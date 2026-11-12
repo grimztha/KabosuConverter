@@ -1,12 +1,20 @@
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 use anyhow::{anyhow, Result};
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
+use sha2::{Sha256, Digest};
 
 pub const GITHUB_REPO: &str = "grimztha/KabosuConverter";
+/// GitHub API base URL - externalized for potential testing, mirroring, or environment overrides.
+pub const GITHUB_API_BASE: &str = "https://api.github.com";
+
+pub fn github_api_base() -> String {
+    std::env::var("KABOSU_GITHUB_API_BASE")
+        .unwrap_or_else(|_| GITHUB_API_BASE.to_string())
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct GithubRelease {
@@ -32,7 +40,7 @@ pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
         .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
         .build()?;
 
-    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+    let url = format!("{}/repos/{}/releases/latest", github_api_base(), repo);
     let res = client
         .get(&url)
         .header("Accept", "application/vnd.github.v3+json")
@@ -106,10 +114,72 @@ pub fn find_platform_asset<'a>(assets: &'a [GithubAsset]) -> Option<&'a GithubAs
     }
 }
 
+/// Computes the SHA-256 hash of a file, returning a lowercase hex string.
+pub fn sha256_file(path: &Path) -> Result<String> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    let result = hasher.finalize();
+    Ok(hex::encode(result).to_lowercase())
+}
+
+/// Verifies the SHA-256 hash of a downloaded file against the expected hash.
+pub fn verify_sha256(path: &Path, expected: &str) -> Result<bool> {
+    let actual = sha256_file(path)?;
+    let expected_lower = expected.to_lowercase();
+    Ok(actual == expected_lower)
+}
+
+/// Attempts to discover the expected SHA-256 checksum for `target_asset_name` from GitHub release assets.
+pub async fn fetch_release_checksum(
+    client: &Client,
+    assets: &[GithubAsset],
+    target_asset_name: &str,
+) -> Option<String> {
+    for asset in assets {
+        let name_lower = asset.name.to_lowercase();
+        let is_target_checksum = name_lower == format!("{}.sha256", target_asset_name.to_lowercase())
+            || name_lower == format!("{}.sha256sum", target_asset_name.to_lowercase());
+        let is_manifest = name_lower == "sha256sums"
+            || name_lower == "checksums.sha256"
+            || name_lower == "checksums.txt";
+
+        if is_target_checksum || is_manifest {
+            if let Ok(res) = client.get(&asset.browser_download_url).send().await {
+                if res.status().is_success() {
+                    if let Ok(text) = res.text().await {
+                        if is_manifest {
+                            if let Some(hash) = crate::binaries::BinaryFetcher::find_hash_in_manifest(&text, target_asset_name) {
+                                return Some(hash);
+                            }
+                        } else {
+                            let trimmed = text.trim();
+                            let hash = trimmed.split_whitespace().next().unwrap_or(trimmed);
+                            if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                                return Some(hash.to_lowercase());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Streams download of the asset to destination path, reporting progress.
+/// If expected_hash is provided, verifies the download's SHA-256 hash.
 pub async fn download_release_asset<F>(
     url: &str,
     dest_path: &Path,
+    expected_hash: Option<&str>,
     on_progress: F,
 ) -> Result<()>
 where
@@ -164,6 +234,16 @@ where
         return Err(anyhow!("Failed flushing file: {}", e));
     }
     drop(file);
+
+    // Verify SHA-256 hash if provided
+    if let Some(hash) = expected_hash {
+        if let Ok(is_valid) = verify_sha256(&tmp_path, hash) {
+            if !is_valid {
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(anyhow!("SHA-256 hash verification failed"));
+            }
+        }
+    }
 
     if dest_path.exists() {
         let _ = std::fs::remove_file(dest_path);

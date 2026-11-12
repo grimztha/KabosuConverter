@@ -128,11 +128,13 @@ fn test_ui_update_state_lifecycle() {
     assert_eq!(data.get_update_status_text().as_str(), "Up to date");
 
     // State 3: Update available
+    data.set_has_update_available(true);
     data.set_update_status(3);
     data.set_update_latest_version("v0.15.0".into());
     data.set_update_release_url("https://github.com/grimztha/KabosuConverter/releases/tag/v0.15.0".into());
     data.set_update_status_text("Update to v0.15.0".into());
     assert_eq!(data.get_update_status(), 3);
+    assert!(data.get_has_update_available());
     assert_eq!(data.get_update_latest_version().as_str(), "v0.15.0");
     assert_eq!(data.get_update_status_text().as_str(), "Update to v0.15.0");
 

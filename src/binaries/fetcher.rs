@@ -43,12 +43,20 @@ impl BinaryFetcher {
         std::fs::create_dir_all(target_dir)?;
         let tmp_file_path = target_dir.join(format!("{}.download.tmp", target.asset_filename));
 
-        let res = self.client.get(target.download_url).send().await?;
+        let download_url = if target.name == "yt-dlp" {
+            std::env::var("KABOSU_YTDLP_URL").unwrap_or_else(|_| target.download_url.to_string())
+        } else if target.name == "ffmpeg" {
+            std::env::var("KABOSU_FFMPEG_URL").unwrap_or_else(|_| target.download_url.to_string())
+        } else {
+            target.download_url.to_string()
+        };
+
+        let res = self.client.get(&download_url).send().await?;
         if !res.status().is_success() {
             return Err(BinaryError::Other(format!(
                 "Failed to download asset '{}' from {}: HTTP {}",
                 target.asset_filename,
-                target.download_url,
+                download_url,
                 res.status()
             )));
         }
@@ -89,7 +97,19 @@ impl BinaryFetcher {
         target: &BinaryDownloadTarget,
         calculated_hash: &str,
     ) -> Result<String, BinaryError> {
-        let Some(checksum_url) = target.checksum_url else {
+        let checksum_url_override = if target.name == "yt-dlp" {
+            std::env::var("KABOSU_YTDLP_CHECKSUM_URL").ok()
+        } else if target.name == "ffmpeg" {
+            std::env::var("KABOSU_FFMPEG_CHECKSUM_URL").ok()
+        } else {
+            None
+        };
+
+        let checksum_url = checksum_url_override
+            .as_deref()
+            .or(target.checksum_url);
+
+        let Some(checksum_url) = checksum_url else {
             // No remote checksum URL specified for this target
             return Ok(calculated_hash.to_string());
         };

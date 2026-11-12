@@ -57,6 +57,15 @@ impl FFmpegRunner {
         let exe = &cmd_args[0];
         let args = &cmd_args[1..];
 
+        // Security check: Validate executable path and subprocess arguments
+        crate::sanitize::validate_path(exe)
+            .with_context(|| format!("Invalid executable path: {}", exe))?;
+
+        for (idx, arg) in args.iter().enumerate() {
+            crate::sanitize::validate_subprocess_arg(arg)
+                .with_context(|| format!("Invalid subprocess argument at index {}: {:?}", idx + 1, arg))?;
+        }
+
         let mut cmd = Command::new(exe);
         cmd.args(args)
             .stdin(Stdio::null())

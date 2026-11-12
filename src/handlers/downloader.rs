@@ -136,6 +136,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => return,
             };
             let data = ui.global::<AppData>();
+            if data.get_ytdlp_is_discovering() {
+                // Concurrency / rate limiting guard: prevent concurrent discoveries
+                return;
+            }
             let url = data.get_ytdlp_url().trim().to_string();
             if url.is_empty() {
                 return;
@@ -234,6 +238,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => return,
             };
             let data = ui.global::<AppData>();
+            if data.get_ytdlp_is_downloading() {
+                // Concurrency / rate limiting guard: prevent starting concurrent downloads
+                return;
+            }
             let url = data.get_ytdlp_url().trim().to_string();
             if url.is_empty() {
                 return;
@@ -346,7 +354,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             if !cur.is_empty() {
                                 cur.push('\n');
                             }
-                            cur.push_str(&log_line);
+                            let sanitized_log = kabosu_converter::sanitize::redact_url_query(&log_line);
+                            cur.push_str(&sanitized_log);
                             if cur.len() > 8000 {
                                 let mut start = cur.len() - 6000;
                                 while start < cur.len() && !cur.is_char_boundary(start) {

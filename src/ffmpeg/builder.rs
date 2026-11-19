@@ -472,9 +472,8 @@ impl CropHandleDragSession {
         }
     }
 
-    /// Computes the updated `CropRect` given current normalized mouse coordinates.
-    ///
-    /// Preserves all non-selected edges exactly without cumulative drift.
+    /// Computes the updated `CropRect` for the current normalized pointer coordinates
+    /// without letting opposite edges drift from rounding.
     pub fn compute_rect(
         &self,
         norm_x: f32,
@@ -491,186 +490,109 @@ impl CropHandleDragSession {
         let (new_x, new_y, new_w, new_h) = if let Some((num, den)) = aspect.ratio() {
             let num_i = num as i64;
             let den_i = den as i64;
+
+            // Fits width-driven resize inside (max_w, max_h) while keeping even dimensions.
+            let fit_from_w = |raw_w: i32, max_w: i32, max_h: i32| -> (i32, i32) {
+                let mut w = raw_w.clamp(16, max_w);
+                let mut h = (w as i64 * den_i / num_i) as i32;
+                if h > max_h {
+                    h = max_h;
+                    w = (h as i64 * num_i / den_i) as i32;
+                }
+                ((w & !1).clamp(16, max_w & !1), (h & !1).clamp(16, max_h & !1))
+            };
+
+            // Fits height-driven resize inside (max_w, max_h) while keeping even dimensions.
+            let fit_from_h = |raw_h: i32, max_w: i32, max_h: i32| -> (i32, i32) {
+                let mut h = raw_h.clamp(16, max_h);
+                let mut w = (h as i64 * num_i / den_i) as i32;
+                if w > max_w {
+                    w = max_w;
+                    h = (w as i64 * den_i / num_i) as i32;
+                }
+                ((w & !1).clamp(16, max_w & !1), (h & !1).clamp(16, max_h & !1))
+            };
+
             match self.handle_id {
-                0 => { // Top-Left: anchor is (fixed_right, fixed_bottom)
-                    let max_w = self.fixed_right;
-                    let max_h = self.fixed_bottom;
-                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > max_h {
-                        h = max_h;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                0 => {
+                    let (w, h) = fit_from_w(self.start_w - delta_px, self.fixed_right, self.fixed_bottom);
                     (self.fixed_right - w, self.fixed_bottom - h, w, h)
                 }
-                1 => { // Top-Right: anchor is (start_x, fixed_bottom)
-                    let max_w = eff_w_i - self.start_x;
-                    let max_h = self.fixed_bottom;
-                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > max_h {
-                        h = max_h;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                1 => {
+                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, self.fixed_bottom);
                     (self.start_x, self.fixed_bottom - h, w, h)
                 }
-                2 => { // Bottom-Left: anchor is (fixed_right, start_y)
-                    let max_w = self.fixed_right;
-                    let max_h = eff_h_i - self.start_y;
-                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > max_h {
-                        h = max_h;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                2 => {
+                    let (w, h) = fit_from_w(self.start_w - delta_px, self.fixed_right, eff_h_i - self.start_y);
                     (self.fixed_right - w, self.start_y, w, h)
                 }
-                3 => { // Bottom-Right: anchor is (start_x, start_y)
-                    let max_w = eff_w_i - self.start_x;
-                    let max_h = eff_h_i - self.start_y;
-                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > max_h {
-                        h = max_h;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                3 => {
+                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, eff_h_i - self.start_y);
                     (self.start_x, self.start_y, w, h)
                 }
-                4 => { // Top Edge: anchor is fixed_bottom, center x preserved
-                    let max_h = self.fixed_bottom;
-                    let raw_h = (self.start_h - delta_py).clamp(16, max_h);
-                    let mut h = raw_h;
-                    let mut w = (h as i64 * num_i / den_i) as i32;
-                    if w > eff_w_i {
-                        w = eff_w_i;
-                        h = (w as i64 * den_i / num_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, eff_w_i & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                4 => {
+                    let (w, h) = fit_from_h(self.start_h - delta_py, eff_w_i, self.fixed_bottom);
                     let center_x = self.start_x + self.start_w / 2;
                     let x = (center_x - w / 2).clamp(0, eff_w_i - w) & !1;
                     (x, self.fixed_bottom - h, w, h)
                 }
-                5 => { // Bottom Edge: anchor is start_y, center x preserved
-                    let max_h = eff_h_i - self.start_y;
-                    let raw_h = (self.start_h + delta_py).clamp(16, max_h);
-                    let mut h = raw_h;
-                    let mut w = (h as i64 * num_i / den_i) as i32;
-                    if w > eff_w_i {
-                        w = eff_w_i;
-                        h = (w as i64 * den_i / num_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, eff_w_i & !1);
-                    let h = (h & !1).clamp(16, max_h & !1);
+                5 => {
+                    let (w, h) = fit_from_h(self.start_h + delta_py, eff_w_i, eff_h_i - self.start_y);
                     let center_x = self.start_x + self.start_w / 2;
                     let x = (center_x - w / 2).clamp(0, eff_w_i - w) & !1;
                     (x, self.start_y, w, h)
                 }
-                6 => { // Left Edge: anchor is fixed_right, center y preserved
-                    let max_w = self.fixed_right;
-                    let raw_w = (self.start_w - delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > eff_h_i {
-                        h = eff_h_i;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, eff_h_i & !1);
+                6 => {
+                    let (w, h) = fit_from_w(self.start_w - delta_px, self.fixed_right, eff_h_i);
                     let center_y = self.start_y + self.start_h / 2;
                     let y = (center_y - h / 2).clamp(0, eff_h_i - h) & !1;
                     (self.fixed_right - w, y, w, h)
                 }
-                _ => { // Right Edge: anchor is start_x, center y preserved
-                    let max_w = eff_w_i - self.start_x;
-                    let raw_w = (self.start_w + delta_px).clamp(16, max_w);
-                    let mut w = raw_w;
-                    let mut h = (w as i64 * den_i / num_i) as i32;
-                    if h > eff_h_i {
-                        h = eff_h_i;
-                        w = (h as i64 * num_i / den_i) as i32;
-                    }
-                    let w = (w & !1).clamp(16, max_w & !1);
-                    let h = (h & !1).clamp(16, eff_h_i & !1);
+                _ => {
+                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, eff_h_i);
                     let center_y = self.start_y + self.start_h / 2;
                     let y = (center_y - h / 2).clamp(0, eff_h_i - h) & !1;
                     (self.start_x, y, w, h)
                 }
             }
         } else {
-            // Free aspect ratio
+            // Free aspect ratio: only the dragged edge(s) move.
             match self.handle_id {
-                0 => { // Top-Left: anchor is (fixed_right, fixed_bottom)
-                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
-                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
-                    let new_x = raw_x & !1;
-                    let new_y = raw_y & !1;
-                    let new_w = self.fixed_right - new_x;
-                    let new_h = self.fixed_bottom - new_y;
-                    (new_x, new_y, new_w, new_h)
+                0 => {
+                    let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
+                    let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
+                    (new_x, new_y, self.fixed_right - new_x, self.fixed_bottom - new_y)
                 }
-                1 => { // Top-Right: anchor is (start_x, fixed_bottom)
-                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
-                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
-                    let new_right = raw_right & !1;
-                    let new_y = raw_y & !1;
-                    let new_w = new_right - self.start_x;
-                    let new_h = self.fixed_bottom - new_y;
-                    (self.start_x, new_y, new_w, new_h)
+                1 => {
+                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
+                    (self.start_x, new_y, new_right - self.start_x, self.fixed_bottom - new_y)
                 }
-                2 => { // Bottom-Left: anchor is (fixed_right, start_y)
-                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
-                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
-                    let new_x = raw_x & !1;
-                    let new_bottom = raw_bottom & !1;
-                    let new_w = self.fixed_right - new_x;
-                    let new_h = new_bottom - self.start_y;
-                    (new_x, self.start_y, new_w, new_h)
+                2 => {
+                    let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
+                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (new_x, self.start_y, self.fixed_right - new_x, new_bottom - self.start_y)
                 }
-                3 => { // Bottom-Right: anchor is (start_x, start_y)
-                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
-                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
-                    let new_right = raw_right & !1;
-                    let new_bottom = raw_bottom & !1;
-                    let new_w = new_right - self.start_x;
-                    let new_h = new_bottom - self.start_y;
-                    (self.start_x, self.start_y, new_w, new_h)
+                3 => {
+                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (self.start_x, self.start_y, new_right - self.start_x, new_bottom - self.start_y)
                 }
-                4 => { // Top Edge: anchor is bottom, left, right
-                    let raw_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16);
-                    let new_y = raw_y & !1;
-                    let new_h = self.fixed_bottom - new_y;
-                    (self.start_x, new_y, self.start_w, new_h)
+                4 => {
+                    let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
+                    (self.start_x, new_y, self.start_w, self.fixed_bottom - new_y)
                 }
-                5 => { // Bottom Edge: anchor is top, left, right
-                    let raw_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i);
-                    let new_bottom = raw_bottom & !1;
-                    let new_h = new_bottom - self.start_y;
-                    (self.start_x, self.start_y, self.start_w, new_h)
+                5 => {
+                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (self.start_x, self.start_y, self.start_w, new_bottom - self.start_y)
                 }
-                6 => { // Left Edge: anchor is right, top, bottom
-                    let raw_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16);
-                    let new_x = raw_x & !1;
-                    let new_w = self.fixed_right - new_x;
-                    (new_x, self.start_y, new_w, self.start_h)
+                6 => {
+                    let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
+                    (new_x, self.start_y, self.fixed_right - new_x, self.start_h)
                 }
-                _ => { // Right Edge: anchor is left, top, bottom
-                    let raw_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i);
-                    let new_right = raw_right & !1;
-                    let new_w = new_right - self.start_x;
-                    (self.start_x, self.start_y, new_w, self.start_h)
+                _ => {
+                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    (self.start_x, self.start_y, new_right - self.start_x, self.start_h)
                 }
             }
         };
@@ -829,55 +751,115 @@ impl EncodeJobConfig {
 pub struct FFmpegCommandBuilder;
 
 impl FFmpegCommandBuilder {
-    pub fn build(config: &EncodeJobConfig, ffmpeg_bin: &Path) -> Vec<String> {
-        // Validate input path
+    /// Validates job inputs and builds the complete FFmpeg argument list.
+    pub fn try_build(config: &EncodeJobConfig, ffmpeg_bin: &Path) -> anyhow::Result<Vec<String>> {
         crate::sanitize::validate_path(&config.input_path)
-            .expect("Invalid input path for FFmpeg");
-
-        // Validate output path
+            .map_err(|e| anyhow::anyhow!("Invalid input path: {}", e))?;
         crate::sanitize::validate_path(&config.output_path)
-            .expect("Invalid output path for FFmpeg");
+            .map_err(|e| anyhow::anyhow!("Invalid output path: {}", e))?;
 
-        // Validate timecode points
         if let Some(ref in_pt) = config.in_point {
             crate::sanitize::validate_timecode(in_pt)
-                .expect("Invalid in-point timecode");
+                .map_err(|e| anyhow::anyhow!("Invalid in-point timecode: {}", e))?;
         }
         if let Some(ref out_pt) = config.out_point {
             crate::sanitize::validate_timecode(out_pt)
-                .expect("Invalid out-point timecode");
+                .map_err(|e| anyhow::anyhow!("Invalid out-point timecode: {}", e))?;
         }
 
-        let mut args: Vec<String> = Vec::new();
-        args.push(ffmpeg_bin.to_string_lossy().to_string());
-        args.push("-y".to_string()); // overwrite output without prompt
-        args.push("-hide_banner".to_string());
+        let mut args = vec![
+            ffmpeg_bin.to_string_lossy().to_string(),
+            "-y".to_string(),
+            "-hide_banner".to_string(),
+        ];
 
         match config.function {
-            EncoderFunction::Rewrap => {
-                Self::build_rewrap(config, &mut args);
-            }
-            EncoderFunction::LosslessCut => {
-                Self::build_cut(config, &mut args);
-            }
-            EncoderFunction::ExtractVideo => {
-                Self::build_extract_video(config, &mut args);
-            }
-            EncoderFunction::ExtractAudio => {
-                Self::build_extract_audio(config, &mut args);
-            }
-            EncoderFunction::AudioNormalize => {
-                Self::build_normalize(config, &mut args);
-            }
-            EncoderFunction::ExtractSubtitles => {
-                Self::build_extract_subtitles(config, &mut args);
-            }
-            EncoderFunction::Transcode => {
-                Self::build_transcode(config, &mut args);
-            }
+            EncoderFunction::Rewrap => Self::build_rewrap(config, &mut args),
+            EncoderFunction::LosslessCut => Self::build_cut(config, &mut args),
+            EncoderFunction::ExtractVideo => Self::build_extract_video(config, &mut args),
+            EncoderFunction::ExtractAudio => Self::build_extract_audio(config, &mut args),
+            EncoderFunction::AudioNormalize => Self::build_normalize(config, &mut args),
+            EncoderFunction::ExtractSubtitles => Self::build_extract_subtitles(config, &mut args),
+            EncoderFunction::Transcode => Self::build_transcode(config, &mut args),
         }
 
-        args
+        Ok(args)
+    }
+
+    /// Panicking convenience wrapper around [`Self::try_build`] for validated configs and tests.
+    pub fn build(config: &EncodeJobConfig, ffmpeg_bin: &Path) -> Vec<String> {
+        Self::try_build(config, ffmpeg_bin).expect("Invalid FFmpeg job configuration")
+    }
+
+    fn is_mp4_like_container(output_path: &str) -> bool {
+        let out_lower = output_path.to_lowercase();
+        out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v")
+    }
+
+    fn push_pair(args: &mut Vec<String>, flag: &str, value: impl Into<String>) {
+        args.push(flag.to_string());
+        args.push(value.into());
+    }
+
+    fn push_nvenc_args(config: &EncodeJobConfig, args: &mut Vec<String>, hvc1_tag: bool) {
+        Self::push_pair(args, "-preset", "p5");
+        if config.rate_control == RateControlMode::CRF {
+            Self::push_pair(args, "-cq", config.crf.to_string());
+        } else {
+            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+        }
+        if hvc1_tag {
+            Self::push_pair(args, "-tag:v", "hvc1");
+        }
+        Self::push_pair(args, "-pix_fmt", "yuv420p");
+    }
+
+    fn push_qsv_args(config: &EncodeJobConfig, args: &mut Vec<String>, with_preset: bool, hvc1_tag: bool) {
+        if with_preset {
+            Self::push_pair(args, "-preset", "medium");
+        }
+        if config.rate_control == RateControlMode::CRF {
+            Self::push_pair(args, "-global_quality", config.crf.to_string());
+        } else {
+            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+        }
+        if hvc1_tag {
+            Self::push_pair(args, "-tag:v", "hvc1");
+        }
+        Self::push_pair(args, "-pix_fmt", "nv12");
+    }
+
+    fn push_amf_args(config: &EncodeJobConfig, args: &mut Vec<String>, with_quality: bool, hvc1_tag: bool) {
+        if with_quality {
+            Self::push_pair(args, "-quality", "balanced");
+        }
+        if config.rate_control == RateControlMode::CRF {
+            Self::push_pair(args, "-rc", "cqp");
+            Self::push_pair(args, "-qp_i", config.crf.to_string());
+            Self::push_pair(args, "-qp_p", config.crf.to_string());
+        } else {
+            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+        }
+        if hvc1_tag {
+            Self::push_pair(args, "-tag:v", "hvc1");
+        }
+        Self::push_pair(args, "-pix_fmt", "yuv420p");
+    }
+
+    fn push_videotoolbox_args(config: &EncodeJobConfig, args: &mut Vec<String>, hvc1_tag: bool) {
+        if config.rate_control == RateControlMode::CRF {
+            // Saturating arithmetic prevents underflow when CRF is 51 (51 * 2 > 100).
+            let q = 100u32
+                .saturating_sub(config.crf.saturating_mul(2))
+                .clamp(10, 100);
+            Self::push_pair(args, "-q:v", q.to_string());
+        } else {
+            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+        }
+        if hvc1_tag {
+            Self::push_pair(args, "-tag:v", "hvc1");
+        }
+        Self::push_pair(args, "-pix_fmt", "yuv420p");
     }
 
     fn apply_trim(config: &EncodeJobConfig, args: &mut Vec<String>) {
@@ -993,11 +975,11 @@ impl FFmpegCommandBuilder {
         }
 
         // Framerate
-        if let Some(fps) = config.fps {
+        if let Some(fps) = config.fps.filter(|v| v.is_finite() && *v > 0.0) {
             vf_filters.push(format!("fps=fps={}", fps));
         }
 
-        // Filters require re-encoding; promote Copy to H264 if any filters are active
+        // Video filters require re-encoding; promote Copy to H264 if any filters are active.
         let effective_video_codec = if !vf_filters.is_empty() && config.video_codec == VideoCodec::Copy {
             VideoCodec::H264
         } else {
@@ -1009,11 +991,15 @@ impl FFmpegCommandBuilder {
         }
 
         if !vf_filters.is_empty() {
-            args.push("-vf".to_string());
-            args.push(vf_filters.join(","));
+            Self::push_pair(args, "-vf", vf_filters.join(","));
         }
 
-        // Video Encoder
+        let preset = if config.preset.is_empty() {
+            "medium"
+        } else {
+            config.preset.as_str()
+        };
+
         match effective_video_codec {
             VideoCodec::H264 => {
                 let encoder = match effective_hw_accel {
@@ -1023,87 +1009,31 @@ impl FFmpegCommandBuilder {
                     HwAccel::VideoToolbox => "h264_videotoolbox",
                     _ => "libx264",
                 };
-                args.push("-c:v".to_string());
-                args.push(encoder.to_string());
+                Self::push_pair(args, "-c:v", encoder);
 
-                if encoder == "libx264" {
-                    args.push("-preset".to_string());
-                    args.push(if config.preset.is_empty() { "medium".to_string() } else { config.preset.clone() });
-                    match config.rate_control {
-                        RateControlMode::CRF => {
-                            args.push("-crf".to_string());
-                            args.push(config.crf.to_string());
+                match encoder {
+                    "libx264" => {
+                        Self::push_pair(args, "-preset", preset);
+                        match config.rate_control {
+                            RateControlMode::CRF => Self::push_pair(args, "-crf", config.crf.to_string()),
+                            RateControlMode::CBR => {
+                                Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+                                Self::push_pair(args, "-maxrate", format!("{}k", config.video_bitrate_kbps));
+                                Self::push_pair(args, "-bufsize", format!("{}k", config.video_bitrate_kbps * 2));
+                            }
+                            RateControlMode::VBR => {
+                                Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+                                Self::push_pair(args, "-maxrate", format!("{}k", config.max_bitrate_kbps));
+                                Self::push_pair(args, "-bufsize", format!("{}k", config.max_bitrate_kbps * 2));
+                            }
                         }
-                        RateControlMode::CBR => {
-                            args.push("-b:v".to_string());
-                            args.push(format!("{}k", config.video_bitrate_kbps));
-                            args.push("-maxrate".to_string());
-                            args.push(format!("{}k", config.video_bitrate_kbps));
-                            args.push("-bufsize".to_string());
-                            args.push(format!("{}k", config.video_bitrate_kbps * 2));
-                        }
-                        RateControlMode::VBR => {
-                            args.push("-b:v".to_string());
-                            args.push(format!("{}k", config.video_bitrate_kbps));
-                            args.push("-maxrate".to_string());
-                            args.push(format!("{}k", config.max_bitrate_kbps));
-                            args.push("-bufsize".to_string());
-                            args.push(format!("{}k", config.max_bitrate_kbps * 2));
-                        }
+                        Self::push_pair(args, "-pix_fmt", "yuv420p");
                     }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "h264_nvenc" {
-                    args.push("-preset".to_string());
-                    args.push("p5".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-cq".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "h264_qsv" {
-                    args.push("-preset".to_string());
-                    args.push("medium".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-global_quality".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("nv12".to_string());
-                } else if encoder == "h264_amf" {
-                    args.push("-quality".to_string());
-                    args.push("balanced".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-rc".to_string());
-                        args.push("cqp".to_string());
-                        args.push("-qp_i".to_string());
-                        args.push(config.crf.to_string());
-                        args.push("-qp_p".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "h264_videotoolbox" {
-                    if config.rate_control == RateControlMode::CRF {
-                        let q = (100 - (config.crf * 2)).clamp(10, 100);
-                        args.push("-q:v".to_string());
-                        args.push(q.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
+                    "h264_nvenc" => Self::push_nvenc_args(config, args, false),
+                    "h264_qsv" => Self::push_qsv_args(config, args, true, false),
+                    "h264_amf" => Self::push_amf_args(config, args, true, false),
+                    "h264_videotoolbox" => Self::push_videotoolbox_args(config, args, false),
+                    _ => {}
                 }
             }
             VideoCodec::H265 => {
@@ -1114,82 +1044,25 @@ impl FFmpegCommandBuilder {
                     HwAccel::VideoToolbox => "hevc_videotoolbox",
                     _ => "libx265",
                 };
-                args.push("-c:v".to_string());
-                args.push(encoder.to_string());
+                Self::push_pair(args, "-c:v", encoder);
 
-                if encoder == "libx265" {
-                    args.push("-preset".to_string());
-                    args.push(if config.preset.is_empty() { "medium".to_string() } else { config.preset.clone() });
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-crf".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
+                match encoder {
+                    "libx265" => {
+                        Self::push_pair(args, "-preset", preset);
+                        if config.rate_control == RateControlMode::CRF {
+                            Self::push_pair(args, "-crf", config.crf.to_string());
+                        } else {
+                            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+                        }
+                        // Tag HEVC as hvc1 for Apple/QuickTime compatibility.
+                        Self::push_pair(args, "-tag:v", "hvc1");
+                        Self::push_pair(args, "-pix_fmt", "yuv420p");
                     }
-                    args.push("-tag:v".to_string());
-                    args.push("hvc1".to_string()); // Apple/QuickTime compatibility
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "hevc_nvenc" {
-                    args.push("-preset".to_string());
-                    args.push("p5".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-cq".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-tag:v".to_string());
-                    args.push("hvc1".to_string());
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "hevc_qsv" {
-                    args.push("-preset".to_string());
-                    args.push("medium".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-global_quality".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-tag:v".to_string());
-                    args.push("hvc1".to_string());
-                    args.push("-pix_fmt".to_string());
-                    args.push("nv12".to_string());
-                } else if encoder == "hevc_amf" {
-                    args.push("-quality".to_string());
-                    args.push("balanced".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-rc".to_string());
-                        args.push("cqp".to_string());
-                        args.push("-qp_i".to_string());
-                        args.push(config.crf.to_string());
-                        args.push("-qp_p".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-tag:v".to_string());
-                    args.push("hvc1".to_string());
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "hevc_videotoolbox" {
-                    if config.rate_control == RateControlMode::CRF {
-                        let q = (100 - (config.crf * 2)).clamp(10, 100);
-                        args.push("-q:v".to_string());
-                        args.push(q.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-tag:v".to_string());
-                    args.push("hvc1".to_string());
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
+                    "hevc_nvenc" => Self::push_nvenc_args(config, args, true),
+                    "hevc_qsv" => Self::push_qsv_args(config, args, true, true),
+                    "hevc_amf" => Self::push_amf_args(config, args, true, true),
+                    "hevc_videotoolbox" => Self::push_videotoolbox_args(config, args, true),
+                    _ => {}
                 }
             }
             VideoCodec::AV1 => {
@@ -1199,227 +1072,142 @@ impl FFmpegCommandBuilder {
                     HwAccel::Amf => "av1_amf",
                     _ => "libsvtav1",
                 };
-                args.push("-c:v".to_string());
-                args.push(encoder.to_string());
+                Self::push_pair(args, "-c:v", encoder);
 
-                if encoder == "libsvtav1" {
-                    match config.rate_control {
-                        RateControlMode::CRF => {
-                            args.push("-crf".to_string());
-                            args.push(config.crf.to_string());
+                match encoder {
+                    "libsvtav1" => {
+                        if config.rate_control == RateControlMode::CRF {
+                            Self::push_pair(args, "-crf", config.crf.to_string());
+                        } else {
+                            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
                         }
-                        RateControlMode::CBR | RateControlMode::VBR => {
-                            args.push("-b:v".to_string());
-                            args.push(format!("{}k", config.video_bitrate_kbps));
-                        }
+                        Self::push_pair(args, "-pix_fmt", "yuv420p10le");
                     }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p10le".to_string());
-                } else if encoder == "av1_qsv" {
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-global_quality".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("nv12".to_string());
-                } else if encoder == "av1_amf" {
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-rc".to_string());
-                        args.push("cqp".to_string());
-                        args.push("-qp_i".to_string());
-                        args.push(config.crf.to_string());
-                        args.push("-qp_p".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else if encoder == "av1_nvenc" {
-                    args.push("-preset".to_string());
-                    args.push("p5".to_string());
-                    if config.rate_control == RateControlMode::CRF {
-                        args.push("-cq".to_string());
-                        args.push(config.crf.to_string());
-                    } else {
-                        args.push("-b:v".to_string());
-                        args.push(format!("{}k", config.video_bitrate_kbps));
-                    }
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv420p".to_string());
-                } else {
-                    args.push("-cq".to_string());
-                    args.push(config.crf.to_string());
+                    "av1_nvenc" => Self::push_nvenc_args(config, args, false),
+                    "av1_qsv" => Self::push_qsv_args(config, args, false, false),
+                    "av1_amf" => Self::push_amf_args(config, args, false, false),
+                    _ => Self::push_pair(args, "-cq", config.crf.to_string()),
                 }
             }
             VideoCodec::VP9 => {
-                args.push("-c:v".to_string());
-                args.push("libvpx-vp9".to_string());
-                args.push("-crf".to_string());
-                args.push(config.crf.to_string());
-                args.push("-b:v".to_string());
-                args.push("0".to_string());
-                args.push("-row-mt".to_string());
-                args.push("1".to_string());
-                args.push("-pix_fmt".to_string());
-                args.push("yuv420p".to_string());
+                Self::push_pair(args, "-c:v", "libvpx-vp9");
+                Self::push_pair(args, "-crf", config.crf.to_string());
+                Self::push_pair(args, "-b:v", "0");
+                Self::push_pair(args, "-row-mt", "1");
+                Self::push_pair(args, "-pix_fmt", "yuv420p");
             }
             VideoCodec::AppleProRes => {
                 let encoder = match effective_hw_accel {
                     HwAccel::VideoToolbox => "prores_videotoolbox",
                     _ => "prores_ks",
                 };
-                args.push("-c:v".to_string());
-                args.push(encoder.to_string());
-                args.push("-profile:v".to_string());
-                args.push((config.prores_profile as u8).to_string());
-                if config.prores_profile == ProResProfile::FourFourFourFour || config.prores_profile == ProResProfile::FourFourFourFourXQ {
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuva444p10le".to_string());
+                Self::push_pair(args, "-c:v", encoder);
+                Self::push_pair(args, "-profile:v", (config.prores_profile as u8).to_string());
+                let pix_fmt = if matches!(
+                    config.prores_profile,
+                    ProResProfile::FourFourFourFour | ProResProfile::FourFourFourFourXQ
+                ) {
+                    "yuva444p10le"
                 } else {
-                    args.push("-pix_fmt".to_string());
-                    args.push("yuv422p10le".to_string());
-                }
+                    "yuv422p10le"
+                };
+                Self::push_pair(args, "-pix_fmt", pix_fmt);
             }
             VideoCodec::AvidDNxHD => {
-                args.push("-c:v".to_string());
-                args.push("dnxhd".to_string());
-                args.push("-profile:v".to_string());
-                args.push("dnxhr_hq".to_string());
-                args.push("-pix_fmt".to_string());
-                args.push("yuv422p".to_string());
+                Self::push_pair(args, "-c:v", "dnxhd");
+                Self::push_pair(args, "-profile:v", "dnxhr_hq");
+                Self::push_pair(args, "-pix_fmt", "yuv422p");
             }
             VideoCodec::Copy => {
-                args.push("-c:v".to_string());
-                args.push("copy".to_string());
+                Self::push_pair(args, "-c:v", "copy");
             }
         }
 
-        // Faststart for streaming web containers
-        let out_lower = config.output_path.to_lowercase();
-        if config.faststart && (out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v")) {
-            args.push("-movflags".to_string());
-            args.push("+faststart".to_string());
+        if config.faststart && Self::is_mp4_like_container(&config.output_path) {
+            Self::push_pair(args, "-movflags", "+faststart");
         }
 
-        Self::append_audio_filters(config, None, args);
-        Self::apply_audio_encoder(config, args);
+        let has_af = Self::append_audio_filters(config, None, args);
+        Self::apply_audio_encoder(config, has_af, args);
 
         args.push(config.output_path.clone());
     }
 
-    fn append_audio_filters(config: &EncodeJobConfig, fallback_lufs: Option<f32>, args: &mut Vec<String>) {
+    /// Appends `-af` filters when gain or loudness normalization is active; returns true if added.
+    fn append_audio_filters(config: &EncodeJobConfig, fallback_lufs: Option<f32>, args: &mut Vec<String>) -> bool {
         let mut af_filters: Vec<String> = Vec::new();
-        if let Some(gain) = config.audio_gain_db {
-            if gain.abs() > 0.05 {
-                af_filters.push(format!("volume={:.1}dB", gain));
-            }
+        if let Some(gain) = config.audio_gain_db.filter(|g| g.is_finite() && g.abs() > 0.05) {
+            af_filters.push(format!("volume={:.1}dB", gain.clamp(-60.0, 60.0)));
         }
-        if let Some(lufs) = config.normalize_lufs.or(fallback_lufs) {
-            af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs));
+        if let Some(lufs) = config.normalize_lufs.or(fallback_lufs).filter(|v| v.is_finite()) {
+            af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs.clamp(-70.0, -5.0)));
         }
 
         if !af_filters.is_empty() {
-            args.push("-af".to_string());
-            args.push(af_filters.join(","));
+            Self::push_pair(args, "-af", af_filters.join(","));
+            true
+        } else {
+            false
         }
     }
 
-    fn apply_audio_encoder(config: &EncodeJobConfig, args: &mut Vec<String>) {
-        let has_af = config.audio_gain_db.is_some_and(|g| g.abs() > 0.05) || config.normalize_lufs.is_some();
-        let out_lower = config.output_path.to_lowercase();
-        let is_mp4_like = out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v");
+    fn apply_audio_encoder(config: &EncodeJobConfig, has_af: bool, args: &mut Vec<String>) {
+        let is_mp4_like = Self::is_mp4_like_container(&config.output_path);
 
         let effective_codec = if has_af && config.audio_codec == AudioCodecChoice::Copy {
             AudioCodecChoice::AAC
         } else if is_mp4_like && matches!(config.audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus) {
-            // Guard: MP3 and Opus inside MP4/MOV containers violate mobile & messenger standards
-            // (Apple AVFoundation, Facebook Messenger, Signal, and Android MediaExtractor drop audio).
-            // Automatically promote to standard AAC for 100% universal compatibility.
+            // MP3/Opus in MP4/MOV play silently on iOS, Android, and messenger apps; use AAC instead.
             AudioCodecChoice::AAC
         } else {
             config.audio_codec
         };
 
         match effective_codec {
-            AudioCodecChoice::Copy => {
-                args.push("-c:a".to_string());
-                args.push("copy".to_string());
-            }
+            AudioCodecChoice::Copy => Self::push_pair(args, "-c:a", "copy"),
             AudioCodecChoice::AAC => {
-                args.push("-c:a".to_string());
-                args.push("aac".to_string());
-                args.push("-b:a".to_string());
-                args.push(format!("{}k", config.audio_bitrate_kbps));
+                Self::push_pair(args, "-c:a", "aac");
+                Self::push_pair(args, "-b:a", format!("{}k", config.audio_bitrate_kbps));
             }
             AudioCodecChoice::MP3 => {
-                args.push("-c:a".to_string());
-                args.push("libmp3lame".to_string());
-                args.push("-b:a".to_string());
-                args.push(format!("{}k", config.audio_bitrate_kbps));
+                Self::push_pair(args, "-c:a", "libmp3lame");
+                Self::push_pair(args, "-b:a", format!("{}k", config.audio_bitrate_kbps));
             }
             AudioCodecChoice::Opus => {
-                args.push("-c:a".to_string());
-                args.push("libopus".to_string());
-                args.push("-b:a".to_string());
-                args.push(format!("{}k", config.audio_bitrate_kbps));
+                Self::push_pair(args, "-c:a", "libopus");
+                Self::push_pair(args, "-b:a", format!("{}k", config.audio_bitrate_kbps));
             }
-            AudioCodecChoice::FLAC => {
-                args.push("-c:a".to_string());
-                args.push("flac".to_string());
-            }
-            AudioCodecChoice::WavPCM16 => {
-                args.push("-c:a".to_string());
-                args.push("pcm_s16le".to_string());
-            }
-            AudioCodecChoice::WavPCM24 => {
-                args.push("-c:a".to_string());
-                args.push("pcm_s24le".to_string());
-            }
+            AudioCodecChoice::FLAC => Self::push_pair(args, "-c:a", "flac"),
+            AudioCodecChoice::WavPCM16 => Self::push_pair(args, "-c:a", "pcm_s16le"),
+            AudioCodecChoice::WavPCM24 => Self::push_pair(args, "-c:a", "pcm_s24le"),
             AudioCodecChoice::AC3 => {
-                args.push("-c:a".to_string());
-                args.push("ac3".to_string());
-                args.push("-b:a".to_string());
-                args.push(format!("{}k", config.audio_bitrate_kbps.max(192)));
+                Self::push_pair(args, "-c:a", "ac3");
+                Self::push_pair(args, "-b:a", format!("{}k", config.audio_bitrate_kbps.max(192)));
             }
         }
 
         if effective_codec != AudioCodecChoice::Copy {
             if let Some(sr) = config.audio_sample_rate {
-                args.push("-ar".to_string());
-                args.push(sr.to_string());
+                Self::push_pair(args, "-ar", sr.to_string());
             }
             if let Some(ch) = config.audio_channels {
-                args.push("-ac".to_string());
-                args.push(ch.to_string());
+                Self::push_pair(args, "-ac", ch.to_string());
             } else if is_mp4_like {
-                // Default to stereo (2 channels) for universal mobile & web playback compatibility
-                // (prevents 5.1/surround center channel dropout on mobile phone speakers).
-                args.push("-ac".to_string());
-                args.push("2".to_string());
+                // Default to stereo for MP4/MOV so surround tracks don't drop dialogue on phone speakers.
+                Self::push_pair(args, "-ac", "2");
             }
         }
     }
 
     fn build_rewrap(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
-
-        args.push("-c".to_string());
-        args.push("copy".to_string());
-        args.push("-map".to_string());
-        args.push("0".to_string());
+        Self::push_pair(args, "-i", config.input_path.clone());
+        Self::push_pair(args, "-c", "copy");
+        Self::push_pair(args, "-map", "0");
         args.push("-ignore_unknown".to_string());
 
-        let out_lower = config.output_path.to_lowercase();
-        if out_lower.ends_with(".mp4") || out_lower.ends_with(".mov") || out_lower.ends_with(".m4v") {
-            args.push("-movflags".to_string());
-            args.push("+faststart".to_string());
+        if Self::is_mp4_like_container(&config.output_path) {
+            Self::push_pair(args, "-movflags", "+faststart");
         }
 
         args.push(config.output_path.clone());
@@ -1427,73 +1215,103 @@ impl FFmpegCommandBuilder {
 
     fn build_cut(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
-
-        args.push("-c".to_string());
-        args.push("copy".to_string());
-        args.push("-avoid_negative_ts".to_string());
-        args.push("make_zero".to_string());
-        args.push("-map".to_string());
-        args.push("0".to_string());
-
+        Self::push_pair(args, "-i", config.input_path.clone());
+        Self::push_pair(args, "-c", "copy");
+        Self::push_pair(args, "-avoid_negative_ts", "make_zero");
+        Self::push_pair(args, "-map", "0");
         args.push(config.output_path.clone());
     }
 
     fn build_extract_video(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
+        Self::push_pair(args, "-i", config.input_path.clone());
         args.push("-an".to_string());
         args.push("-sn".to_string());
-        args.push("-c:v".to_string());
-        args.push("copy".to_string());
-        args.push("-map".to_string());
-        args.push("0:v:0".to_string());
+        Self::push_pair(args, "-c:v", "copy");
+        Self::push_pair(args, "-map", "0:v:0");
         args.push(config.output_path.clone());
     }
 
     fn build_extract_audio(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
+        Self::push_pair(args, "-i", config.input_path.clone());
         args.push("-vn".to_string());
         args.push("-sn".to_string());
 
-        Self::append_audio_filters(config, None, args);
-        Self::apply_audio_encoder(config, args);
+        let has_af = Self::append_audio_filters(config, None, args);
+        Self::apply_audio_encoder(config, has_af, args);
 
-        args.push("-map".to_string());
-        args.push("0:a:0".to_string());
+        Self::push_pair(args, "-map", "0:a:0");
         args.push(config.output_path.clone());
     }
 
     fn build_extract_subtitles(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
+        Self::push_pair(args, "-i", config.input_path.clone());
         args.push("-vn".to_string());
         args.push("-an".to_string());
-        args.push("-c:s".to_string());
-        args.push("copy".to_string());
-        args.push("-map".to_string());
-        args.push("0:s:0?".to_string());
+        Self::push_pair(args, "-c:s", "copy");
+        Self::push_pair(args, "-map", "0:s:0?");
         args.push(config.output_path.clone());
     }
 
     fn build_normalize(config: &EncodeJobConfig, args: &mut Vec<String>) {
         Self::apply_trim(config, args);
-        args.push("-i".to_string());
-        args.push(config.input_path.clone());
+        Self::push_pair(args, "-i", config.input_path.clone());
+        Self::push_pair(args, "-c:v", "copy");
 
-        // Copy video stream without re-encoding
-        args.push("-c:v".to_string());
-        args.push("copy".to_string());
-
-        Self::append_audio_filters(config, Some(-23.0), args);
-        Self::apply_audio_encoder(config, args);
+        let has_af = Self::append_audio_filters(config, Some(-23.0), args);
+        Self::apply_audio_encoder(config, has_af, args);
 
         args.push(config.output_path.clone());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_videotoolbox_crf_51_does_not_underflow() {
+        let config = EncodeJobConfig {
+            function: EncoderFunction::Transcode,
+            input_path: "in.mp4".to_string(),
+            output_path: "out.mp4".to_string(),
+            video_codec: VideoCodec::H264,
+            hw_accel: HwAccel::VideoToolbox,
+            rate_control: RateControlMode::CRF,
+            crf: 51,
+            ..Default::default()
+        };
+        let cmd = FFmpegCommandBuilder::try_build(&config, Path::new("ffmpeg")).unwrap();
+        let q_idx = cmd.iter().position(|a| a == "-q:v").unwrap();
+        assert_eq!(cmd[q_idx + 1], "10");
+    }
+
+    #[test]
+    fn test_audio_normalize_with_copy_promotes_to_aac() {
+        let config = EncodeJobConfig {
+            function: EncoderFunction::AudioNormalize,
+            input_path: "in.mp4".to_string(),
+            output_path: "out.mp4".to_string(),
+            normalize_lufs: None,
+            audio_codec: AudioCodecChoice::Copy,
+            ..Default::default()
+        };
+        let cmd = FFmpegCommandBuilder::try_build(&config, Path::new("ffmpeg")).unwrap();
+        assert!(cmd.contains(&"-af".to_string()));
+        let ca_idx = cmd.iter().position(|a| a == "-c:a").unwrap();
+        assert_eq!(cmd[ca_idx + 1], "aac");
+    }
+
+    #[test]
+    fn test_try_build_rejects_invalid_timecode_without_panicking() {
+        let config = EncodeJobConfig {
+            input_path: "in.mp4".to_string(),
+            output_path: "out.mp4".to_string(),
+            in_point: Some("not-a-timecode".to_string()),
+            ..Default::default()
+        };
+        assert!(FFmpegCommandBuilder::try_build(&config, Path::new("ffmpeg")).is_err());
     }
 }

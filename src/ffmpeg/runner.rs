@@ -202,8 +202,10 @@ impl FFmpegRunner {
         watcher_stop.store(true, Ordering::SeqCst);
         let _ = watcher_handle.join();
 
-        let mut child_guard = child_shared.lock().unwrap_or_else(|e| e.into_inner());
-        let mut child = child_guard.take().context("Child process handle already taken")?;
+        let mut child = {
+            let mut guard = child_shared.lock().unwrap_or_else(|e| e.into_inner());
+            guard.take().context("Child process handle already taken")?
+        };
         let status = child.wait().context("Failed to wait on ffmpeg process")?;
 
         if cancel_flag.load(Ordering::SeqCst) {

@@ -125,6 +125,8 @@ fn parse_fraction(s: &str) -> Option<f64> {
 /// Probes media file metadata using ffprobe.
 pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) -> Result<MediaMetadata> {
     let path_ref = file_path.as_ref();
+    crate::sanitize::validate_path(path_ref)?;
+
     let file_path_str = path_ref.to_string_lossy().to_string();
     let file_name = path_ref.file_name().unwrap_or_default().to_string_lossy().to_string();
 
@@ -149,8 +151,11 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
         anyhow::bail!("ffprobe failed for {}: {}", file_path_str, err_msg);
     }
 
-    let json_text = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&json_text)
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .or_else(|_| {
+            let json_text = String::from_utf8_lossy(&output.stdout);
+            serde_json::from_str(&json_text)
+        })
         .context("Failed to parse ffprobe json output")?;
 
     let format_obj = &parsed["format"];
@@ -158,6 +163,7 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
         .as_str()
         .and_then(|s| s.parse().ok())
         .or_else(|| format_obj["duration"].as_f64())
+        .filter(|d| d.is_finite() && *d >= 0.0)
         .unwrap_or(0.0);
 
     let container_format = format_obj["format_name"]

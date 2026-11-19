@@ -6,6 +6,22 @@ use anyhow::{Context, Result};
 use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
 use crate::sanitize::validate_path;
 
+pub use crate::sanitize::parse_timecode_to_seconds;
+
+/// Appends fast two-stage seek args (coarse pre-seek 2s early, then exact post-seek) plus `-i <media_path>`.
+fn push_accurate_seek_input(cmd: &mut Command, media_path: &str, time_seconds: f64) {
+    let target = if time_seconds.is_finite() {
+        time_seconds.max(0.0)
+    } else {
+        0.0
+    };
+    if target > 2.0 {
+        let coarse = target - 2.0;
+        cmd.args(["-ss", &format!("{:.3}", coarse), "-copyts"]);
+    }
+    cmd.args(["-i", media_path, "-ss", &format!("{:.3}", target)]);
+}
+
 /// Computes the normalized `(vx, vy, vw, vh)` active video sub-rectangle inside a `640x360`
 /// preview buffer when `force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2` is used.
 pub fn compute_letterbox_viewport(eff_width: u32, eff_height: u32) -> (f32, f32, f32, f32) {
@@ -48,54 +64,7 @@ fn build_preview_vf_chain(rotation: VideoRotation, flip_h: bool, flip_v: bool) -
     filters.join(",")
 }
 
-/// Parses various timestamp formats into seconds (f64).
-/// Supported:
-/// - "HH:MM:SS.mmm" or "HH:MM:SS" (e.g. "01:23:45.500")
-/// - "MM:SS.mmm" or "MM:SS" (e.g. "02:30.250")
-/// - "SS.mmm" or "SS" (e.g. "45.0" or "45")
-pub fn parse_timecode_to_seconds(s: &str) -> Option<f64> {
-    let s = s.trim();
-    if s.is_empty() {
-        return None;
-    }
-
-    let parts: Vec<&str> = s.split(':').collect();
-    match parts.len() {
-        3 => {
-            let h: f64 = parts[0].trim().parse().ok()?;
-            let m: f64 = parts[1].trim().parse().ok()?;
-            let sec: f64 = parts[2].trim().parse().ok()?;
-            if !h.is_finite() || !m.is_finite() || !sec.is_finite() {
-                return None;
-            }
-            if h < 0.0 || m < 0.0 || m >= 60.0 || sec < 0.0 || sec >= 60.0 {
-                return None;
-            }
-            Some(h * 3600.0 + m * 60.0 + sec)
-        }
-        2 => {
-            let m: f64 = parts[0].trim().parse().ok()?;
-            let sec: f64 = parts[1].trim().parse().ok()?;
-            if !m.is_finite() || !sec.is_finite() {
-                return None;
-            }
-            if m < 0.0 || sec < 0.0 || sec >= 60.0 {
-                return None;
-            }
-            Some(m * 60.0 + sec)
-        }
-        1 => {
-            let sec: f64 = parts[0].trim().parse().ok()?;
-            if !sec.is_finite() || sec < 0.0 {
-                return None;
-            }
-            Some(sec)
-        }
-        _ => None,
-    }
-}
-
-/// Extracts a single preview video frame at a specific timestamp to the given image file.
+/// Extracts a single preview video frame at `time_seconds` into `out_img_path`.
 pub fn extract_frame<P: AsRef<Path>, B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -106,44 +75,14 @@ pub fn extract_frame<P: AsRef<Path>, B: AsRef<Path>>(
     validate_path(out_img_path.as_ref())?;
 
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    let target = time_seconds.max(0.0);
-    if target > 2.0 {
-        let coarse = target - 2.0;
-        cmd.args([
-            "-ss",
-            &format!("{:.3}", coarse),
-            "-copyts",
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-frames:v",
-            "1",
-            "-q:v",
-            "2",
-            "-vf",
-            "scale='min(640,iw)':-2",
-            "-update",
-            "1",
-            "-y",
-        ]);
-    } else {
-        cmd.args([
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-frames:v",
-            "1",
-            "-q:v",
-            "2",
-            "-vf",
-            "scale='min(640,iw)':-2",
-            "-update",
-            "1",
-            "-y",
-        ]);
-    }
+    push_accurate_seek_input(&mut cmd, media_path, time_seconds);
+    cmd.args([
+        "-frames:v", "1",
+        "-q:v", "2",
+        "-vf", "scale='min(640,iw)':-2",
+        "-update", "1",
+        "-y",
+    ]);
     cmd.arg(out_img_path.as_ref());
 
     let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
@@ -216,7 +155,7 @@ pub fn extract_frame_rgba<B: AsRef<Path>>(
     )
 }
 
-/// Extracts a preview video frame with rotation and flip applied.
+/// Extracts a 640x360 RGBA preview frame with rotation and flip applied.
 pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     ffmpeg_bin: B,
     media_path: &str,
@@ -228,67 +167,30 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     validate_path(media_path)?;
 
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    let target = time_seconds.max(0.0);
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
-    if target > 2.0 {
-        let coarse = target - 2.0;
-        cmd.args([
-            "-threads",
-            "2",
-            "-ss",
-            &format!("{:.3}", coarse),
-            "-copyts",
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-vf",
-            &vf_chain,
-            "-frames:v",
-            "1",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-an",
-            "-sn",
-            "-dn",
-            "pipe:1",
-        ]);
-    } else {
-        cmd.args([
-            "-threads",
-            "2",
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-vf",
-            &vf_chain,
-            "-frames:v",
-            "1",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-an",
-            "-sn",
-            "-dn",
-            "pipe:1",
-        ]);
-    }
+    cmd.args(["-threads", "2"]);
+    push_accurate_seek_input(&mut cmd, media_path, time_seconds);
+    cmd.args([
+        "-vf", &vf_chain,
+        "-frames:v", "1",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
+        "-an", "-sn", "-dn",
+        "pipe:1",
+    ]);
 
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
+    let mut output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
     let expected = 640 * 360 * 4;
     if output.stdout.len() < expected {
         anyhow::bail!("Incomplete raw frame: got {} vs expected {}", output.stdout.len(), expected);
     }
 
-    Ok(output.stdout[..expected].to_vec())
+    output.stdout.truncate(expected);
+    Ok(output.stdout)
 }
 
 /// Starts an ffmpeg stream piping raw RGBA frames (640x360x4) at 24fps.
@@ -340,59 +242,19 @@ pub fn spawn_playback_stream_transformed_with_duration<B: AsRef<Path>>(
     validate_path(media_path)?;
 
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
-    let target = start_seconds.max(0.0);
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
-    if target > 2.0 {
-        let coarse = target - 2.0;
-        cmd.args([
-            "-ss",
-            &format!("{:.3}", coarse),
-            "-copyts",
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-vf",
-            &vf_chain,
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-r",
-            "24",
-            "-an",
-            "-sn",
-        ]);
-        if let Some(dur) = duration {
-            if dur > 0.0 {
-                cmd.arg("-t").arg(format!("{:.3}", dur));
-            }
-        }
-        cmd.arg("pipe:1");
-    } else {
-        cmd.args([
-            "-i",
-            media_path,
-            "-ss",
-            &format!("{:.3}", target),
-            "-vf",
-            &vf_chain,
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-r",
-            "24",
-            "-an",
-            "-sn",
-        ]);
-        if let Some(dur) = duration {
-            if dur > 0.0 {
-                cmd.arg("-t").arg(format!("{:.3}", dur));
-            }
-        }
-        cmd.arg("pipe:1");
+    push_accurate_seek_input(&mut cmd, media_path, start_seconds);
+    cmd.args([
+        "-vf", &vf_chain,
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
+        "-r", "24",
+        "-an", "-sn",
+    ]);
+    if let Some(dur) = duration.filter(|d| d.is_finite() && *d > 0.0) {
+        cmd.arg("-t").arg(format!("{:.3}", dur));
     }
+    cmd.arg("pipe:1");
 
     crate::set_no_window(&mut cmd);
 
@@ -586,13 +448,11 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     cmd.arg("-volume").arg(vol_clamped.to_string());
 
     let mut af_filters = Vec::new();
-    if let Some(lufs) = normalize {
-        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.5:LRA=11", lufs));
+    if let Some(lufs) = normalize.filter(|v| v.is_finite()) {
+        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.5:LRA=11", lufs.clamp(-70.0, -5.0)));
     }
-    if let Some(gain) = gain_db {
-        if gain.abs() > 0.05 {
-            af_filters.push(format!("volume={:.1}dB", gain));
-        }
+    if let Some(gain) = gain_db.filter(|v| v.is_finite() && v.abs() > 0.05) {
+        af_filters.push(format!("volume={:.1}dB", gain.clamp(-60.0, 60.0)));
     }
 
     // Force stereo layout so both L and R channels exist, window into 2048 samples (~46ms),
@@ -697,11 +557,15 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
-    let expected = (width * height * 4) as usize;
+    let mut output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .context("Waveform dimensions overflow buffer size")?;
     if output.stdout.len() < expected {
         anyhow::bail!("Incomplete waveform data: got {} vs expected {}", output.stdout.len(), expected);
     }
 
-    Ok(output.stdout[..expected].to_vec())
+    output.stdout.truncate(expected);
+    Ok(output.stdout)
 }

@@ -15,6 +15,106 @@ use crate::handlers::editor::rotation_from_index;
 use crate::utils::open_folder_in_explorer;
 use crate::{AppData, AppLogic, MainWindow, QueueFile};
 
+/// Finds the matching queue row (preferring `preferred_idx` if its path matches) and updates it.
+fn update_queue_row(
+    ui_weak: &slint::Weak<MainWindow>,
+    preferred_idx: usize,
+    expected_path: &str,
+    status: String,
+    progress: Option<f32>,
+    status_summary: Option<String>,
+) {
+    let ui_w = ui_weak.clone();
+    let expected = expected_path.to_string();
+    let _ = slint::invoke_from_event_loop(move || {
+        let Some(ui) = ui_w.upgrade() else {
+            return;
+        };
+        let app_data = ui.global::<AppData>();
+        if let Some(summary) = status_summary {
+            app_data.set_status_summary(SharedString::from(summary));
+        }
+        let model = app_data.get_queue();
+        let target_idx = model
+            .row_data(preferred_idx)
+            .filter(|r| r.file_path.as_str() == expected)
+            .map(|_| preferred_idx)
+            .or_else(|| {
+                (0..model.row_count()).find(|&i| {
+                    model
+                        .row_data(i)
+                        .is_some_and(|r| r.file_path.as_str() == expected)
+                })
+            });
+        if let Some(idx) = target_idx {
+            if let Some(mut row) = model.row_data(idx) {
+                row.status = SharedString::from(status);
+                if let Some(p) = progress {
+                    row.progress = p;
+                }
+                model.set_row_data(idx, row);
+            }
+        }
+    });
+}
+
+/// Ensures `is_processing` is cleared on the UI if the batch worker exits abnormally.
+struct ProcessingResetGuard {
+    ui_weak: slint::Weak<MainWindow>,
+    disarmed: bool,
+}
+
+impl ProcessingResetGuard {
+    fn new(ui_weak: slint::Weak<MainWindow>) -> Self {
+        Self {
+            ui_weak,
+            disarmed: false,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl Drop for ProcessingResetGuard {
+    fn drop(&mut self) {
+        if !self.disarmed {
+            let ui_w = self.ui_weak.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = ui_w.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    app_data.set_is_processing(false);
+                    app_data.set_progress_text(SharedString::from("Encoding interrupted"));
+                }
+            });
+        }
+    }
+}
+
+/// Resolves a unique, non-existing output path inside `parent_dir`.
+fn pick_unique_output_path(
+    parent_dir: &Path,
+    safe_stem: &str,
+    out_container: &str,
+) -> Result<PathBuf, &'static str> {
+    for counter in 1..=1000u32 {
+        let filename = if counter == 1 {
+            format!("{}_encoded{}", safe_stem, out_container)
+        } else {
+            format!("{}_encoded_{}{}", safe_stem, counter, out_container)
+        };
+        if filename.len() > 255 {
+            return Err("Filename exceeds 255 bytes");
+        }
+        let candidate = parent_dir.join(&filename);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("Too many existing outputs (>1000)")
+}
+
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
     // Handle Select Output Directory
     {
@@ -202,6 +302,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                 // Spawn worker thread for batch queue processing
                 thread::spawn(move || {
+                    let mut processing_guard = ProcessingResetGuard::new(ui_weak.clone());
                     let total_items = items.len();
                     let mut any_errors = false;
                     let mut last_completed_path: Option<PathBuf> = None;
@@ -214,7 +315,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let input_path = item.file_path.to_string();
                         let in_p = Path::new(&input_path);
 
-                        // Determine destination directory and filename
+                        // Determine destination container extension
                         let out_container = if func_idx == 12 {
                             ".srt"
                         } else if func_idx == 9 || func_idx == 11 {
@@ -231,7 +332,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 },
                             }
                         } else if func_idx == 3 || func_idx == 4 {
-                            // Professional editing codecs (Apple ProRes & Avid DNxHD) require QuickTime (.mov) or Matroska (.mkv) container
+                            // ProRes and DNxHD require QuickTime (.mov) or Matroska (.mkv).
                             match container_idx {
                                 1 => ".mkv",
                                 _ => ".mov",
@@ -259,88 +360,56 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     .unwrap_or_else(|| PathBuf::from("."))
                             };
 
-                        // Validate output directory path
                         if let Err(e) = validate_path(&parent_dir) {
                             any_errors = true;
-                            let ui_err = ui_weak.clone();
-                            let msg = format!("Invalid dir: {}", e);
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_err.upgrade() {
-                                    let model = ui.global::<AppData>().get_queue();
-                                    if let Some(mut row) = model.row_data(item_idx) {
-                                        row.status = SharedString::from(msg);
-                                        model.set_row_data(item_idx, row);
-                                    }
-                                }
-                            });
+                            update_queue_row(
+                                &ui_weak,
+                                item_idx,
+                                &input_path,
+                                format!("Invalid dir: {}", e),
+                                None,
+                                None,
+                            );
                             continue;
                         }
 
                         let _ = std::fs::create_dir_all(&parent_dir);
 
                         let stem = in_p.file_stem().unwrap_or_default().to_string_lossy();
-                        // Sanitize stem and validate length to prevent path truncation and reserved name issues
                         let safe_stem = sanitize_filename_stem(&stem);
 
-                        let mut output_path =
-                            parent_dir.join(format!("{}_encoded{}", safe_stem, out_container));
-
-                        // Validate output filename length
-                        let output_filename = output_path.file_name().unwrap_or_default().to_string_lossy();
-                        if output_filename.len() > 255 {
-                            any_errors = true;
-                            let ui_err = ui_weak.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_err.upgrade() {
-                                    let model = ui.global::<AppData>().get_queue();
-                                    if let Some(mut row) = model.row_data(item_idx) {
-                                        row.status = SharedString::from("Filename exceeds 255 chars");
-                                        model.set_row_data(item_idx, row);
-                                    }
+                        let output_path =
+                            match pick_unique_output_path(&parent_dir, &safe_stem, out_container) {
+                                Ok(p) => p,
+                                Err(msg) => {
+                                    any_errors = true;
+                                    update_queue_row(
+                                        &ui_weak,
+                                        item_idx,
+                                        &input_path,
+                                        msg.to_string(),
+                                        None,
+                                        None,
+                                    );
+                                    continue;
                                 }
-                            });
-                            continue;
-                        }
-
-                        // Avoid overwriting existing output or input file by appending counter if needed
-                        let mut counter = 1;
-                        let base_output_path = output_path.clone();
-                        loop {
-                            let candidate_path = if counter == 1 {
-                                base_output_path.clone()
-                            } else {
-                                parent_dir.join(format!("{}_encoded_{}{}", safe_stem, counter, out_container))
                             };
-                            output_path = candidate_path;
-                            if !output_path.exists() {
-                                break;
-                            }
-                            counter += 1;
-                            if counter > 1000 {
-                                break;
-                            }
-                        }
 
-                        // Validate final output path and ensure it is strictly within parent_dir (prevents traversal)
                         if let Err(e) = ensure_path_within_dir(&output_path, &parent_dir) {
                             any_errors = true;
-                            let ui_err = ui_weak.clone();
-                            let msg = format!("Invalid path: {}", e);
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_err.upgrade() {
-                                    let model = ui.global::<AppData>().get_queue();
-                                    if let Some(mut row) = model.row_data(item_idx) {
-                                        row.status = SharedString::from(msg);
-                                        model.set_row_data(item_idx, row);
-                                    }
-                                }
-                            });
+                            update_queue_row(
+                                &ui_weak,
+                                item_idx,
+                                &input_path,
+                                format!("Invalid path: {}", e),
+                                None,
+                                None,
+                            );
                             continue;
                         }
 
-                        // Clip-specific edits (crop, rotation, mirror flip) are only applied to the
-                        // currently selected/edited item, or when there is only a single item in the queue.
-                        // Non-selected items in a batch queue transcode their full frames with the batch codec settings.
+                        // Clip-specific edits (crop, rotation, mirror flip) apply only to the
+                        // active/edited clip, or when there is a single file in the queue.
                         let is_selected_or_single = total_items == 1 || item_idx as i32 == selected_idx;
 
                         let (rotation, flip_h, flip_v, crop) = if is_selected_or_single {
@@ -360,18 +429,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             (VideoRotation::None, false, false, None)
                         };
 
+                        // Matches transcoder_tab.slint: None, EBU R128 (-23), YouTube (-14), Podcast (-16), Apple Music (-16)
                         let normalize_lufs = match normalize_idx {
                             1 => Some(-23.0),
                             2 => Some(-14.0),
-                            3 => Some(-16.0),
-                            4 => Some(-12.0),
-                            _ => {
-                                if func_idx == 10 {
-                                    Some(-23.0)
-                                } else {
-                                    None
-                                }
-                            }
+                            3 | 4 => Some(-16.0),
+                            _ if func_idx == 10 => Some(-23.0),
+                            _ => None,
                         };
 
                         let has_audio_edits = (edit_gain_opt.is_some()
@@ -381,7 +445,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let has_video_edits =
                             rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
 
-                        // Upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active
+                        // Upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active.
                         let function = match func_idx {
                             0..=5 => EncoderFunction::Transcode,
                             6 | 7 if has_video_edits || has_audio_edits => EncoderFunction::Transcode,
@@ -390,7 +454,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             8 => EncoderFunction::ExtractVideo,
                             9 => EncoderFunction::ExtractAudio,
                             10 => EncoderFunction::AudioNormalize,
-                            11 => EncoderFunction::ExtractAudio, // Audio conversion: drop video cleanly without streamcopy conflict
+                            11 => EncoderFunction::ExtractAudio,
                             12 => EncoderFunction::ExtractSubtitles,
                             _ => EncoderFunction::Transcode,
                         };
@@ -402,13 +466,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let hw_accel = HwAccel::from_index(hw_accel_idx);
                         let rate_control = RateControlMode::from_index(rate_ctrl_idx);
 
+                        // Matches transcoder_tab.slint bitrate options (in kbps).
                         let video_bitrate_kbps = match video_br_idx {
-                            0 => 15000,
-                            1 => 10000,
+                            0 => 12000,
+                            1 => 8000,
                             2 => 6000,
                             3 => 4000,
                             4 => 2500,
-                            _ => 1200,
+                            _ => 1500,
                         };
 
                         let preset = match preset_idx {
@@ -504,19 +569,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         if let (Some(in_s), Some(out_s)) = (in_secs, out_secs) {
                             if in_s >= out_s {
                                 any_errors = true;
-                                let ui_w = ui_weak.clone();
-                                let idx = item_idx;
-                                let _ = slint::invoke_from_event_loop(move || {
-                                    if let Some(ui) = ui_w.upgrade() {
-                                        let app_data = ui.global::<AppData>();
-                                        app_data.set_status_summary(SharedString::from("In point must be before out point"));
-                                        let model = app_data.get_queue();
-                                        if let Some(mut row) = model.row_data(idx) {
-                                            row.status = SharedString::from("Skipped: In >= Out");
-                                            model.set_row_data(idx, row);
-                                        }
-                                    }
-                                });
+                                update_queue_row(
+                                    &ui_weak,
+                                    item_idx,
+                                    &input_path,
+                                    "Skipped: In >= Out".to_string(),
+                                    None,
+                                    Some("In point must be before out point".to_string()),
+                                );
                                 continue;
                             }
                         }
@@ -524,21 +584,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         if let Some(in_s) = in_secs {
                             if total_duration > 0.0 && in_s >= total_duration {
                                 any_errors = true;
-                                let ui_w = ui_weak.clone();
-                                let in_s_c = in_s;
-                                let dur_c = total_duration;
-                                let idx = item_idx;
-                                let _ = slint::invoke_from_event_loop(move || {
-                                    if let Some(ui) = ui_w.upgrade() {
-                                        let app_data = ui.global::<AppData>();
-                                        app_data.set_status_summary(SharedString::from(format!("In point ({:.1}s) is beyond video duration ({:.1}s)", in_s_c, dur_c)));
-                                        let model = app_data.get_queue();
-                                        if let Some(mut row) = model.row_data(idx) {
-                                            row.status = SharedString::from("Skipped: In > Dur");
-                                            model.set_row_data(idx, row);
-                                        }
-                                    }
-                                });
+                                update_queue_row(
+                                    &ui_weak,
+                                    item_idx,
+                                    &input_path,
+                                    "Skipped: In > Dur".to_string(),
+                                    None,
+                                    Some(format!(
+                                        "In point ({:.1}s) is beyond video duration ({:.1}s)",
+                                        in_s, total_duration
+                                    )),
+                                );
                                 continue;
                             }
                         }
@@ -546,21 +602,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         if let Some(out_s) = out_secs {
                             if total_duration > 0.0 && out_s > total_duration {
                                 any_errors = true;
-                                let ui_w = ui_weak.clone();
-                                let out_s_c = out_s;
-                                let dur_c = total_duration;
-                                let idx = item_idx;
-                                let _ = slint::invoke_from_event_loop(move || {
-                                    if let Some(ui) = ui_w.upgrade() {
-                                        let app_data = ui.global::<AppData>();
-                                        app_data.set_status_summary(SharedString::from(format!("Out point ({:.1}s) is beyond video duration ({:.1}s)", out_s_c, dur_c)));
-                                        let model = app_data.get_queue();
-                                        if let Some(mut row) = model.row_data(idx) {
-                                            row.status = SharedString::from("Skipped: Out > Dur");
-                                            model.set_row_data(idx, row);
-                                        }
-                                    }
-                                });
+                                update_queue_row(
+                                    &ui_weak,
+                                    item_idx,
+                                    &input_path,
+                                    "Skipped: Out > Dur".to_string(),
+                                    None,
+                                    Some(format!(
+                                        "Out point ({:.1}s) is beyond video duration ({:.1}s)",
+                                        out_s, total_duration
+                                    )),
+                                );
                                 continue;
                             }
                         }
@@ -619,25 +671,32 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             crop,
                         };
 
-                        // Build FFmpeg command
-                        let cmd_args = FFmpegCommandBuilder::build(&config, &bins.ffmpeg);
+                        // Build FFmpeg command safely (reject bad inputs without panicking the worker).
+                        let cmd_args = match FFmpegCommandBuilder::try_build(&config, &bins.ffmpeg) {
+                            Ok(args) => args,
+                            Err(e) => {
+                                any_errors = true;
+                                update_queue_row(
+                                    &ui_weak,
+                                    item_idx,
+                                    &input_path,
+                                    format!("Failed: {}", e),
+                                    None,
+                                    Some(format!("Invalid encoding configuration: {}", e)),
+                                );
+                                continue;
+                            }
+                        };
                         let cmd_str = cmd_args.join(" ");
 
-                        // Update current file status to Encoding in-place
-                        {
-                            let ui_w = ui_weak.clone();
-                            let idx = item_idx;
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_w.upgrade() {
-                                    let app_data = ui.global::<AppData>();
-                                    let model = app_data.get_queue();
-                                    if let Some(mut row) = model.row_data(idx) {
-                                        row.status = SharedString::from("Encoding...");
-                                        model.set_row_data(idx, row);
-                                    }
-                                }
-                            });
-                        }
+                        update_queue_row(
+                            &ui_weak,
+                            item_idx,
+                            &input_path,
+                            "Encoding...".to_string(),
+                            None,
+                            None,
+                        );
 
                         // Display command preview in UI
                         {
@@ -654,6 +713,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         let ui_w_progress = ui_weak.clone();
                         let idx = item_idx;
+                        let expected_path_progress = input_path.clone();
                         let mut last_ui_tick = std::time::Instant::now()
                             .checked_sub(std::time::Duration::from_millis(100))
                             .unwrap_or_else(std::time::Instant::now);
@@ -669,17 +729,31 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 last_ui_tick = now;
 
                                 let ui_w = ui_w_progress.clone();
+                                let expected = expected_path_progress.clone();
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(ui) = ui_w.upgrade() {
                                         let app_data = ui.global::<AppData>();
                                         let model = app_data.get_queue();
-                                        if let Some(mut row) = model.row_data(idx) {
-                                            row.progress = p.percentage;
-                                            row.status = SharedString::from(format!(
-                                                "{:.1}%",
-                                                p.percentage * 100.0
-                                            ));
-                                            model.set_row_data(idx, row);
+                                        let target_idx = model
+                                            .row_data(idx)
+                                            .filter(|r| r.file_path.as_str() == expected)
+                                            .map(|_| idx)
+                                            .or_else(|| {
+                                                (0..model.row_count()).find(|&i| {
+                                                    model
+                                                        .row_data(i)
+                                                        .is_some_and(|r| r.file_path.as_str() == expected)
+                                                })
+                                            });
+                                        if let Some(target_idx) = target_idx {
+                                            if let Some(mut row) = model.row_data(target_idx) {
+                                                row.progress = p.percentage;
+                                                row.status = SharedString::from(format!(
+                                                    "{:.1}%",
+                                                    p.percentage * 100.0
+                                                ));
+                                                model.set_row_data(target_idx, row);
+                                            }
                                         }
 
                                         let overall =
@@ -749,7 +823,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             log_callback,
                         );
 
-                        let ui_w_done = ui_weak.clone();
                         let status_str = match &result {
                             Ok(_) => "Completed".to_string(),
                             Err(e) => {
@@ -767,27 +840,23 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             last_completed_path = Some(output_path.clone());
                         }
 
-                        // Clean up output file only if this specific processing job failed or was cancelled in-flight
+                        // Remove partial output file when this job fails or is cancelled.
                         if !is_ok && output_path.exists() {
                             let _ = std::fs::remove_file(&output_path);
                         }
 
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(ui) = ui_w_done.upgrade() {
-                                let app_data = ui.global::<AppData>();
-                                let model = app_data.get_queue();
-                                if let Some(mut row) = model.row_data(idx) {
-                                    row.status = SharedString::from(status_str);
-                                    if is_ok {
-                                        row.progress = 1.0;
-                                    }
-                                    model.set_row_data(idx, row);
-                                }
-                            }
-                        });
+                        update_queue_row(
+                            &ui_weak,
+                            item_idx,
+                            &input_path,
+                            status_str,
+                            is_ok.then_some(1.0),
+                            None,
+                        );
                     }
 
-                    // Batch finished or cancelled
+                    // Batch finished or cancelled; disarm panic-reset guard before posting final state.
+                    processing_guard.disarm();
                     let ui_w = ui_weak.clone();
                     let was_cancelled = cancel.load(Ordering::SeqCst);
                     let _ = slint::invoke_from_event_loop(move || {

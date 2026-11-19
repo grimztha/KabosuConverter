@@ -124,42 +124,28 @@ impl FFmpegBinaries {
 
         #[cfg(not(target_os = "macos"))]
         {
-            // Probe NVIDIA NVENC first
-            let mut cmd = Command::new(&self.ffmpeg);
-            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_nvenc", "-f", "null", "-"])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
-            crate::set_no_window(&mut cmd);
-            if let Ok(status) = cmd.status() {
-                if status.success() {
-                    return (crate::ffmpeg::HwAccel::Nvenc, true, "NVIDIA NVENC".to_string());
-                }
-            }
+            const PROBES: &[(&str, crate::ffmpeg::HwAccel, &str)] = &[
+                ("h264_nvenc", crate::ffmpeg::HwAccel::Nvenc, "NVIDIA NVENC"),
+                ("h264_qsv", crate::ffmpeg::HwAccel::Qsv, "Intel QuickSync"),
+                ("h264_amf", crate::ffmpeg::HwAccel::Amf, "AMD AMF"),
+            ];
 
-            // Probe Intel QSV
-            let mut cmd = Command::new(&self.ffmpeg);
-            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_qsv", "-f", "null", "-"])
+            for &(encoder, accel, label) in PROBES {
+                let mut cmd = Command::new(&self.ffmpeg);
+                cmd.args([
+                    "-f", "lavfi",
+                    "-i", "nullsrc=s=256x256:d=0.04",
+                    "-c:v", encoder,
+                    "-f", "null",
+                    "-",
+                ])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
-            crate::set_no_window(&mut cmd);
-            if let Ok(status) = cmd.status() {
-                if status.success() {
-                    return (crate::ffmpeg::HwAccel::Qsv, true, "Intel QuickSync".to_string());
-                }
-            }
+                crate::set_no_window(&mut cmd);
 
-            // Probe AMD AMF
-            let mut cmd = Command::new(&self.ffmpeg);
-            cmd.args(["-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.04", "-c:v", "h264_amf", "-f", "null", "-"])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
-            crate::set_no_window(&mut cmd);
-            if let Ok(status) = cmd.status() {
-                if status.success() {
-                    return (crate::ffmpeg::HwAccel::Amf, true, "AMD AMF".to_string());
+                if cmd.status().is_ok_and(|s| s.success()) {
+                    return (accel, true, label.to_string());
                 }
             }
 

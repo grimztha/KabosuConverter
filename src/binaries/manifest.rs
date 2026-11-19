@@ -21,15 +21,19 @@ pub struct LocalBinaryManifest {
 
 impl LocalBinaryManifest {
     pub const FILE_NAME: &'static str = ".metadata.json";
+    const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
 
-    /// Loads the local binary manifest from the given binary directory.
-    /// Returns default manifest if file does not exist or fails to parse.
+    /// Loads the local binary manifest, falling back to defaults if missing, oversized, or unreadable.
     pub fn load(bin_dir: &Path) -> Self {
         let manifest_path = bin_dir.join(Self::FILE_NAME);
-        if manifest_path.is_file() {
-            if let Ok(content) = fs::read_to_string(&manifest_path) {
-                if let Ok(manifest) = serde_json::from_str::<Self>(&content) {
-                    return manifest;
+        if let Ok(file) = fs::File::open(&manifest_path) {
+            if let Ok(meta) = file.metadata() {
+                if meta.len() <= Self::MAX_MANIFEST_BYTES {
+                    use std::io::Read;
+                    let reader = std::io::BufReader::new(file.take(Self::MAX_MANIFEST_BYTES));
+                    if let Ok(manifest) = serde_json::from_reader::<_, Self>(reader) {
+                        return manifest;
+                    }
                 }
             }
         }

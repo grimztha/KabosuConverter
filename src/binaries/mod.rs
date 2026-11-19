@@ -79,6 +79,52 @@ impl DependencyManager {
         Ok(None)
     }
 
+    /// Downloads, verifies, and extracts a single binary target into `self.bin_dir`.
+    async fn download_verify_and_extract<F>(
+        &self,
+        fetcher: &fetcher::BinaryFetcher,
+        target: &platform::BinaryDownloadTarget,
+        on_progress: &F,
+    ) -> Result<String, BinaryError>
+    where
+        F: Fn(&str, DownloadProgress) + Send + Sync,
+    {
+        let (tmp_file, calculated_hash) = fetcher
+            .download_with_hash(target, &self.bin_dir, &|prog| {
+                on_progress(target.name, prog);
+            })
+            .await?;
+
+        on_progress(target.name, DownloadProgress::VerifyingHash);
+        let verified_hash = match fetcher.verify_checksum(target, &calculated_hash).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp_file);
+                return Err(e);
+            }
+        };
+
+        on_progress(target.name, DownloadProgress::Extracting);
+        if let Err(e) = extract::BinaryExtractor::extract(
+            &tmp_file,
+            &self.bin_dir,
+            &target.format,
+            &self.platform,
+        ) {
+            let _ = std::fs::remove_file(&tmp_file);
+            return Err(e);
+        }
+
+        Ok(verified_hash)
+    }
+
+    fn unix_timestamp_secs() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    }
+
     /// Finds local binaries or downloads, hash-verifies, and extracts any missing ones.
     pub async fn ensure_dependencies<F>(&self, on_progress: F) -> Result<BinaryPaths, BinaryError>
     where
@@ -98,25 +144,9 @@ impl DependencyManager {
             }
             _ => {
                 let target = self.platform.ffmpeg_target();
-                let progress_name = "ffmpeg";
-
-                let (tmp_file, calculated_hash) = fetcher
-                    .download_with_hash(&target, &self.bin_dir, &|prog| {
-                        on_progress(progress_name, prog);
-                    })
+                let verified_hash = self
+                    .download_verify_and_extract(&fetcher, &target, &on_progress)
                     .await?;
-
-                on_progress(progress_name, DownloadProgress::VerifyingHash);
-                let verified_hash = match fetcher.verify_checksum(&target, &calculated_hash).await {
-                    Ok(hash) => hash,
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&tmp_file);
-                        return Err(e);
-                    }
-                };
-
-                on_progress(progress_name, DownloadProgress::Extracting);
-                extract::BinaryExtractor::extract(&tmp_file, &self.bin_dir, &target.format, &self.platform)?;
 
                 let ffmpeg = self.bin_dir.join(self.platform.ffmpeg_filename());
                 let ffprobe = self.bin_dir.join(self.platform.ffprobe_filename());
@@ -125,25 +155,19 @@ impl DependencyManager {
                 let ver_output = Self::verify_binary_executable(&ffmpeg, "-version").await?;
                 let _ = Self::verify_binary_executable(&ffprobe, "-version").await?;
 
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-
                 manifest.update(
                     "ffmpeg",
                     manifest::BinaryMetadata {
-                        installed_at: now,
+                        installed_at: Self::unix_timestamp_secs(),
                         sha256: Some(verified_hash),
                         version: Some(ver_output.lines().next().unwrap_or("").trim().to_string()),
                         path: Some(ffmpeg.to_string_lossy().to_string()),
                     },
                 );
                 let _ = manifest.save(&self.bin_dir);
+                on_progress(target.name, DownloadProgress::Complete);
 
-                on_progress(progress_name, DownloadProgress::Complete);
-
-                let play_opt = if ffplay.is_file() { Some(ffplay) } else { None };
+                let play_opt = ffplay.is_file().then_some(ffplay);
                 (ffmpeg, ffprobe, play_opt)
             }
         };
@@ -153,47 +177,24 @@ impl DependencyManager {
             Some(p) => p,
             None => {
                 let target = self.platform.ytdlp_target();
-                let progress_name = "yt-dlp";
-
-                let (tmp_file, calculated_hash) = fetcher
-                    .download_with_hash(&target, &self.bin_dir, &|prog| {
-                        on_progress(progress_name, prog);
-                    })
+                let verified_hash = self
+                    .download_verify_and_extract(&fetcher, &target, &on_progress)
                     .await?;
 
-                on_progress(progress_name, DownloadProgress::VerifyingHash);
-                let verified_hash = match fetcher.verify_checksum(&target, &calculated_hash).await {
-                    Ok(hash) => hash,
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&tmp_file);
-                        return Err(e);
-                    }
-                };
-
-                on_progress(progress_name, DownloadProgress::Extracting);
-                extract::BinaryExtractor::extract(&tmp_file, &self.bin_dir, &target.format, &self.platform)?;
-
                 let ytdlp = self.bin_dir.join(self.platform.ytdlp_filename());
-
                 let ver_output = Self::verify_binary_executable(&ytdlp, "--version").await?;
-
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
 
                 manifest.update(
                     "yt-dlp",
                     manifest::BinaryMetadata {
-                        installed_at: now,
+                        installed_at: Self::unix_timestamp_secs(),
                         sha256: Some(verified_hash),
                         version: Some(ver_output.trim().to_string()),
                         path: Some(ytdlp.to_string_lossy().to_string()),
                     },
                 );
                 let _ = manifest.save(&self.bin_dir);
-
-                on_progress(progress_name, DownloadProgress::Complete);
+                on_progress(target.name, DownloadProgress::Complete);
 
                 ytdlp
             }
@@ -237,7 +238,7 @@ impl DependencyManager {
         None
     }
 
-    /// Runs `<binary> <arg>` with a 2-second timeout to confirm the binary is valid and runnable.
+    /// Runs `<binary> <arg>` with a 10-second timeout to verify the binary can execute cleanly.
     pub async fn verify_binary_executable(path: &Path, arg: &str) -> Result<String, BinaryError> {
         if !path.is_file() {
             return Err(BinaryError::ExecutionFailed {

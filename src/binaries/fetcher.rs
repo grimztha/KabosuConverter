@@ -25,12 +25,12 @@ impl BinaryFetcher {
     pub fn new() -> Result<Self, BinaryError> {
         let client = Client::builder()
             .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
+            .connect_timeout(std::time::Duration::from_secs(15))
             .build()?;
         Ok(Self { client })
     }
 
-    /// Streams download of the target asset into `<target_dir>/<asset_filename>.download.tmp`,
-    /// simultaneously calculating its SHA-256 hash and emitting progress callbacks.
+    /// Streams `target` to a temporary file in `target_dir` while computing its SHA-256 digest.
     pub async fn download_with_hash<F>(
         &self,
         target: &BinaryDownloadTarget,
@@ -43,12 +43,10 @@ impl BinaryFetcher {
         std::fs::create_dir_all(target_dir)?;
         let tmp_file_path = target_dir.join(format!("{}.download.tmp", target.asset_filename));
 
-        let download_url = if target.name == "yt-dlp" {
-            std::env::var("KABOSU_YTDLP_URL").unwrap_or_else(|_| target.download_url.to_string())
-        } else if target.name == "ffmpeg" {
-            std::env::var("KABOSU_FFMPEG_URL").unwrap_or_else(|_| target.download_url.to_string())
-        } else {
-            target.download_url.to_string()
+        let download_url = match target.name {
+            "yt-dlp" => std::env::var("KABOSU_YTDLP_URL").unwrap_or_else(|_| target.download_url.to_string()),
+            "ffmpeg" => std::env::var("KABOSU_FFMPEG_URL").unwrap_or_else(|_| target.download_url.to_string()),
+            _ => target.download_url.to_string(),
         };
 
         let res = self.client.get(&download_url).send().await?;
@@ -70,9 +68,20 @@ impl BinaryFetcher {
         let mut total_downloaded: u64 = 0;
 
         while let Some(chunk_res) = stream.next().await {
-            let chunk = chunk_res?;
+            let chunk = match chunk_res {
+                Ok(c) => c,
+                Err(e) => {
+                    drop(file);
+                    let _ = std::fs::remove_file(&tmp_file_path);
+                    return Err(e.into());
+                }
+            };
             let chunk_len = chunk.len();
-            file.write_all(&chunk)?;
+            if let Err(e) = file.write_all(&chunk) {
+                drop(file);
+                let _ = std::fs::remove_file(&tmp_file_path);
+                return Err(e.into());
+            }
             hasher.update(&chunk);
             total_downloaded += chunk_len as u64;
 
@@ -82,12 +91,14 @@ impl BinaryFetcher {
             });
         }
 
-        file.flush()?;
+        if let Err(e) = file.flush() {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_file_path);
+            return Err(e.into());
+        }
         drop(file);
 
-        let hash_result = hasher.finalize();
-        let calculated_hash = hex::encode(hash_result).to_lowercase();
-
+        let calculated_hash = hex::encode(hasher.finalize());
         Ok((tmp_file_path, calculated_hash))
     }
 
@@ -141,8 +152,7 @@ impl BinaryFetcher {
         Ok(expected_hash)
     }
 
-    /// Parses standard checksum manifests (such as SHA2-256SUMS or checksums.sha256).
-    /// Lines format: `<hash>  <filename>` or `<hash> *<filename>`
+    /// Parses standard checksum manifests (`<sha256>  <filename>` or `<sha256> *<filename>`).
     pub fn find_hash_in_manifest(manifest: &str, asset_name: &str) -> Option<String> {
         for line in manifest.lines() {
             let trimmed = line.trim();
@@ -151,10 +161,17 @@ impl BinaryFetcher {
             }
 
             let mut parts = trimmed.split_whitespace();
-            let hash = parts.next()?;
-            let filename = parts.next()?.trim_start_matches('*');
+            let Some(hash) = parts.next() else {
+                continue;
+            };
+            let Some(filename) = parts.next().map(|s| s.trim_start_matches('*')) else {
+                continue;
+            };
 
-            if filename == asset_name {
+            if filename == asset_name
+                && hash.len() == 64
+                && hash.chars().all(|c| c.is_ascii_hexdigit())
+            {
                 return Some(hash.to_lowercase());
             }
         }

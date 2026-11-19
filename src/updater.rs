@@ -1,19 +1,35 @@
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
+use std::time::Duration;
+
 use anyhow::{anyhow, Result};
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 pub const GITHUB_REPO: &str = "grimztha/KabosuConverter";
-/// GitHub API base URL - externalized for potential testing, mirroring, or environment overrides.
+/// Default GitHub API base URL (can be overridden via `KABOSU_GITHUB_API_BASE` for testing/mirrors).
 pub const GITHUB_API_BASE: &str = "https://api.github.com";
 
+const USER_AGENT: &str = concat!("KabosuConverter/", env!("CARGO_PKG_VERSION"));
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const METADATA_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub fn github_api_base() -> String {
-    std::env::var("KABOSU_GITHUB_API_BASE")
-        .unwrap_or_else(|_| GITHUB_API_BASE.to_string())
+    std::env::var("KABOSU_GITHUB_API_BASE").unwrap_or_else(|_| GITHUB_API_BASE.to_string())
+}
+
+/// Builds an HTTP client configured with our user-agent and connection timeout.
+pub fn build_http_client(request_timeout: Option<Duration>) -> Result<Client> {
+    let mut builder = Client::builder()
+        .user_agent(USER_AGENT)
+        .connect_timeout(CONNECT_TIMEOUT);
+    if let Some(timeout) = request_timeout {
+        builder = builder.timeout(timeout);
+    }
+    Ok(builder.build()?)
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -34,12 +50,26 @@ pub struct GithubAsset {
     pub size: u64,
 }
 
-/// Checks the latest GitHub release for the repository.
-pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
-    let client = Client::builder()
-        .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
-        .build()?;
+/// Validates a remote release asset filename so it can never escape the download folder.
+pub fn sanitize_asset_filename(name: &str) -> Result<&str> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.contains('\0')
+        || trimmed.chars().any(char::is_control)
+        || crate::sanitize::is_windows_reserved_name(trimmed)
+    {
+        return Err(anyhow!("Refusing unsafe release asset filename: {:?}", name));
+    }
+    Ok(trimmed)
+}
 
+/// Queries the GitHub Releases API for the latest published release.
+pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
+    let client = build_http_client(Some(METADATA_TIMEOUT))?;
     let url = format!("{}/repos/{}/releases/latest", github_api_base(), repo);
     let res = client
         .get(&url)
@@ -56,17 +86,17 @@ pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
     Ok(release)
 }
 
-/// Parses a semver-like version string into (major, minor, patch).
+/// Parses a semver-like string (with optional leading `v`/`V`) into `(major, minor, patch)`.
 pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
-    let s = v.trim().trim_start_matches(|c| c == 'v' || c == 'V');
+    let s = v.trim().trim_start_matches(['v', 'V']);
     let mut parts = s.split(|c: char| !c.is_ascii_digit());
     let major = parts.next()?.parse().ok()?;
-    let minor = parts.next().unwrap_or("0").parse().ok().unwrap_or(0);
-    let patch = parts.next().unwrap_or("0").parse().ok().unwrap_or(0);
+    let minor = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let patch = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
     Some((major, minor, patch))
 }
 
-/// Returns true if remote version is strictly newer than current version.
+/// Returns true when `remote` is strictly newer than `current`.
 pub fn is_newer_version(current: &str, remote: &str) -> bool {
     match (parse_version(current), parse_version(remote)) {
         (Some(c), Some(r)) => r > c,
@@ -74,16 +104,17 @@ pub fn is_newer_version(current: &str, remote: &str) -> bool {
     }
 }
 
-/// Finds the best matching release asset for the current OS and architecture.
-pub fn find_platform_asset<'a>(assets: &'a [GithubAsset]) -> Option<&'a GithubAsset> {
+/// Picks the best matching release archive for the current OS and CPU architecture.
+pub fn find_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
     #[cfg(target_os = "windows")]
     {
-        assets.iter().find(|a| {
-            let n = a.name.to_lowercase();
-            n.contains("windows") && n.ends_with(".zip")
-        }).or_else(|| {
-            assets.iter().find(|a| a.name.to_lowercase().ends_with(".zip"))
-        })
+        assets
+            .iter()
+            .find(|a| {
+                let n = a.name.to_lowercase();
+                n.contains("windows") && n.ends_with(".zip")
+            })
+            .or_else(|| assets.iter().find(|a| a.name.to_lowercase().ends_with(".zip")))
     }
     #[cfg(target_os = "macos")]
     {
@@ -92,90 +123,105 @@ pub fn find_platform_asset<'a>(assets: &'a [GithubAsset]) -> Option<&'a GithubAs
         #[cfg(not(target_arch = "aarch64"))]
         let arch_match = "x86_64";
 
-        assets.iter().find(|a| {
-            let n = a.name.to_lowercase();
-            (n.contains("apple") || n.contains("darwin") || n.contains("macos"))
-                && n.contains(arch_match)
-                && (n.ends_with(".tar.gz") || n.ends_with(".zip"))
-        }).or_else(|| {
-            assets.iter().find(|a| {
+        assets
+            .iter()
+            .find(|a| {
                 let n = a.name.to_lowercase();
                 (n.contains("apple") || n.contains("darwin") || n.contains("macos"))
+                    && n.contains(arch_match)
                     && (n.ends_with(".tar.gz") || n.ends_with(".zip"))
             })
-        })
+            .or_else(|| {
+                assets.iter().find(|a| {
+                    let n = a.name.to_lowercase();
+                    (n.contains("apple") || n.contains("darwin") || n.contains("macos"))
+                        && (n.ends_with(".tar.gz") || n.ends_with(".zip"))
+                })
+            })
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         assets.iter().find(|a| {
             let n = a.name.to_lowercase();
-            (n.contains("linux") || n.contains("ubuntu")) && (n.ends_with(".tar.gz") || n.ends_with(".zip"))
+            (n.contains("linux") || n.contains("ubuntu"))
+                && (n.ends_with(".tar.gz") || n.ends_with(".zip"))
         })
     }
 }
 
-/// Computes the SHA-256 hash of a file, returning a lowercase hex string.
+/// Computes the lowercase hex SHA-256 digest of a file on disk.
 pub fn sha256_file(path: &Path) -> Result<String> {
+    use std::io::Read;
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 65536];
+    let mut buf = [0u8; 16 * 1024];
     loop {
-        let bytes_read = file.read(&mut buffer)?;
-        if bytes_read == 0 {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
             break;
         }
-        hasher.update(&buffer[..bytes_read]);
+        hasher.update(&buf[..n]);
     }
-    let result = hasher.finalize();
-    Ok(hex::encode(result).to_lowercase())
+    Ok(hex::encode(hasher.finalize()))
 }
 
-/// Verifies the SHA-256 hash of a downloaded file against the expected hash.
+/// Returns true if the file's SHA-256 digest matches `expected` (case-insensitive).
 pub fn verify_sha256(path: &Path, expected: &str) -> Result<bool> {
     let actual = sha256_file(path)?;
-    let expected_lower = expected.to_lowercase();
-    Ok(actual == expected_lower)
+    Ok(actual.eq_ignore_ascii_case(expected.trim()))
 }
 
-/// Attempts to discover the expected SHA-256 checksum for `target_asset_name` from GitHub release assets.
+/// Looks for a matching `.sha256` file or checksum manifest in `assets` and extracts the expected hash.
 pub async fn fetch_release_checksum(
     client: &Client,
     assets: &[GithubAsset],
     target_asset_name: &str,
 ) -> Option<String> {
+    let target_lower = target_asset_name.to_lowercase();
+    let expected_sha256 = format!("{}.sha256", target_lower);
+    let expected_sha256sum = format!("{}.sha256sum", target_lower);
+
     for asset in assets {
         let name_lower = asset.name.to_lowercase();
-        let is_target_checksum = name_lower == format!("{}.sha256", target_asset_name.to_lowercase())
-            || name_lower == format!("{}.sha256sum", target_asset_name.to_lowercase());
-        let is_manifest = name_lower == "sha256sums"
-            || name_lower == "checksums.sha256"
-            || name_lower == "checksums.txt";
+        let is_target_checksum =
+            name_lower == expected_sha256 || name_lower == expected_sha256sum;
+        let is_manifest = matches!(
+            name_lower.as_str(),
+            "sha256sums" | "checksums.sha256" | "checksums.txt"
+        );
 
-        if is_target_checksum || is_manifest {
-            if let Ok(res) = client.get(&asset.browser_download_url).send().await {
-                if res.status().is_success() {
-                    if let Ok(text) = res.text().await {
-                        if is_manifest {
-                            if let Some(hash) = crate::binaries::BinaryFetcher::find_hash_in_manifest(&text, target_asset_name) {
-                                return Some(hash);
-                            }
-                        } else {
-                            let trimmed = text.trim();
-                            let hash = trimmed.split_whitespace().next().unwrap_or(trimmed);
-                            if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
-                                return Some(hash.to_lowercase());
-                            }
-                        }
-                    }
-                }
+        if !(is_target_checksum || is_manifest) {
+            continue;
+        }
+
+        let Ok(res) = client.get(&asset.browser_download_url).send().await else {
+            continue;
+        };
+        if !res.status().is_success() {
+            continue;
+        }
+        let Ok(text) = res.text().await else {
+            continue;
+        };
+
+        if is_manifest {
+            if let Some(hash) =
+                crate::binaries::BinaryFetcher::find_hash_in_manifest(&text, target_asset_name)
+            {
+                return Some(hash);
+            }
+        } else {
+            let trimmed = text.trim();
+            let hash = trimmed.split_whitespace().next().unwrap_or(trimmed);
+            if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Some(hash.to_lowercase());
             }
         }
     }
     None
 }
 
-/// Streams download of the asset to destination path, reporting progress.
-/// If expected_hash is provided, verifies the download's SHA-256 hash.
+/// Streams a release asset to `dest_path`, verifying its SHA-256 digest if `expected_hash` is provided.
 pub async fn download_release_asset<F>(
     url: &str,
     dest_path: &Path,
@@ -185,9 +231,7 @@ pub async fn download_release_asset<F>(
 where
     F: Fn(f32, u64, u64) + Send + Sync + 'static,
 {
-    let client = Client::builder()
-        .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
-        .build()?;
+    let client = build_http_client(None)?;
 
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -211,11 +255,13 @@ where
         let chunk = match chunk_res {
             Ok(c) => c,
             Err(e) => {
+                drop(file);
                 let _ = std::fs::remove_file(&tmp_path);
                 return Err(anyhow!("Download stream failed: {}", e));
             }
         };
         if let Err(e) = file.write_all(&chunk) {
+            drop(file);
             let _ = std::fs::remove_file(&tmp_path);
             return Err(anyhow!("Failed writing update file: {}", e));
         }
@@ -230,17 +276,23 @@ where
     }
 
     if let Err(e) = file.flush() {
+        drop(file);
         let _ = std::fs::remove_file(&tmp_path);
         return Err(anyhow!("Failed flushing file: {}", e));
     }
     drop(file);
 
-    // Verify SHA-256 hash if provided
+    // Always propagate verification errors instead of silently accepting an unverified file.
     if let Some(hash) = expected_hash {
-        if let Ok(is_valid) = verify_sha256(&tmp_path, hash) {
-            if !is_valid {
+        match verify_sha256(&tmp_path, hash) {
+            Ok(true) => {}
+            Ok(false) => {
                 let _ = std::fs::remove_file(&tmp_path);
                 return Err(anyhow!("SHA-256 hash verification failed"));
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(anyhow!("Could not verify SHA-256 hash: {}", e));
             }
         }
     }
@@ -281,6 +333,25 @@ mod tests {
         assert!(is_newer_version("0.14.6", "0.14.7"));
         assert!(is_newer_version("0.14.6", "v0.15.0"));
         assert!(is_newer_version("0.14.6", "v1.0.0"));
+    }
+
+    #[test]
+    fn test_sanitize_asset_filename_blocks_traversal() {
+        assert_eq!(
+            sanitize_asset_filename("kabosu-converter-v0.15.0-x86_64-windows.zip").unwrap(),
+            "kabosu-converter-v0.15.0-x86_64-windows.zip"
+        );
+        assert!(sanitize_asset_filename("../evil.exe").is_err());
+        assert!(sanitize_asset_filename("..\\evil.exe").is_err());
+        assert!(sanitize_asset_filename("subdir/file.zip").is_err());
+        assert!(sanitize_asset_filename("CON.zip").is_err());
+        assert!(sanitize_asset_filename("").is_err());
+    }
+
+    #[test]
+    fn test_verify_sha256_missing_file_returns_err() {
+        let res = verify_sha256(Path::new("nonexistent_file_for_sha_test.bin"), "0".repeat(64).as_str());
+        assert!(res.is_err());
     }
 
     #[test]

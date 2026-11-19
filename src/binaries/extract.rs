@@ -117,6 +117,9 @@ impl BinaryExtractor {
 
         for i in 0..archive.len() {
             let file = archive.by_index(i)?;
+            if file.is_dir() {
+                continue;
+            }
             let raw_name = file.name()?.replace('\\', "/");
 
             if let Some(out_name) = Self::match_ffmpeg_entry(
@@ -175,6 +178,10 @@ impl BinaryExtractor {
             let entry = entry_res.map_err(|e| {
                 BinaryError::ArchiveExtraction(format!("Failed to read entry: {}", e))
             })?;
+            // Skip directories, symlinks, and other non-regular tar entries.
+            if !entry.header().entry_type().is_file() {
+                continue;
+            }
 
             let entry_path = entry.path().map_err(|e| {
                 BinaryError::ArchiveExtraction(format!("Invalid entry path: {}", e))

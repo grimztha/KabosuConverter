@@ -60,17 +60,20 @@ pub fn format_bytes_fast(bytes: u64) -> String {
     }
 }
 
-/// Recursively collects media files from a directory up to depth 4.
+/// Recursively collects media files from a directory up to depth 4, skipping symlinks.
 pub fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>, exts: &[&str]) {
     if depth > 4 {
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             let child = entry.path();
-            if child.is_dir() {
+            if file_type.is_dir() {
                 collect_media_files_from_dir(&child, depth + 1, out, exts);
-            } else if child.is_file() {
+            } else if file_type.is_file() {
                 if let Some(ext) = child.extension().and_then(|e| e.to_str()) {
                     if exts.iter().any(|&m| m.eq_ignore_ascii_case(ext)) {
                         out.push(child);
@@ -204,20 +207,41 @@ pub fn play_notification_sound() {
     }
 }
 
-/// Opens a web URL in the default system browser after validating protocol and safe characters.
+/// Opens an HTTP or HTTPS URL in the default system browser.
 pub fn open_url(url: &str) {
     let trimmed = url.trim();
     if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
         return;
     }
-    if trimmed.chars().any(|c| c.is_control() || ['&', '|', ';', '`', '^', '%', '"', '\''].contains(&c)) {
+    if trimmed.chars().any(|c| c.is_control() || c.is_ascii_whitespace()) {
         return;
     }
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", trimmed])
-            .spawn();
+        #[link(name = "shell32")]
+        extern "system" {
+            fn ShellExecuteW(
+                hwnd: *mut std::ffi::c_void,
+                lpOperation: *const u16,
+                lpFile: *const u16,
+                lpParameters: *const u16,
+                lpDirectory: *const u16,
+                nShowCmd: i32,
+            ) -> isize;
+        }
+        const SW_SHOWNORMAL: i32 = 1;
+        let op: Vec<u16> = "open\0".encode_utf16().collect();
+        let target: Vec<u16> = trimmed.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                op.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            );
+        }
     }
     #[cfg(target_os = "macos")]
     {

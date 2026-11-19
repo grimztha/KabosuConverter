@@ -1,23 +1,22 @@
-//! Input sanitization and validation for subprocess arguments, file paths, URLs, and filters.
-//!
-//! Provides secure validation and sanitization for all user-supplied values that are passed to
-//! external processes (FFmpeg, ffprobe, ffplay, yt-dlp) or used in file system operations.
+//! Input validation and sanitization for file paths, URLs, timecodes, and CLI arguments.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
-/// Windows reserved device names that cannot be used as filenames or stems.
+/// Device names reserved by Windows that cannot be used as file or folder stems.
 pub const WINDOWS_RESERVED_NAMES: &[&str] = &[
     "CON", "PRN", "AUX", "NUL",
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
-/// Maximum allowed path length across supported platforms.
+/// Upper bound on accepted file path lengths.
 pub const MAX_PATH_LENGTH: usize = 1024;
 
-/// Maximum allowed filename stem length.
+/// Maximum safe filename stem length in UTF-8 bytes (leaves room for suffixes and extensions within the 255-byte OS limit).
 pub const MAX_FILENAME_STEM_LENGTH: usize = 200;
+
+const MAX_TIMECODE_SECONDS: f64 = 24.0 * 60.0 * 60.0;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum SanitizeError {
@@ -61,93 +60,85 @@ pub enum SanitizeError {
     InvalidSubprocessArg(String),
 }
 
-/// Checks if a string (or stem) matches a Windows reserved device name case-insensitively.
+/// Returns true if the filename stem matches a reserved Windows device name (case-insensitive).
 pub fn is_windows_reserved_name(name: &str) -> bool {
     let clean = name.trim().trim_end_matches('.');
     let stem = clean.split('.').next().unwrap_or(clean);
-    WINDOWS_RESERVED_NAMES.iter().any(|&r| r.eq_ignore_ascii_case(stem))
+    WINDOWS_RESERVED_NAMES
+        .iter()
+        .any(|&reserved| reserved.eq_ignore_ascii_case(stem))
 }
 
-/// Validates and sanitizes a filename stem for safe use in output paths across all platforms.
+/// Cleans a filename stem so it is safe on Windows, macOS, and Linux.
 ///
-/// Strips characters forbidden in Windows / NTFS and POSIX filesystems, collapses redundant
-/// separators/underscores, prevents Windows reserved device names, and clamps length to prevent
-/// buffer/path truncation.
+/// Replaces forbidden path and control characters, collapses repeated underscores,
+/// enforces a safe UTF-8 byte cap, and prefixes reserved Windows device names.
 pub fn sanitize_filename_stem(name: &str) -> String {
-    // Replace characters that are problematic in filenames across platforms
-    let mut sanitized = name
-        .replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_")
-        .trim()
-        .to_string();
+    let mut sanitized = String::with_capacity(name.len().min(MAX_FILENAME_STEM_LENGTH));
+    let mut prev_underscore = false;
 
-    // Replace control characters with underscores
-    sanitized = sanitized
-        .chars()
-        .map(|c| if c.is_control() { '_' } else { c })
-        .collect();
+    for ch in name.trim().chars() {
+        let forbidden = matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+            || ch.is_control();
+        let mapped = if forbidden { '_' } else { ch };
 
-    // Collapse multiple underscores
-    while sanitized.contains("__") {
-        sanitized = sanitized.replace("__", "_");
+        if mapped == '_' {
+            if prev_underscore {
+                continue;
+            }
+            prev_underscore = true;
+        } else {
+            prev_underscore = false;
+        }
+        sanitized.push(mapped);
     }
 
-    // Trim leading/trailing underscores, whitespace, and dots
-    sanitized = sanitized
+    let mut trimmed = sanitized
         .trim_matches(|c: char| c == '_' || c == '.' || c.is_whitespace())
         .to_string();
 
-    // Clamp length to prevent OS filename limits (255 bytes max on most filesystems)
-    if sanitized.chars().count() > MAX_FILENAME_STEM_LENGTH {
-        sanitized = sanitized.chars().take(MAX_FILENAME_STEM_LENGTH).collect();
-        sanitized = sanitized.trim_end_matches(|c: char| c == '_' || c == '.').to_string();
+    // Clamp by UTF-8 byte length so multi-byte characters never break 255-byte filesystem limits.
+    if trimmed.len() > MAX_FILENAME_STEM_LENGTH {
+        let mut end = MAX_FILENAME_STEM_LENGTH;
+        while end > 0 && !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
+        trimmed.truncate(end);
+        trimmed = trimmed.trim_end_matches(['_', '.']).to_string();
     }
 
-    // If the name is empty, return a safe placeholder
-    if sanitized.is_empty() {
+    if trimmed.is_empty() {
         return "downloaded_media".to_string();
     }
 
-    // If the name is a reserved Windows device name, prefix with an underscore
-    if is_windows_reserved_name(&sanitized) {
-        return format!("_{}", sanitized);
+    if is_windows_reserved_name(&trimmed) {
+        return format!("_{}", trimmed);
     }
 
-    sanitized
+    trimmed
 }
 
-/// Validates a file path for safe use as a subprocess argument or filesystem path.
-///
-/// Ensures:
-/// 1. Path is not empty.
-/// 2. Path length does not exceed maximum bounds.
-/// 3. Path contains no null bytes (`\0`) or control characters.
-/// 4. Path components do not use reserved Windows device names (`CON`, `PRN`, `AUX`, etc.).
+/// Validates a path before passing it to the filesystem or external CLI tools.
 pub fn validate_path<P: AsRef<Path>>(path: P) -> Result<(), SanitizeError> {
-    let p = path.as_ref();
-    let s = p.to_string_lossy();
+    let s = path.as_ref().to_string_lossy();
 
     if s.trim().is_empty() {
         return Err(SanitizeError::EmptyPath);
     }
-
     if s.len() > MAX_PATH_LENGTH {
         return Err(SanitizeError::PathTooLong {
             actual: s.len(),
             max: MAX_PATH_LENGTH,
         });
     }
-
     if s.contains('\0') {
         return Err(SanitizeError::ContainsNull);
     }
-
     if s.chars().any(|c| c.is_control() && c != '\t') {
         return Err(SanitizeError::ControlCharacters);
     }
 
-    // Check components for Windows reserved device names across both '/' and '\\' separators.
-    // On Unix systems, '\\' is treated as a normal character by Path::components(),
-    // so splitting on both separators ensures consistent cross-platform protection.
+    // Split on both '/' and '\\' so Windows reserved device names are caught on Unix CI too.
     for part in s.split(['/', '\\']) {
         let trimmed = part.trim();
         if !trimmed.is_empty() && is_windows_reserved_name(trimmed) {
@@ -158,45 +149,35 @@ pub fn validate_path<P: AsRef<Path>>(path: P) -> Result<(), SanitizeError> {
     Ok(())
 }
 
-/// Determines if a path is absolute across platforms.
-///
-/// On Windows, checks standard Windows prefix rules. On Unix, checks standard POSIX root `/`
-/// as well as Windows drive letters (e.g., `C:\` or `C:/`) so that cross-platform paths
-/// are recognized consistently.
+/// Returns true if `path` is absolute on the current OS or starts with a Windows drive prefix (e.g. `C:\`).
 pub fn is_absolute_path(path: &Path) -> bool {
     if path.is_absolute() {
         return true;
     }
     let s = path.to_string_lossy();
     let bytes = s.as_bytes();
-    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes[2] == b'/' || bytes[2] == b'\\') {
-        return true;
-    }
-    false
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
 }
 
-/// Ensures an output path is strictly contained within the allowed output directory,
-/// preventing path traversal attacks.
+/// Verifies that `target` resolves inside `allowed_dir` without escaping via `..` traversal.
 pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathBuf, SanitizeError> {
     validate_path(target)?;
     validate_path(allowed_dir)?;
 
     #[cfg(not(windows))]
-    let (target_buf, allowed_buf): (PathBuf, PathBuf) = {
-        let t_str = target.to_string_lossy();
-        let a_str = allowed_dir.to_string_lossy();
-        (
-            if t_str.contains('\\') { PathBuf::from(t_str.replace('\\', "/")) } else { target.to_path_buf() },
-            if a_str.contains('\\') { PathBuf::from(a_str.replace('\\', "/")) } else { allowed_dir.to_path_buf() },
-        )
-    };
+    let (target_buf, allowed_buf) = (normalize_separators(target), normalize_separators(allowed_dir));
     #[cfg(windows)]
     let (target_buf, allowed_buf) = (target.to_path_buf(), allowed_dir.to_path_buf());
+
+    let cwd = || std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     let abs_allowed = if is_absolute_path(&allowed_buf) {
         allowed_buf.clone()
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(&allowed_buf)
+        cwd().join(&allowed_buf)
     };
 
     let abs_target = if is_absolute_path(&target_buf) {
@@ -205,13 +186,12 @@ pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathB
         if is_absolute_path(&allowed_buf) {
             target_buf
         } else {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(target_buf)
+            cwd().join(target_buf)
         }
     } else {
         abs_allowed.join(target_buf)
     };
 
-    // Normalize paths by removing `.` and evaluating `..` lexically
     let norm_target = normalize_lexically(&abs_target);
     let norm_allowed = normalize_lexically(&abs_allowed);
 
@@ -225,28 +205,28 @@ pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathB
     Ok(norm_target)
 }
 
-/// Normalizes path components lexically without touching the filesystem.
-///
-/// On Unix, treats `\\` as a path separator so that Windows-style paths (e.g. from configs
-/// or cross-platform tests) are decomposed and normalized identically across platforms.
+#[cfg(not(windows))]
+fn normalize_separators(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if s.contains('\\') {
+        PathBuf::from(s.replace('\\', "/"))
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// Resolves `.` and `..` components purely in memory without touching the filesystem.
 pub fn normalize_lexically(path: &Path) -> PathBuf {
     #[cfg(not(windows))]
-    let normalized = {
-        let s = path.to_string_lossy();
-        if s.contains('\\') {
-            PathBuf::from(s.replace('\\', "/"))
-        } else {
-            path.to_path_buf()
-        }
-    };
+    let normalized = normalize_separators(path);
     #[cfg(windows)]
     let normalized = path.to_path_buf();
 
     let mut out = PathBuf::new();
     for comp in normalized.components() {
         match comp {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
+            Component::CurDir => {}
+            Component::ParentDir => {
                 out.pop();
             }
             c => out.push(c.as_os_str()),
@@ -255,10 +235,7 @@ pub fn normalize_lexically(path: &Path) -> PathBuf {
     out
 }
 
-/// Validates a subprocess argument before passing it to `std::process::Command`.
-///
-/// Ensures no null bytes or raw control characters exist that could be misinterpreted
-/// by `CreateProcessW` on Windows or `execvp` on Unix.
+/// Checks that a CLI argument contains no null bytes or unexpected control characters.
 pub fn validate_subprocess_arg(arg: &str) -> Result<(), SanitizeError> {
     if arg.contains('\0') {
         return Err(SanitizeError::ContainsNull);
@@ -269,92 +246,69 @@ pub fn validate_subprocess_arg(arg: &str) -> Result<(), SanitizeError> {
     Ok(())
 }
 
-/// Validates a YouTube URL format.
-///
-/// Returns true only if the URL strictly matches a known YouTube URL pattern.
-/// Returns false for any non-YouTube URLs, unencrypted http:// schemes, or malformed queries.
-pub fn validate_youtube_url(url: &str) -> bool {
-    let url_trimmed = url.trim();
-    let url_lower = url_trimmed.to_lowercase();
+fn is_valid_youtube_id(id: &str, exact_len: Option<usize>, min_len: usize) -> bool {
+    let len_ok = match exact_len {
+        Some(len) => id.len() == len,
+        None => id.len() >= min_len,
+    };
+    len_ok && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
 
-    // Must start with https://
+fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    query
+        .split('&')
+        .find_map(|param| param.strip_prefix(key))
+}
+
+/// Returns true only when `url` matches a known HTTPS YouTube video, embed, music, or playlist URL.
+pub fn validate_youtube_url(url: &str) -> bool {
+    let url_lower = url.trim().to_lowercase();
     if !url_lower.starts_with("https://") {
         return false;
     }
 
-    // Short URL: https://youtu.be/VIDEO_ID
-    if url_lower.starts_with("https://youtu.be/") {
-        let path = &url_lower[17..];
-        let video_id = path.split(['/', '?', '&']).next().unwrap_or(path);
-        if video_id.len() != 11 {
-            return false;
-        }
-        return video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    }
-
-    // Standard URL: https://www.youtube.com/watch?v=VIDEO_ID or https://youtube.com/watch?v=VIDEO_ID
-    for prefix in &["https://www.youtube.com/watch?", "https://youtube.com/watch?"] {
-        if url_lower.starts_with(prefix) {
-            let query = &url_lower[prefix.len()..];
-            for param in query.split('&') {
-                if let Some(vid) = param.strip_prefix("v=") {
-                    let video_id = vid.split('&').next().unwrap_or(vid);
-                    if video_id.len() == 11 && video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                        return true;
-                    }
-                }
-            }
-            return false;
+    // Path-based video IDs (youtu.be and /embed/)
+    for prefix in [
+        "https://youtu.be/",
+        "https://www.youtube.com/embed/",
+        "https://youtube.com/embed/",
+    ] {
+        if let Some(rest) = url_lower.strip_prefix(prefix) {
+            let video_id = rest.split(['/', '?', '&']).next().unwrap_or(rest);
+            return is_valid_youtube_id(video_id, Some(11), 11);
         }
     }
 
-    // Embed URL: https://www.youtube.com/embed/VIDEO_ID
-    for prefix in &["https://www.youtube.com/embed/", "https://youtube.com/embed/"] {
-        if url_lower.starts_with(prefix) {
-            let path = &url_lower[prefix.len()..];
-            let video_id = path.split(['/', '?', '&']).next().unwrap_or(path);
-            if video_id.len() != 11 {
-                return false;
-            }
-            return video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    // Query-based watch URLs (?v=VIDEO_ID)
+    for prefix in [
+        "https://www.youtube.com/watch?",
+        "https://youtube.com/watch?",
+        "https://music.youtube.com/watch?",
+    ] {
+        if let Some(query) = url_lower.strip_prefix(prefix) {
+            return query_param(query, "v=")
+                .is_some_and(|id| is_valid_youtube_id(id, Some(11), 11));
         }
     }
 
-    // Music URL: https://music.youtube.com/watch?v=VIDEO_ID
-    if url_lower.starts_with("https://music.youtube.com/watch?") {
-        let query = &url_lower["https://music.youtube.com/watch?".len()..];
-        for param in query.split('&') {
-            if let Some(vid) = param.strip_prefix("v=") {
-                let video_id = vid.split('&').next().unwrap_or(vid);
-                if video_id.len() == 11 && video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // Playlist URL: https://www.youtube.com/playlist?list=LIST_ID
-    for prefix in &["https://www.youtube.com/playlist?", "https://youtube.com/playlist?"] {
-        if url_lower.starts_with(prefix) {
-            let query = &url_lower[prefix.len()..];
-            for param in query.split('&') {
-                if let Some(lid) = param.strip_prefix("list=") {
-                    let list_id = lid.split('&').next().unwrap_or(lid);
-                    return list_id.len() >= 12 && list_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-                }
-            }
-            return false;
+    // Playlist URLs (?list=LIST_ID)
+    for prefix in [
+        "https://www.youtube.com/playlist?",
+        "https://youtube.com/playlist?",
+    ] {
+        if let Some(query) = url_lower.strip_prefix(prefix) {
+            return query_param(query, "list=")
+                .is_some_and(|id| is_valid_youtube_id(id, None, 12));
         }
     }
 
     false
 }
 
-/// Validates a stream URL for safe passing to yt-dlp.
+/// Validates a stream URL before passing it to `yt-dlp`.
 ///
-/// Ensures the URL starts with https:// (or http:// for localhost), contains no command-line flag
-/// indicators (`-`), no control characters, and no shell metacharacters.
+/// Requires `http://` or `https://` and blocks flag injection, control characters,
+/// whitespace, and dangerous metacharacters while permitting standard query separators like `&`.
 pub fn validate_stream_url(url: &str) -> Result<(), SanitizeError> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
@@ -373,15 +327,15 @@ pub fn validate_stream_url(url: &str) -> Result<(), SanitizeError> {
             "Invalid stream URL: input cannot contain control characters".to_string(),
         ));
     }
-    if trimmed.chars().any(|c| c.is_whitespace()) {
+    if trimmed.chars().any(char::is_whitespace) {
         return Err(SanitizeError::InvalidUrl(
             "Invalid stream URL: input cannot contain whitespace".to_string(),
         ));
     }
 
-    // Reject dangerous shell metacharacters
-    let dangerous = [';', '&', '|', '$', '`', '<', '>', '"', '\'', '{', '}', '^'];
-    for ch in dangerous {
+    // Allow `&` for standard multi-parameter query strings; yt-dlp is invoked directly without a shell.
+    const DISALLOWED_URL_CHARS: &[char] = &[';', '|', '$', '`', '<', '>', '"', '\'', '{', '}', '^'];
+    for &ch in DISALLOWED_URL_CHARS {
         if trimmed.contains(ch) {
             return Err(SanitizeError::InvalidUrl(format!(
                 "URL contains disallowed character '{}'",
@@ -399,11 +353,7 @@ pub fn validate_stream_url(url: &str) -> Result<(), SanitizeError> {
     Ok(())
 }
 
-/// Validates a yt-dlp format specification string.
-///
-/// Only permits standard yt-dlp format selector characters:
-/// alphanumerics, `+`, `/`, `[`, `]`, `(`, `)`, `<=`, `>=`, `<`, `>`, `=`, `*`, `-`, `_`, `.`, `?`, `~`, `,`.
-/// Prevents shell injection or argument injection via format parameters.
+/// Checks that a `yt-dlp` format selector contains only valid selector syntax characters.
 pub fn validate_ytdlp_format_spec(spec: &str) -> bool {
     let trimmed = spec.trim();
     if trimmed.is_empty() || trimmed.len() > 256 {
@@ -418,10 +368,7 @@ pub fn validate_ytdlp_format_spec(spec: &str) -> bool {
     })
 }
 
-/// Validates and parses a timecode string for FFmpeg.
-///
-/// Accepts formats: `HH:MM:SS`, `HH:MM:SS.ms`, `MM:SS`, `MM:SS.ms`, or plain numeric seconds.
-/// Rejects negative seconds or durations exceeding 24 hours.
+/// Validates a timecode string and ensures it falls within `[0, 24h]`.
 pub fn validate_timecode(tc: &str) -> Result<(), SanitizeError> {
     let tc = tc.trim();
     if tc.is_empty() {
@@ -431,43 +378,46 @@ pub fn validate_timecode(tc: &str) -> Result<(), SanitizeError> {
     let seconds = parse_timecode_to_seconds(tc)
         .ok_or_else(|| SanitizeError::InvalidTimecode(tc.to_string()))?;
 
-    if seconds < 0.0 || seconds > 24.0 * 60.0 * 60.0 {
+    if !(0.0..=MAX_TIMECODE_SECONDS).contains(&seconds) {
         return Err(SanitizeError::TimecodeOutOfRange(seconds));
     }
 
     Ok(())
 }
 
-/// Parses a timecode string to seconds.
-///
-/// Accepts formats: `HH:MM:SS`, `HH:MM:SS.ms`, `MM:SS`, `MM:SS.ms`, or plain numeric seconds.
+/// Parses `HH:MM:SS(.ms)`, `MM:SS(.ms)`, or plain seconds into a finite non-negative `f64`.
 pub fn parse_timecode_to_seconds(tc: &str) -> Option<f64> {
     let tc = tc.trim();
     if tc.is_empty() {
         return None;
     }
 
-    // Try plain seconds first
-    if let Ok(secs) = tc.parse::<f64>() {
-        return if secs >= 0.0 { Some(secs) } else { None };
-    }
-
     let parts: Vec<&str> = tc.split(':').collect();
     match parts.len() {
+        1 => {
+            let secs: f64 = parts[0].trim().parse().ok()?;
+            (secs.is_finite() && secs >= 0.0).then_some(secs)
+        }
         2 => {
-            let min: f64 = parts[0].parse().ok()?;
-            let sec: f64 = parts[1].parse().ok()?;
-            if min >= 0.0 && sec >= 0.0 && sec < 60.0 {
+            let min: f64 = parts[0].trim().parse().ok()?;
+            let sec: f64 = parts[1].trim().parse().ok()?;
+            if min.is_finite() && sec.is_finite() && min >= 0.0 && (0.0..60.0).contains(&sec) {
                 Some(min * 60.0 + sec)
             } else {
                 None
             }
         }
         3 => {
-            let h: f64 = parts[0].parse().ok()?;
-            let m: f64 = parts[1].parse().ok()?;
-            let s: f64 = parts[2].parse().ok()?;
-            if h >= 0.0 && m >= 0.0 && m < 60.0 && s >= 0.0 && s < 60.0 {
+            let h: f64 = parts[0].trim().parse().ok()?;
+            let m: f64 = parts[1].trim().parse().ok()?;
+            let s: f64 = parts[2].trim().parse().ok()?;
+            if h.is_finite()
+                && m.is_finite()
+                && s.is_finite()
+                && h >= 0.0
+                && (0.0..60.0).contains(&m)
+                && (0.0..60.0).contains(&s)
+            {
                 Some(h * 3600.0 + m * 60.0 + s)
             } else {
                 None
@@ -477,26 +427,27 @@ pub fn parse_timecode_to_seconds(tc: &str) -> Option<f64> {
     }
 }
 
-/// Formats duration in seconds to HH:MM:SS string for display.
+/// Formats seconds as `HH:MM:SS`.
 pub fn format_duration_hms(seconds: f64) -> String {
-    let total_secs = seconds.max(0.0) as u64;
+    let total_secs = if seconds.is_finite() {
+        seconds.max(0.0) as u64
+    } else {
+        0
+    };
     let h = total_secs / 3600;
     let m = (total_secs % 3600) / 60;
     let s = total_secs % 60;
     format!("{:02}:{:02}:{:02}", h, m, s)
 }
 
-/// Validates an FFmpeg filter argument for safe use.
-///
-/// Ensures the filter string contains only safe filter syntax characters and contains
-/// no shell metacharacters or command injection primitives.
+/// Checks an FFmpeg filter expression for null bytes and unsafe metacharacters.
 pub fn validate_ffmpeg_filter(filter: &str) -> Result<(), SanitizeError> {
     if filter.contains('\0') {
         return Err(SanitizeError::ContainsNull);
     }
 
-    let dangerous = [';', '&', '|', '$', '`', '{', '}', '!'];
-    for ch in dangerous {
+    const DANGEROUS_FILTER_CHARS: &[char] = &[';', '&', '|', '$', '`', '{', '}', '!'];
+    for &ch in DANGEROUS_FILTER_CHARS {
         if filter.contains(ch) {
             return Err(SanitizeError::DangerousFilterChar(ch));
         }
@@ -505,9 +456,9 @@ pub fn validate_ffmpeg_filter(filter: &str) -> Result<(), SanitizeError> {
     Ok(())
 }
 
-/// Validates a numeric value is within a safe range for FFmpeg arguments.
+/// Checks that a numeric value is finite and within `[min, max]`.
 pub fn validate_numeric_range(value: f64, min: f64, max: f64) -> Result<(), SanitizeError> {
-    if value < min || value > max || value.is_nan() {
+    if !value.is_finite() || value < min || value > max {
         return Err(SanitizeError::NumericOutOfRange {
             value: value.to_string(),
             min: min.to_string(),
@@ -517,8 +468,7 @@ pub fn validate_numeric_range(value: f64, min: f64, max: f64) -> Result<(), Sani
     Ok(())
 }
 
-/// Masks a portion of a string, showing only the first `visible` and last `visible` characters.
-/// Useful for hiding secrets or sensitive portions of strings in logs.
+/// Masks the middle of a string, leaving `visible` characters at each end for safe logging.
 pub fn mask_sensitive(value: &str, visible: usize) -> String {
     let value_len = value.chars().count();
     if value_len <= visible * 2 {
@@ -529,24 +479,29 @@ pub fn mask_sensitive(value: &str, visible: usize) -> String {
     format!("{}...{}", first, last)
 }
 
-/// Redacts sensitive query parameters (such as tokens, signatures, keys) from a URL for logging.
+/// Replaces sensitive query values (tokens, signatures, keys, passwords) with `[REDACTED]` for logs.
 pub fn redact_url_query(url: &str) -> String {
-    if let Some((base, query)) = url.split_once('?') {
-        let sensitive_keys = ["token", "sig", "signature", "key", "auth", "secret", "session", "pass"];
-        let mut sanitized_params = Vec::new();
-        for param in query.split('&') {
+    const SENSITIVE_KEYS: &[&str] = &[
+        "token", "sig", "signature", "key", "auth", "secret", "session", "pass",
+    ];
+
+    let Some((base, query)) = url.split_once('?') else {
+        return url.to_string();
+    };
+
+    let sanitized_params: Vec<String> = query
+        .split('&')
+        .map(|param| {
             if let Some((k, _)) = param.split_once('=') {
-                if sensitive_keys.iter().any(|&s| k.eq_ignore_ascii_case(s)) {
-                    sanitized_params.push(format!("{}=[REDACTED]", k));
-                    continue;
+                if SENSITIVE_KEYS.iter().any(|&s| k.eq_ignore_ascii_case(s)) {
+                    return format!("{}=[REDACTED]", k);
                 }
             }
-            sanitized_params.push(param.to_string());
-        }
-        format!("{}?{}", base, sanitized_params.join("&"))
-    } else {
-        url.to_string()
-    }
+            param.to_string()
+        })
+        .collect();
+
+    format!("{}?{}", base, sanitized_params.join("&"))
 }
 
 #[cfg(test)]
@@ -585,6 +540,13 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_filename_stem_multibyte_byte_cap() {
+        let long_cjk = "動画テスト".repeat(60);
+        let sanitized = sanitize_filename_stem(&long_cjk);
+        assert!(sanitized.len() <= MAX_FILENAME_STEM_LENGTH);
+    }
+
+    #[test]
     fn test_validate_path_basic() {
         assert!(validate_path("C:\\Users\\test\\file.mp4").is_ok());
         assert!(validate_path("/home/user/file.mp4").is_ok());
@@ -598,7 +560,6 @@ mod tests {
 
     #[test]
     fn test_ensure_path_within_dir() {
-        // Windows-style paths
         let base_win = Path::new("C:\\Users\\test\\output");
         let safe_win = Path::new("C:\\Users\\test\\output\\video.mp4");
         assert!(ensure_path_within_dir(safe_win, base_win).is_ok());
@@ -606,7 +567,6 @@ mod tests {
         let traversal_win = Path::new("C:\\Users\\test\\output\\..\\windows\\system32.exe");
         assert!(ensure_path_within_dir(traversal_win, base_win).is_err());
 
-        // Unix-style paths
         let base_unix = Path::new("/home/user/output");
         let safe_unix = Path::new("/home/user/output/video.mp4");
         assert!(ensure_path_within_dir(safe_unix, base_unix).is_ok());
@@ -614,7 +574,6 @@ mod tests {
         let traversal_unix = Path::new("/home/user/output/../system/secret");
         assert!(ensure_path_within_dir(traversal_unix, base_unix).is_err());
 
-        // Relative paths
         let base_rel = Path::new("output_folder");
         let safe_rel = Path::new("output_folder/video.mp4");
         assert!(ensure_path_within_dir(safe_rel, base_rel).is_ok());
@@ -649,6 +608,7 @@ mod tests {
     #[test]
     fn test_validate_stream_url() {
         assert!(validate_stream_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ").is_ok());
+        assert!(validate_stream_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s&list=PL1234567890ab").is_ok());
         assert!(validate_stream_url("https://example.com/stream.m3u8").is_ok());
         assert!(validate_stream_url("-flag").is_err());
         assert!(validate_stream_url("https://example.com/video; rm -rf /").is_err());
@@ -673,6 +633,8 @@ mod tests {
         assert_eq!(parse_timecode_to_seconds("00:01:05").unwrap(), 65.0);
         assert_eq!(parse_timecode_to_seconds("01:00:00").unwrap(), 3600.0);
         assert!(parse_timecode_to_seconds("invalid").is_none());
+        assert!(parse_timecode_to_seconds("inf").is_none());
+        assert!(parse_timecode_to_seconds("NaN").is_none());
     }
 
     #[test]

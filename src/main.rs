@@ -191,7 +191,11 @@ fn main() -> Result<()> {
     let active_ytdlp_cancel = Arc::new(AtomicBool::new(false));
     let playback_timer = Rc::new(RefCell::new(slint::Timer::default()));
     let meter_timer = Rc::new(RefCell::new(slint::Timer::default()));
-    let last_audio_restart = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
+    let last_audio_restart = Arc::new(Mutex::new(
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(1))
+            .unwrap_or_else(std::time::Instant::now),
+    ));
 
     // Spawn preview frame background worker
     workers::spawn_preview_worker(
@@ -345,11 +349,8 @@ fn main() -> Result<()> {
                     tabs_start = if expanded { 320.0 } else { 58.0 };
                     tabs_end = tabs_start + 340.0;
                 }
-                // If inside tabs pill, return false so tab switching is not blocked
-                if x_logical >= tabs_start && x_logical <= tabs_end {
-                    return false;
-                }
-                true
+                // Keep the tab switcher clickable instead of treating it as a draggable titlebar.
+                !(tabs_start..=tabs_end).contains(&x_logical)
             } else {
                 true
             }

@@ -227,6 +227,7 @@ export component QueuePanel inherits Rectangle {
                                         btn_width: 20px;
                                         btn_height: 20px;
                                         hover_bg: Theme.accent_red.with-alpha(0.2);
+                                        is_disabled: AppData.is_processing;
                                         clicked => {
                                             AppLogic.remove_file(idx);
                                             root.request_focus();
@@ -273,7 +274,7 @@ export component QueuePanel inherits Rectangle {
                         hover_color: root.confirm_clear ? Theme.accent_red_hover : Theme.btn_neutral_hover;
                         text_color: root.confirm_clear ? #ffffff : Theme.btn_neutral_text;
                         font_size: Theme.font_badge;
-                        is_disabled: AppData.queue.length == 0;
+                        is_disabled: AppData.queue.length == 0 || AppData.is_processing;
                         clicked => {
                             if root.confirm_clear {
                                 root.confirm_clear = false;

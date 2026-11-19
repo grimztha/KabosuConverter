@@ -4,12 +4,21 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
-use kabosu_converter::ffmpeg::{format_duration_hms, probe_file};
+use kabosu_converter::ffmpeg::format_duration_hms;
+use kabosu_converter::sanitize::redact_url_query;
 use kabosu_converter::ytdlp;
 use crate::context::AppContext;
-use crate::handlers::queue::{load_selected_file, process_incoming_paths};
+use crate::handlers::queue::{load_selected_file, probe_to_queue_file, process_incoming_paths};
 use crate::utils::{get_clipboard_string, normalize_path_for_explorer, open_folder_in_explorer};
 use crate::{AppData, AppLogic, DownloadHistoryItem, MainWindow, QueueFile};
+
+fn resolve_ytdlp_binary(cached: &Option<PathBuf>) -> Option<PathBuf> {
+    cached
+        .as_ref()
+        .filter(|p| p.is_file())
+        .cloned()
+        .or_else(ytdlp::find_ytdlp_binary)
+}
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
     // Handle yt-dlp URL Changed
@@ -145,7 +154,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
-            let bin_path = match ytdlp_bin_arc.as_ref().clone().or_else(ytdlp::find_ytdlp_binary) {
+            let bin_path = match resolve_ytdlp_binary(ytdlp_bin_arc.as_ref()) {
                 Some(p) => p,
                 None => {
                     data.set_ytdlp_has_error(true);
@@ -210,8 +219,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 }
                             }
                             Err(e) => {
+                                let safe_err = redact_url_query(&e.to_string());
                                 data.set_ytdlp_has_error(true);
-                                data.set_ytdlp_error_message(SharedString::from(format!("{}", e)));
+                                data.set_ytdlp_error_message(SharedString::from(safe_err));
                                 data.set_ytdlp_status_message(SharedString::from(
                                     "Discovery failed. Check URL and try again.",
                                 ));
@@ -247,7 +257,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 return;
             }
 
-            let bin_path = match ytdlp_bin_arc.as_ref().clone().or_else(ytdlp::find_ytdlp_binary) {
+            let bin_path = match resolve_ytdlp_binary(ytdlp_bin_arc.as_ref()) {
                 Some(p) => p,
                 None => {
                     data.set_ytdlp_has_error(true);
@@ -258,7 +268,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 }
             };
 
-            let selected_idx = data.get_ytdlp_selected_format_index() as usize;
+            let selected_idx = usize::try_from(data.get_ytdlp_selected_format_index()).unwrap_or(0);
             let format_opt = {
                 let store = options_store.lock().unwrap_or_else(|e| e.into_inner());
                 if selected_idx < store.len() {
@@ -427,11 +437,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     data.set_ytdlp_history(ModelRc::new(VecModel::from(history_vec)));
                                 }
                                 Err(e) => {
+                                    let safe_err = redact_url_query(&e.to_string());
                                     data.set_ytdlp_has_error(true);
-                                    data.set_ytdlp_error_message(SharedString::from(format!("{}", e)));
+                                    data.set_ytdlp_error_message(SharedString::from(&safe_err));
                                     data.set_ytdlp_status_message(SharedString::from(format!(
                                         "Download failed: {}",
-                                        e
+                                        safe_err
                                     )));
                                 }
                             }
@@ -441,11 +452,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             );
 
             if let Err(e) = job {
+                let safe_err = redact_url_query(&e.to_string());
                 data.set_ytdlp_is_downloading(false);
                 data.set_ytdlp_has_error(true);
                 data.set_ytdlp_error_message(SharedString::from(format!(
                     "Failed to start download: {}",
-                    e
+                    safe_err
                 )));
             }
         });
@@ -503,68 +515,15 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             let task_ctx_c = task_ctx.clone();
 
             thread::spawn(move || {
-                let file_name = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                let (file_size_formatted, resolution, duration, codecs, duration_seconds, is_video, is_audio, vw, vh) =
-                    match probe_file(&path, &bins_c.ffprobe) {
-                        Ok(meta) => {
-                            let codecs = meta.codecs_summary();
-                            let is_video = meta.primary_video().is_some();
-                            let is_audio = meta.primary_audio().is_some();
-                            let (vw, vh) = meta
-                                .primary_video()
-                                .map(|v| (v.width as i32, v.height as i32))
-                                .unwrap_or((0, 0));
-                            (
-                                meta.file_size_formatted(),
-                                meta.resolution_str(),
-                                meta.duration_formatted,
-                                codecs,
-                                meta.duration_seconds as f32,
-                                is_video,
-                                is_audio,
-                                vw,
-                                vh,
-                            )
-                        }
-                        Err(_) => (
-                            "Unknown size".to_string(),
-                            "Unknown".to_string(),
-                            "00:00.000".to_string(),
-                            "Unknown".to_string(),
-                            0.0,
-                            false,
-                            false,
-                            0,
-                            0,
-                        ),
-                    };
+                let mut item = probe_to_queue_file(&path, &bins_c.ffprobe);
 
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_w.upgrade() {
                         let app_data = ui.global::<AppData>();
                         let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
-                        let item = QueueFile {
-                            id: list.len() as i32,
-                            file_name: SharedString::from(file_name),
-                            file_path: SharedString::from(file_path_str),
-                            file_size_formatted: SharedString::from(file_size_formatted),
-                            resolution: SharedString::from(resolution),
-                            duration: SharedString::from(duration),
-                            codecs: SharedString::from(codecs),
-                            status: SharedString::from("Ready"),
-                            progress: 0.0,
-                            duration_seconds,
-                            is_video,
-                            is_audio,
-                            video_width: vw,
-                            video_height: vh,
-                        };
+                        let idx = list.len() as i32;
+                        item.id = idx;
                         list.push(item.clone());
-                        let idx = (list.len() - 1) as i32;
                         app_data.set_queue(ModelRc::new(VecModel::from(list)));
                         app_data.set_selected_file_index(idx);
                         load_selected_file(&app_data, &item, &task_ctx_c);
@@ -607,10 +566,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         let task_ctx = ctx.task_context();
 
         ui.global::<AppLogic>().on_ytdlp_add_history_item_to_queue(move |idx| {
+            let Ok(idx) = usize::try_from(idx) else {
+                return;
+            };
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
                 let history = app_data.get_ytdlp_history();
-                let idx = idx as usize;
                 if idx < history.row_count() {
                     if let Some(item) = history.row_data(idx) {
                         let path = PathBuf::from(item.file_path.as_str());
@@ -636,9 +597,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_open_history_item(move |idx| {
+            let Ok(idx) = usize::try_from(idx) else {
+                return;
+            };
             if let Some(ui) = ui_handle.upgrade() {
                 let history = ui.global::<AppData>().get_ytdlp_history();
-                let idx = idx as usize;
                 if idx < history.row_count() {
                     if let Some(item) = history.row_data(idx) {
                         let path = PathBuf::from(item.file_path.as_str());
@@ -653,9 +616,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_remove_history_item(move |idx| {
+            let Ok(idx) = usize::try_from(idx) else {
+                return;
+            };
             if let Some(ui) = ui_handle.upgrade() {
                 let history = ui.global::<AppData>().get_ytdlp_history();
-                let idx = idx as usize;
                 if idx < history.row_count() {
                     let mut list: Vec<DownloadHistoryItem> = (0..history.row_count())
                         .filter_map(|i| history.row_data(i))

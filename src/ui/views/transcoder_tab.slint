@@ -470,7 +470,7 @@ export component TranscoderTab inherits ScrollView {
                                         minimum: 0;
                                         maximum: 51;
                                         value <=> AppData.crf_value;
-                                        changed(_) => { AppLogic.save_settings(); }
+                                        released(_) => { AppLogic.save_settings(); }
                                     }
                                     Rectangle {
                                         width: 54px;

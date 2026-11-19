@@ -129,7 +129,7 @@ fn test_titlebar_drag_and_window_controls() {
         tabs_start_expanded
     );
     assert!(
-        tabs_start_expanded >= 300.0 && tabs_start_expanded <= 330.0,
+        (300.0..=330.0).contains(&tabs_start_expanded),
         "When queue panel is expanded, tabs should start around 321px (got {})",
         tabs_start_expanded
     );

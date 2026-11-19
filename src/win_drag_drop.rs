@@ -208,18 +208,20 @@ unsafe extern "system" fn add_ref(this: *mut DropTargetCom) -> u32 {
     (*this).ref_count.fetch_add(1, Ordering::SeqCst) + 1
 }
 
-/// Decrement COM reference count.
-/// Keeps the drop target alive while subclass hooks remain attached.
+/// Decrement COM reference count, clamped to at least 1 while subclass hooks stay attached.
 unsafe extern "system" fn release(this: *mut DropTargetCom) -> u32 {
     if this.is_null() {
         return 0;
     }
-    let prev = (*this).ref_count.load(Ordering::SeqCst);
-    if prev > 1 {
-        (*this).ref_count.fetch_sub(1, Ordering::SeqCst) - 1
-    } else {
-        1
+    let count = &(*this).ref_count;
+    let mut cur = count.load(Ordering::SeqCst);
+    while cur > 1 {
+        match count.compare_exchange_weak(cur, cur - 1, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => return cur - 1,
+            Err(actual) => cur = actual,
+        }
     }
+    cur
 }
 
 unsafe extern "system" fn drag_enter(
@@ -265,7 +267,7 @@ unsafe extern "system" fn drop(
         *pdw_effect = DROPEFFECT_COPY;
     }
 
-    if !p_data_obj.is_null() {
+    if !this.is_null() && !p_data_obj.is_null() {
         let fmt = FORMATETC {
             cf_format: CF_HDROP,
             ptd: std::ptr::null_mut(),
@@ -280,8 +282,11 @@ unsafe extern "system" fn drop(
             p_unk_for_release: std::ptr::null_mut(),
         };
 
-        // IDataObject::GetData is at vtable index 3
+        // IDataObject::GetData is at vtable index 3.
         let vtable_ptr = *(p_data_obj as *const *const usize);
+        if vtable_ptr.is_null() {
+            return S_OK;
+        }
         let get_data_fn: unsafe extern "system" fn(
             *mut std::ffi::c_void,
             *const FORMATETC,
@@ -398,8 +403,11 @@ extern "system" {
 
 #[link(name = "kernel32")]
 extern "system" {
-    fn GetModuleHandleA(lpModuleName: *const u8) -> *mut std::ffi::c_void;
-    fn GetProcAddress(hModule: *mut std::ffi::c_void, lpProcName: *const u8) -> *mut std::ffi::c_void;
+    fn GetModuleHandleA(lpModuleName: *const std::ffi::c_char) -> *mut std::ffi::c_void;
+    fn GetProcAddress(
+        hModule: *mut std::ffi::c_void,
+        lpProcName: *const std::ffi::c_char,
+    ) -> *mut std::ffi::c_void;
 }
 
 #[link(name = "dwmapi")]
@@ -494,7 +502,9 @@ pub fn set_titlebar_double_click_handler<F>(f: F)
 where
     F: Fn() + Send + Sync + 'static,
 {
-    let mut guard = TITLEBAR_DOUBLE_CLICK_CB.lock().unwrap();
+    let mut guard = TITLEBAR_DOUBLE_CLICK_CB
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     *guard = Some(Box::new(f));
 }
 
@@ -502,12 +512,16 @@ pub fn set_titlebar_hit_test<F>(f: F)
 where
     F: Fn(f32) -> bool + Send + Sync + 'static,
 {
-    let mut guard = TITLEBAR_HIT_TEST_CB.lock().unwrap();
+    let mut guard = TITLEBAR_HIT_TEST_CB
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     *guard = Some(Box::new(f));
 }
 
 pub fn trigger_titlebar_double_click() {
-    let guard = TITLEBAR_DOUBLE_CLICK_CB.lock().unwrap();
+    let guard = TITLEBAR_DOUBLE_CLICK_CB
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     if let Some(ref cb) = *guard {
         cb();
     }
@@ -518,9 +532,9 @@ pub unsafe fn get_window_dpi(hwnd: *mut std::ffi::c_void) -> u32 {
     static DPI_FN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
     let mut ptr = DPI_FN.load(Ordering::Relaxed);
     if ptr == usize::MAX {
-        let mod_user32 = GetModuleHandleA(b"user32.dll\0".as_ptr());
+        let mod_user32 = GetModuleHandleA(c"user32.dll".as_ptr());
         let sym = if !mod_user32.is_null() {
-            GetProcAddress(mod_user32, b"GetDpiForWindow\0".as_ptr())
+            GetProcAddress(mod_user32, c"GetDpiForWindow".as_ptr())
         } else {
             std::ptr::null_mut()
         };
@@ -557,8 +571,7 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
         return false;
     }
 
-    // When unmaximized, preserve the 6px logical top and left resize border so
-    // Slint/Winit North, NorthWest, and West window edge resizing works normally.
+    // Keep the 6px top/left resize border active while unmaximized.
     if IsZoomed(hwnd) == 0 {
         let resize_border = (6.0 * scale) as i32;
         if y < resize_border || x < resize_border {
@@ -566,8 +579,7 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
         }
     }
 
-    // Window controls (minimize, maximize, close) are at the right edge:
-    // 3 buttons * 46px = 138px (+ a small buffer of 4px = 142px)
+    // Exclude the right-edge window controls (3 x 46px + 4px buffer).
     let controls_width = (142.0 * scale) as i32;
     if x >= client_width - controls_width {
         return false;
@@ -575,9 +587,10 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
 
     let x_logical = x as f32 / scale;
 
-    // Consult the registered hit test predicate if available
     let custom_hit = {
-        let guard = TITLEBAR_HIT_TEST_CB.lock().unwrap();
+        let guard = TITLEBAR_HIT_TEST_CB
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         guard.as_ref().map(|f| f(x_logical))
     };
 
@@ -585,13 +598,8 @@ pub unsafe fn is_titlebar_hit(hwnd: *mut std::ffi::c_void, x: i32, y: i32) -> bo
         return hit;
     }
 
-    // Default heuristic if no predicate registered:
-    // Brand identity (< 55px) and flexible area (> 670px) are always titlebar.
-    if x_logical < 55.0 || x_logical > 670.0 {
-        return true;
-    }
-
-    false
+    // Default fallback: left brand mark (< 55px) and right flexible space (> 670px).
+    x_logical < 55.0 || x_logical > 670.0
 }
 
 static IN_SIZE_MOVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

@@ -15,6 +15,63 @@ use crate::handlers::timeline::update_trim_indicators;
 use crate::utils::{collect_media_files_from_dir, format_bytes_fast};
 use crate::{AppData, AppLogic, MainWindow, QueueFile};
 
+/// Probes a media file and returns a populated `QueueFile` entry ready for the queue.
+pub fn probe_to_queue_file(path: &std::path::Path, ffprobe_bin: &std::path::Path) -> QueueFile {
+    let file_name = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let file_path = path.to_string_lossy().to_string();
+
+    match probe_file(path, ffprobe_bin) {
+        Ok(meta) => {
+            let codecs = meta.codecs_summary();
+            let is_video = meta.primary_video().is_some();
+            let is_audio = meta.primary_audio().is_some();
+            let (vw, vh) = meta
+                .primary_video()
+                .map(|v| (v.width as i32, v.height as i32))
+                .unwrap_or((0, 0));
+            QueueFile {
+                id: 0,
+                file_name: SharedString::from(file_name),
+                file_path: SharedString::from(file_path),
+                file_size_formatted: SharedString::from(meta.file_size_formatted()),
+                resolution: SharedString::from(meta.resolution_str()),
+                duration: SharedString::from(meta.duration_formatted),
+                codecs: SharedString::from(codecs),
+                status: SharedString::from("Ready"),
+                progress: 0.0,
+                duration_seconds: meta.duration_seconds as f32,
+                is_video,
+                is_audio,
+                video_width: vw,
+                video_height: vh,
+            }
+        }
+        Err(_) => {
+            let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+            QueueFile {
+                id: 0,
+                file_name: SharedString::from(file_name),
+                file_path: SharedString::from(file_path),
+                file_size_formatted: SharedString::from(format_bytes_fast(size_bytes)),
+                resolution: SharedString::from("Unknown"),
+                duration: SharedString::from("00:00.000"),
+                codecs: SharedString::from("Unknown"),
+                status: SharedString::from("Ready"),
+                progress: 0.0,
+                duration_seconds: 0.0,
+                is_video: false,
+                is_audio: false,
+                video_width: 0,
+                video_height: 0,
+            }
+        }
+    }
+}
+
 pub fn load_selected_file(app_data: &AppData, item: &QueueFile, ctx: &TaskContext) {
     app_data.set_selected_file_name(item.file_name.clone());
     app_data.set_selected_file_path(item.file_path.clone());
@@ -339,6 +396,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         ui.global::<AppLogic>().on_remove_file(move |index| {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
+                if app_data.get_is_processing() {
+                    return;
+                }
                 let mut list: Vec<QueueFile> = app_data.get_queue().iter().collect();
                 if index >= 0 && (index as usize) < list.len() {
                     list.remove(index as usize);
@@ -385,6 +445,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         ui.global::<AppLogic>().on_clear_queue(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
+                if app_data.get_is_processing() {
+                    return;
+                }
                 ctx.stop_active_playback(&app_data);
 
                 app_data.set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));

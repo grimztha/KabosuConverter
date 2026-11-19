@@ -139,15 +139,21 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                         };
 
                         if stdout.read_exact(&mut buf).is_err() {
-                            let ui_w2 = ui_w.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_w2.upgrade() {
-                                    let app_data = ui.global::<AppData>();
-                                    app_data.set_player_is_playing(false);
-                                    app_data.set_player_current_time(final_time as f32);
-                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
-                                }
-                            });
+                            if session_check.load(Ordering::SeqCst) == my_session {
+                                let ui_w2 = ui_w.clone();
+                                let session_ui = session_check.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if session_ui.load(Ordering::SeqCst) != my_session {
+                                        return;
+                                    }
+                                    if let Some(ui) = ui_w2.upgrade() {
+                                        let app_data = ui.global::<AppData>();
+                                        app_data.set_player_is_playing(false);
+                                        app_data.set_player_current_time(final_time as f32);
+                                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
+                                    }
+                                });
+                            }
                             break;
                         }
 
@@ -213,20 +219,26 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                         let has_reached_end = current_master_time >= dur_sec || frame_target_sec >= dur_sec;
 
                         if has_reached_out || has_reached_end {
-                            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
-                            pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
+                            if session_check.load(Ordering::SeqCst) == my_session {
+                                let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
+                                pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
 
-                            let ui_w2 = ui_w.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_w2.upgrade() {
-                                    let app_data = ui.global::<AppData>();
-                                    let img = slint::Image::from_rgba8(pixel_buffer);
-                                    app_data.set_preview_frame(img);
-                                    app_data.set_player_is_playing(false);
-                                    app_data.set_player_current_time(final_time as f32);
-                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
-                                }
-                            });
+                                let ui_w2 = ui_w.clone();
+                                let session_ui = session_check.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if session_ui.load(Ordering::SeqCst) != my_session {
+                                        return;
+                                    }
+                                    if let Some(ui) = ui_w2.upgrade() {
+                                        let app_data = ui.global::<AppData>();
+                                        let img = slint::Image::from_rgba8(pixel_buffer);
+                                        app_data.set_preview_frame(img);
+                                        app_data.set_player_is_playing(false);
+                                        app_data.set_player_current_time(final_time as f32);
+                                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
+                                    }
+                                });
+                            }
                             break;
                         }
 
@@ -234,7 +246,7 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
 
                         frame_index += 1;
 
-                        // Drop late frame (> 40ms) to stay in sync with audio
+                        // Drop late frames (> 40ms behind audio) to stay in sync.
                         if diff < -0.040 {
                             continue;
                         }
@@ -252,7 +264,11 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                         pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
 
                         let ui_w2 = ui_w.clone();
+                        let session_ui = session_check.clone();
                         let _ = slint::invoke_from_event_loop(move || {
+                            if session_ui.load(Ordering::SeqCst) != my_session {
+                                return;
+                            }
                             if let Some(ui) = ui_w2.upgrade() {
                                 let app_data = ui.global::<AppData>();
                                 if app_data.get_player_is_playing() {

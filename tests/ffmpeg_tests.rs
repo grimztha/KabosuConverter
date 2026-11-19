@@ -1686,3 +1686,164 @@ fn test_audio_codec_choice_index_mapping() {
     assert_eq!(AudioCodecChoice::WavPCM16.to_index(), 4);
     assert_eq!(AudioCodecChoice::Copy.to_index(), 5);
 }
+
+#[test]
+fn test_audio_fade_in_and_out_command_generation() {
+    use kabosu_converter::ffmpeg::{build_preview_afade_filters, AudioFadePreview};
+
+    let ffmpeg_bin = Path::new("ffmpeg.exe");
+    let config = EncodeJobConfig {
+        function: EncoderFunction::Transcode,
+        input_path: "input.mp4".to_string(),
+        output_path: "output.mp4".to_string(),
+        video_codec: VideoCodec::H264,
+        hw_accel: HwAccel::Cpu,
+        audio_codec: AudioCodecChoice::Copy, // Must promote to AAC when fade is active
+        audio_gain_db: Some(3.0),
+        normalize_lufs: Some(-16.0),
+        audio_fade_in_sec: Some(2.5),
+        audio_fade_out_sec: Some(3.25),
+        effective_duration_sec: Some(20.0),
+        in_point: Some("00:00:05.000".to_string()),
+        out_point: Some("00:00:25.000".to_string()),
+        ..Default::default()
+    };
+
+    let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
+    let af_idx = cmd.iter().position(|r| r == "-af").expect("-af must be present");
+    let af = &cmd[af_idx + 1];
+
+    let vol_pos = af.find("volume=3.0dB").expect("volume filter missing");
+    let norm_pos = af.find("loudnorm=").expect("loudnorm filter missing");
+    let fade_in_pos = af
+        .find("afade=t=in:st=0.000:d=2.500:curve=qsin")
+        .expect("fade-in filter missing");
+    let fade_out_pos = af
+        .find("afade=t=out:st=16.750:d=3.250:curve=qsin")
+        .expect("fade-out filter missing");
+
+    assert!(
+        vol_pos < fade_in_pos && norm_pos < fade_in_pos && fade_in_pos < fade_out_pos,
+        "afade filters must run after volume and loudnorm: {}",
+        af
+    );
+
+    let ca_idx = cmd.iter().position(|r| r == "-c:a").expect("-c:a must be present");
+    assert_eq!(cmd[ca_idx + 1], "aac", "Copy audio must promote to AAC when afade is active");
+
+    // Verify preview afade filters use absolute media timestamps for ffplay
+    let preview_filters = build_preview_afade_filters(&AudioFadePreview {
+        trim_start_sec: 5.0,
+        trim_end_sec: 25.0,
+        fade_in_sec: 2.5,
+        fade_out_sec: 3.25,
+    });
+    assert_eq!(
+        preview_filters,
+        vec![
+            "afade=t=in:st=5.000:d=2.500:curve=qsin".to_string(),
+            "afade=t=out:st=21.750:d=3.250:curve=qsin".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn test_live_audio_fade_in_and_out_with_trim() {
+    let Ok(binaries) = FFmpegBinaries::locate() else {
+        return;
+    };
+    let tmp_dir = tempfile::tempdir().expect("temp dir");
+    let src_wav = tmp_dir.path().join("tone.wav");
+    let out_wav = tmp_dir.path().join("faded.wav");
+
+    // Generate 5s constant-amplitude 440Hz sine wave using local project ffmpeg
+    let gen_status = std::process::Command::new(&binaries.ffmpeg)
+        .args([
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=5",
+        ])
+        .arg(&src_wav)
+        .status()
+        .expect("spawn local ffmpeg");
+    assert!(gen_status.success(), "failed to generate synthetic sine wav");
+
+    // Extract trimmed 1s..4s (3s clip) with 1.0s fade-in and 1.0s fade-out
+    let config = EncodeJobConfig {
+        function: EncoderFunction::ExtractAudio,
+        input_path: src_wav.to_string_lossy().to_string(),
+        output_path: out_wav.to_string_lossy().to_string(),
+        audio_codec: AudioCodecChoice::WavPCM16,
+        audio_sample_rate: Some(44100),
+        audio_channels: Some(1),
+        in_point: Some("00:00:01.000".to_string()),
+        out_point: Some("00:00:04.000".to_string()),
+        audio_fade_in_sec: Some(1.0),
+        audio_fade_out_sec: Some(1.0),
+        effective_duration_sec: Some(3.0),
+        ..Default::default()
+    };
+
+    let args = FFmpegCommandBuilder::build(&config, &binaries.ffmpeg);
+    let enc_output = std::process::Command::new(&args[0])
+        .args(&args[1..])
+        .output()
+        .expect("run ffmpeg fade encode");
+    assert!(
+        enc_output.status.success(),
+        "ffmpeg fade encode failed: {}",
+        String::from_utf8_lossy(&enc_output.stderr)
+    );
+
+    // Measure 1-second RMS buckets across the 3-second output
+    let stats_output = std::process::Command::new(&binaries.ffmpeg)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+        ])
+        .arg(&out_wav)
+        .args([
+            "-af",
+            "asetnsamples=n=44100,astats=metadata=1:reset=1:measure_perchannel=RMS_level:measure_overall=none,ametadata=mode=print:file=-",
+            "-f",
+            "null",
+            "-",
+        ])
+        .output()
+        .expect("run ffmpeg astats");
+    assert!(stats_output.status.success());
+
+    let stdout = String::from_utf8_lossy(&stats_output.stdout);
+    let rms_values: Vec<f64> = stdout
+        .lines()
+        .filter_map(|line| line.split("RMS_level=").nth(1))
+        .filter_map(|v| v.trim().parse::<f64>().ok())
+        .collect();
+
+    assert!(
+        rms_values.len() >= 3,
+        "Expected 3 one-second RMS buckets, got {:?} from:\n{}",
+        rms_values,
+        stdout
+    );
+    // Bucket 0 (fade-in) and Bucket 2 (fade-out) must be significantly quieter than Bucket 1 (full level)
+    assert!(
+        rms_values[0] < rms_values[1] - 2.0,
+        "Fade-in bucket ({:.2} dB) must be quieter than middle bucket ({:.2} dB)",
+        rms_values[0],
+        rms_values[1]
+    );
+    assert!(
+        rms_values[2] < rms_values[1] - 2.0,
+        "Fade-out bucket ({:.2} dB) must be quieter than middle bucket ({:.2} dB)",
+        rms_values[2],
+        rms_values[1]
+    );
+}

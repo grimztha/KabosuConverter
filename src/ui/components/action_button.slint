@@ -9,6 +9,9 @@ export component ActionButton inherits Rectangle {
     in property <color> hover_color: Theme.accent_primary_hover;
     in property <color> pressed_color: fill_color.darker(0.25);
     in property <color> text_color: #ffffff;
+    in property <color> border_col: #00000000;
+    in property <color> hover_border_col: border_col;
+    in property <length> normal_border_width: 0px;
     in property <length> font_size: Theme.font_body;
     in property <bool> is_disabled: false;
     in property <length> btn_radius: 6px;
@@ -18,8 +21,8 @@ export component ActionButton inherits Rectangle {
     height: 34px;
     border-radius: root.btn_radius;
     background: is_disabled ? Theme.control_bg : (ta.pressed ? pressed_color : (ta.has-hover ? hover_color : fill_color));
-    border-width: fs.has-focus ? 2px : 0px;
-    border-color: Theme.focus_ring;
+    border-width: fs.has-focus ? 2px : root.normal_border_width;
+    border-color: fs.has-focus ? Theme.focus_ring : (is_disabled ? Theme.control_border : (ta.has-hover || ta.pressed ? root.hover_border_col : root.border_col));
 
     animate background { duration: 120ms; easing: ease-out; }
     animate border-color { duration: 120ms; easing: ease-out; }

@@ -4,7 +4,10 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use kabosu_converter::ffmpeg::{spawn_audio_playback, AudioPlaybackSession, FFmpegBinaries, VideoRotation};
+use kabosu_converter::ffmpeg::{
+    spawn_audio_playback_with_fade, AudioFadePreview, AudioPlaybackSession, FFmpegBinaries,
+    VideoRotation,
+};
 use kabosu_converter::ytdlp;
 
 #[derive(Clone, Debug)]
@@ -122,6 +125,33 @@ impl AppContext {
         self.do_restart_audio_preview(app_data);
     }
 
+    /// Builds live audio fade preview settings from current UI state, or None when no fade is active.
+    pub fn build_audio_fade_preview(app_data: &crate::AppData) -> Option<AudioFadePreview> {
+        let fade_in = app_data.get_audio_fade_in_seconds() as f64;
+        let fade_out = app_data.get_audio_fade_out_seconds() as f64;
+        if fade_in <= 0.01 && fade_out <= 0.01 {
+            return None;
+        }
+        let dur = (app_data.get_player_duration() as f64).max(0.0);
+        let in_sec = app_data.get_in_point_seconds() as f64;
+        let out_sec = app_data.get_out_point_seconds() as f64;
+        let trim_start_sec = if in_sec >= 0.0 { in_sec.min(dur) } else { 0.0 };
+        let trim_end_sec = if out_sec >= 0.0 {
+            out_sec.clamp(trim_start_sec, dur)
+        } else {
+            dur
+        };
+        if trim_end_sec <= trim_start_sec {
+            return None;
+        }
+        Some(AudioFadePreview {
+            trim_start_sec,
+            trim_end_sec,
+            fade_in_sec: fade_in.max(0.0),
+            fade_out_sec: fade_out.max(0.0),
+        })
+    }
+
     fn do_restart_audio_preview(&self, app_data: &crate::AppData) {
         let vol_float = if app_data.get_player_is_muted() {
             0.0
@@ -150,12 +180,13 @@ impl AppContext {
             } else {
                 None
             };
+            let fade_opt = Self::build_audio_fade_preview(app_data);
 
             let mut lock = self.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(mut old) = lock.take() {
                 let _ = old.kill();
             }
-            if let Ok(session) = spawn_audio_playback(
+            if let Ok(session) = spawn_audio_playback_with_fade(
                 ffplay_bin,
                 &path,
                 cur_time,
@@ -163,6 +194,7 @@ impl AppContext {
                 vol_int,
                 edit_gain_opt,
                 edit_norm_opt,
+                fade_opt,
             ) {
                 *lock = Some(session);
             }

@@ -6,8 +6,12 @@ export component IconButton inherits Rectangle {
     in property <bool> has_icon: false;
     in property <length> icon_size: 13px;
     in property <color> text_color: Theme.text_secondary;
+    in property <color> normal_bg: #00000000;
     in property <color> hover_bg: Theme.control_hover;
     in property <color> pressed_bg: Theme.control_pressed;
+    in property <color> normal_border: #00000000;
+    in property <color> hover_border: normal_border;
+    in property <length> normal_border_width: 0px;
     in property <length> btn_width: 28px;
     in property <length> btn_height: 28px;
     in property <length> font_size: Theme.font_caption;
@@ -17,9 +21,9 @@ export component IconButton inherits Rectangle {
     width: root.btn_width;
     height: root.btn_height;
     border-radius: 6px;
-    background: is_disabled ? transparent : (ta.pressed ? pressed_bg : (ta.has-hover ? hover_bg : #00000000));
-    border-width: fs.has-focus ? 1.5px : 0px;
-    border-color: Theme.focus_ring;
+    background: is_disabled ? transparent : (ta.pressed ? pressed_bg : (ta.has-hover ? hover_bg : normal_bg));
+    border-width: fs.has-focus ? 1.5px : root.normal_border_width;
+    border-color: fs.has-focus ? Theme.focus_ring : (ta.has-hover || ta.pressed ? root.hover_border : root.normal_border);
 
     animate background { duration: 120ms; easing: ease-out; }
     animate border-color { duration: 120ms; easing: ease-out; }

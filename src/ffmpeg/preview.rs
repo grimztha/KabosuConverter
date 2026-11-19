@@ -425,6 +425,55 @@ pub fn read_ffplay_clock<R: std::io::Read>(reader: R, clock: Arc<AtomicU64>) {
     }
 }
 
+/// Audio fade-in and fade-out parameters in absolute media timestamps for live ffplay preview.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct AudioFadePreview {
+    /// Trim start timestamp in seconds (0.0 when untrimmed).
+    pub trim_start_sec: f64,
+    /// Trim end timestamp in seconds (media duration when untrimmed).
+    pub trim_end_sec: f64,
+    /// Fade-in duration in seconds starting at `trim_start_sec`.
+    pub fade_in_sec: f64,
+    /// Fade-out duration in seconds ending at `trim_end_sec`.
+    pub fade_out_sec: f64,
+}
+
+/// Builds FFmpeg `afade` filters in absolute media timestamps for `ffplay` live preview.
+pub fn build_preview_afade_filters(fade: &AudioFadePreview) -> Vec<String> {
+    let mut filters = Vec::new();
+    let start = if fade.trim_start_sec.is_finite() {
+        fade.trim_start_sec.max(0.0)
+    } else {
+        0.0
+    };
+    let end = if fade.trim_end_sec.is_finite() {
+        fade.trim_end_sec.max(start)
+    } else {
+        start
+    };
+    let clip_len = (end - start).max(0.0);
+    if clip_len <= 0.01 {
+        return filters;
+    }
+
+    if fade.fade_in_sec.is_finite() && fade.fade_in_sec > 0.01 {
+        let d = fade.fade_in_sec.min(clip_len);
+        if d > 0.01 {
+            filters.push(format!("afade=t=in:st={:.3}:d={:.3}:curve=qsin", start, d));
+        }
+    }
+
+    if fade.fade_out_sec.is_finite() && fade.fade_out_sec > 0.01 {
+        let d = fade.fade_out_sec.min(clip_len);
+        let st = (end - d).max(start);
+        if d > 0.01 {
+            filters.push(format!("afade=t=out:st={:.3}:d={:.3}:curve=qsin", st, d));
+        }
+    }
+
+    filters
+}
+
 /// Spawns audio playback via ffplay in headless mode (-nodisp) directly to the system default audio device.
 /// Optionally applies real-time audio filters such as volume gain in dB and loudness normalization.
 /// Attaches audio level meter filter chain measuring L and R peak dB independently.
@@ -437,6 +486,30 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     volume: i32,
     gain_db: Option<f32>,
     normalize: Option<f32>,
+) -> Result<AudioPlaybackSession> {
+    spawn_audio_playback_with_fade(
+        ffplay_bin,
+        media_path,
+        start_seconds,
+        duration,
+        volume,
+        gain_db,
+        normalize,
+        None,
+    )
+}
+
+/// Spawns audio playback via ffplay in headless mode (-nodisp) with optional real-time fade-in/out filters.
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_audio_playback_with_fade<B: AsRef<Path>>(
+    ffplay_bin: B,
+    media_path: &str,
+    start_seconds: f64,
+    duration: Option<f64>,
+    volume: i32,
+    gain_db: Option<f32>,
+    normalize: Option<f32>,
+    fade: Option<AudioFadePreview>,
 ) -> Result<AudioPlaybackSession> {
     validate_path(media_path)?;
 
@@ -453,6 +526,9 @@ pub fn spawn_audio_playback<B: AsRef<Path>>(
     }
     if let Some(gain) = gain_db.filter(|v| v.is_finite() && v.abs() > 0.05) {
         af_filters.push(format!("volume={:.1}dB", gain.clamp(-60.0, 60.0)));
+    }
+    if let Some(ref fade_cfg) = fade {
+        af_filters.extend(build_preview_afade_filters(fade_cfg));
     }
 
     // Force stereo layout so both L and R channels exist, window into 2048 samples (~46ms),

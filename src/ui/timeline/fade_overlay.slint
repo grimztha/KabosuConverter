@@ -1,0 +1,260 @@
+import { Theme } from "../theme.slint";
+
+// Corner fade-in (top-left of IN) and fade-out (top-right of OUT) handles,
+// smooth fade curve lines, and duration badges rendered over the timeline track.
+export component TimelineFadeOverlay inherits Rectangle {
+    in property <float> duration: 1.0;
+    in property <float> in_point_norm: 0.0;
+    in property <float> out_point_norm: 1.0;
+    in property <bool> has_trim: false;
+    in property <float> fade_in_sec: 0.0;
+    in property <float> fade_out_sec: 0.0;
+    in property <string> fade_in_text: "0.00s";
+    in property <string> fade_out_text: "0.00s";
+    in property <length> ruler_height: 18px;
+    in property <bool> has_audio: true;
+
+    callback fade_in_dragged(float);
+    callback fade_out_dragged(float);
+    callback fade_settled();
+
+    private property <float> safe_in: root.in_point_norm.clamp(0.0, 1.0);
+    private property <float> safe_out: root.out_point_norm.clamp(root.safe_in, 1.0);
+    private property <float> trim_span: max(0.0, root.safe_out - root.safe_in);
+
+    private property <float> fade_in_norm: root.duration > 0.0
+        ? (root.fade_in_sec / root.duration).clamp(0.0, root.trim_span)
+        : 0.0;
+    private property <float> fade_out_norm: root.duration > 0.0
+        ? (root.fade_out_sec / root.duration).clamp(0.0, max(0.0, root.trim_span - root.fade_in_norm))
+        : 0.0;
+
+    private property <length> in_x: root.width * root.safe_in;
+    private property <length> out_x: root.width * root.safe_out;
+    private property <length> fade_in_w: root.width * root.fade_in_norm;
+    private property <length> fade_out_w: root.width * root.fade_out_norm;
+
+    private property <length> knob_cy: root.ruler_height + 3px;
+    private property <length> in_handle_cx: (root.in_x + root.fade_in_w).clamp(6px, max(6px, root.width - 6px));
+    private property <length> out_handle_cx: (root.out_x - root.fade_out_w).clamp(6px, max(6px, root.width - 6px));
+
+    private property <length> in_curve_w: max(1px, root.in_handle_cx - root.in_x);
+    private property <length> out_curve_w: max(1px, root.out_x - root.out_handle_cx);
+    private property <length> curve_h: max(1px, root.height - root.knob_cy);
+    private property <float> in_curve_pw: max(1.0, root.in_curve_w / 1px);
+    private property <float> out_curve_pw: max(1.0, root.out_curve_w / 1px);
+    private property <float> curve_ph: max(1.0, root.curve_h / 1px);
+
+    private property <bool> can_fade: root.has_audio && root.has_trim;
+
+    private property <bool> in_active: fade_in_ta.has-hover || fade_in_ta.pressed;
+    private property <bool> out_active: fade_out_ta.has-hover || fade_out_ta.pressed;
+
+    private property <bool> show_in_curve: root.can_fade && root.fade_in_sec > 0.01 && (root.in_handle_cx - root.in_x) > 1px;
+    private property <bool> show_out_curve: root.can_fade && root.fade_out_sec > 0.01 && (root.out_x - root.out_handle_cx) > 1px;
+
+    private property <bool> show_in_pill: root.can_fade && (root.fade_in_sec > 0.01 || root.in_active);
+    private property <bool> show_out_pill: root.can_fade && (root.fade_out_sec > 0.01 || root.out_active);
+
+    // Fade-In Curve Line (bottom-left of trim up to top-left fade handle)
+    if root.show_in_curve : Path {
+        x: root.in_x;
+        y: root.knob_cy;
+        width: root.in_curve_w;
+        height: root.curve_h;
+        viewbox-width: root.in_curve_pw;
+        viewbox-height: root.curve_ph;
+        stroke: root.in_active ? #ffffff : #e4e4e7cc;
+        stroke-width: root.in_active ? 2px : 1.5px;
+
+        MoveTo { x: 0; y: root.curve_ph; }
+        QuadraticTo { control-x: root.in_curve_pw * 0.55; control-y: root.curve_ph * 0.90; x: root.in_curve_pw; y: 0; }
+    }
+
+    // Fade-Out Curve Line (top-right fade handle down to bottom-right of trim)
+    if root.show_out_curve : Path {
+        x: root.out_handle_cx;
+        y: root.knob_cy;
+        width: root.out_curve_w;
+        height: root.curve_h;
+        viewbox-width: root.out_curve_pw;
+        viewbox-height: root.curve_ph;
+        stroke: root.out_active ? #ffffff : #e4e4e7cc;
+        stroke-width: root.out_active ? 2px : 1.5px;
+
+        MoveTo { x: 0; y: 0; }
+        QuadraticTo { control-x: root.out_curve_pw * 0.45; control-y: root.curve_ph * 0.90; x: root.out_curve_pw; y: root.curve_ph; }
+    }
+
+    // Fade-In Duration Pill Badge (in ruler strip above handle)
+    if root.show_in_pill : Rectangle {
+        width: in_pill_row.preferred-width;
+        height: 15px;
+        x: (root.in_handle_cx - self.width / 2).clamp(2px, max(2px, root.width - self.width - 2px));
+        y: 1px;
+        border-radius: 5px;
+        background: #ffffff;
+        border-width: 1px;
+        border-color: #d4d4d8;
+
+        in_pill_row := HorizontalLayout {
+            padding-left: 5px;
+            padding-right: 5px;
+            alignment: center;
+
+            Text {
+                text: root.fade_in_text;
+                font-size: 10px;
+                font-weight: 800;
+                font-family: Theme.font_mono;
+                color: #18181b;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // Fade-Out Duration Pill Badge (in ruler strip above handle)
+    if root.show_out_pill : Rectangle {
+        width: out_pill_row.preferred-width;
+        height: 15px;
+        x: (root.out_handle_cx - self.width / 2).clamp(2px, max(2px, root.width - self.width - 2px));
+        y: 1px;
+        border-radius: 5px;
+        background: #ffffff;
+        border-width: 1px;
+        border-color: #d4d4d8;
+
+        out_pill_row := HorizontalLayout {
+            padding-left: 5px;
+            padding-right: 5px;
+            alignment: center;
+
+            Text {
+                text: root.fade_out_text;
+                font-size: 10px;
+                font-weight: 800;
+                font-family: Theme.font_mono;
+                color: #18181b;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // Top-Left ("IN") Fade-In Corner Drag Handle
+    Rectangle {
+        visible: root.can_fade;
+        property <length> hit_w: 24px;
+        property <length> hit_h: 20px;
+        property <length> knob_d: root.in_active ? 13px : (root.fade_in_sec > 0.01 ? 11px : 10px);
+
+        x: (root.in_handle_cx - self.hit_w / 2).clamp(0px, max(0px, root.width - self.hit_w));
+        y: root.ruler_height - 7px;
+        width: self.hit_w;
+        height: self.hit_h;
+
+        // Visual white circular knob
+        Rectangle {
+            x: (root.in_handle_cx - parent.x) - parent.knob_d / 2;
+            y: (root.knob_cy - parent.y) - parent.knob_d / 2;
+            width: parent.knob_d;
+            height: parent.knob_d;
+            border-radius: self.width / 2;
+            background: #ffffff;
+            border-width: 1.5px;
+            border-color: root.in_active ? #18181b : #52525b;
+            opacity: root.in_active || root.fade_in_sec > 0.01 ? 1.0 : 0.88;
+
+            animate width { duration: 100ms; easing: ease-out; }
+            animate height { duration: 100ms; easing: ease-out; }
+        }
+
+        fade_in_ta := TouchArea {
+            enabled: root.can_fade;
+            mouse-cursor: ew-resize;
+            property <length> drag_start_mouse_x: 0px;
+            property <float> drag_start_fade_sec: 0.0;
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    self.drag_start_mouse_x = self.absolute-position.x + self.mouse-x;
+                    self.drag_start_fade_sec = root.fade_in_sec;
+                } else if event.kind == PointerEventKind.up {
+                    root.fade_settled();
+                }
+            }
+
+            moved => {
+                if self.pressed && root.width > 0px && root.duration > 0.0 {
+                    let delta_px = (self.absolute-position.x + self.mouse-x) - self.drag_start_mouse_x;
+                    let delta_sec = (delta_px / root.width) * root.duration;
+                    root.fade_in_dragged(self.drag_start_fade_sec + delta_sec);
+                }
+            }
+
+            double-clicked => {
+                root.fade_in_dragged(0.0);
+                root.fade_settled();
+            }
+        }
+    }
+
+    // Top-Right ("OUT") Fade-Out Corner Drag Handle
+    Rectangle {
+        visible: root.can_fade;
+        property <length> hit_w: 24px;
+        property <length> hit_h: 20px;
+        property <length> knob_d: root.out_active ? 13px : (root.fade_out_sec > 0.01 ? 11px : 10px);
+
+        x: (root.out_handle_cx - self.hit_w / 2).clamp(0px, max(0px, root.width - self.hit_w));
+        y: root.ruler_height - 7px;
+        width: self.hit_w;
+        height: self.hit_h;
+
+        // Visual white circular knob
+        Rectangle {
+            x: (root.out_handle_cx - parent.x) - parent.knob_d / 2;
+            y: (root.knob_cy - parent.y) - parent.knob_d / 2;
+            width: parent.knob_d;
+            height: parent.knob_d;
+            border-radius: self.width / 2;
+            background: #ffffff;
+            border-width: 1.5px;
+            border-color: root.out_active ? #18181b : #52525b;
+            opacity: root.out_active || root.fade_out_sec > 0.01 ? 1.0 : 0.88;
+
+            animate width { duration: 100ms; easing: ease-out; }
+            animate height { duration: 100ms; easing: ease-out; }
+        }
+
+        fade_out_ta := TouchArea {
+            enabled: root.can_fade;
+            mouse-cursor: ew-resize;
+            property <length> drag_start_mouse_x: 0px;
+            property <float> drag_start_fade_sec: 0.0;
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    self.drag_start_mouse_x = self.absolute-position.x + self.mouse-x;
+                    self.drag_start_fade_sec = root.fade_out_sec;
+                } else if event.kind == PointerEventKind.up {
+                    root.fade_settled();
+                }
+            }
+
+            moved => {
+                if self.pressed && root.width > 0px && root.duration > 0.0 {
+                    let delta_px = (self.absolute-position.x + self.mouse-x) - self.drag_start_mouse_x;
+                    let delta_sec = -(delta_px / root.width) * root.duration;
+                    root.fade_out_dragged(self.drag_start_fade_sec + delta_sec);
+                }
+            }
+
+            double-clicked => {
+                root.fade_out_dragged(0.0);
+                root.fade_settled();
+            }
+        }
+    }
+}

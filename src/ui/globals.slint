@@ -195,6 +195,10 @@ export global AppData {
     in-out property <bool> audio_normalize_enabled: false;
     in-out property <float> audio_normalize_lufs: -16.0;
     in-out property <int> audio_normalize_preset_index: 0;
+    in-out property <float> audio_fade_in_seconds: 0.0;
+    in-out property <float> audio_fade_out_seconds: 0.0;
+    in-out property <string> audio_fade_in_text: "0.00s";
+    in-out property <string> audio_fade_out_text: "0.00s";
     in-out property <bool> has_active_audio_edits: false;
 }
 
@@ -261,11 +265,14 @@ export global AppLogic {
     callback reset_all_video_edits();
     callback reset_all_edits();
 
-    // Audio Editing (Volume dB, Normalization) Callbacks
+    // Audio Editing (Volume dB, Normalization, Fade In/Out) Callbacks
     callback set_audio_gain_db(float);
     callback step_audio_gain_db(float);
     callback toggle_audio_normalize();
     callback set_audio_normalize_preset(int);
+    callback set_audio_fade_in(float);
+    callback set_audio_fade_out(float);
+    callback audio_fade_settled();
     callback reset_audio_edits();
     callback toggle_volume_meter();
 

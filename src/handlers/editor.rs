@@ -29,6 +29,21 @@ pub fn update_video_edit_indicators(app_data: &AppData) {
     app_data.set_has_active_video_edits(rot_idx != 0 || flip_h || flip_v || crop_en);
 }
 
+pub fn update_audio_edit_indicators(app_data: &AppData) {
+    let gain_active = app_data.get_audio_gain_db().abs() > 0.05;
+    let norm_active = app_data.get_audio_normalize_enabled();
+    let fade_in_active = app_data.get_audio_fade_in_seconds() > 0.01;
+    let fade_out_active = app_data.get_audio_fade_out_seconds() > 0.01;
+    app_data.set_has_active_audio_edits(gain_active || norm_active || fade_in_active || fade_out_active);
+}
+
+pub fn reset_audio_fades(app_data: &AppData) {
+    app_data.set_audio_fade_in_seconds(0.0);
+    app_data.set_audio_fade_out_seconds(0.0);
+    app_data.set_audio_fade_in_text(SharedString::from("0.00s"));
+    app_data.set_audio_fade_out_text(SharedString::from("0.00s"));
+}
+
 pub fn sync_crop_rect_to_ui(app_data: &AppData, rect: CropRect, update_text_fields: bool) {
     let eff_w = (app_data.get_effective_video_width().max(2) as u32) & !1;
     let eff_h = (app_data.get_effective_video_height().max(2) as u32) & !1;
@@ -591,7 +606,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 app_data.set_audio_normalize_enabled(false);
                 app_data.set_audio_normalize_lufs(-16.0);
                 app_data.set_audio_normalize_preset_index(0);
-                app_data.set_has_active_audio_edits(false);
+                reset_audio_fades(&app_data);
+                update_audio_edit_indicators(&app_data);
 
                 if app_data.get_selected_is_video() {
                     request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
@@ -616,8 +632,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     format!("{:+.1} dB", clamped)
                 };
                 app_data.set_audio_gain_text(SharedString::from(text));
-                let is_active = clamped.abs() > 0.05 || app_data.get_audio_normalize_enabled();
-                app_data.set_has_active_audio_edits(is_active);
+                update_audio_edit_indicators(&app_data);
 
                 ctx.restart_audio_preview(&app_data);
             }
@@ -640,8 +655,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     format!("{:+.1} dB", next)
                 };
                 app_data.set_audio_gain_text(SharedString::from(text));
-                let is_active = next.abs() > 0.05 || app_data.get_audio_normalize_enabled();
-                app_data.set_has_active_audio_edits(is_active);
+                update_audio_edit_indicators(&app_data);
 
                 ctx.restart_audio_preview(&app_data);
             }
@@ -657,8 +671,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 let next = !app_data.get_audio_normalize_enabled();
                 app_data.set_audio_normalize_enabled(next);
-                let is_active = app_data.get_audio_gain_db().abs() > 0.05 || next;
-                app_data.set_has_active_audio_edits(is_active);
+                update_audio_edit_indicators(&app_data);
 
                 ctx.restart_audio_preview(&app_data);
             }
@@ -682,7 +695,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 app_data.set_audio_normalize_preset_index(idx);
                 app_data.set_audio_normalize_lufs(lufs);
                 app_data.set_audio_normalize_enabled(true);
-                app_data.set_has_active_audio_edits(true);
+                update_audio_edit_indicators(&app_data);
 
                 ctx.restart_audio_preview(&app_data);
             }
@@ -701,7 +714,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 app_data.set_audio_normalize_enabled(false);
                 app_data.set_audio_normalize_lufs(-16.0);
                 app_data.set_audio_normalize_preset_index(0);
-                app_data.set_has_active_audio_edits(false);
+                reset_audio_fades(&app_data);
+                update_audio_edit_indicators(&app_data);
 
                 ctx.restart_audio_preview(&app_data);
             }

@@ -3,6 +3,7 @@ import { Theme } from "../theme.slint";
 import { AppData } from "../globals.slint";
 import { TimelineScrollBar } from "timeline_scrollbar.slint";
 import { TimelineGrid } from "timeline_grid.slint";
+import { TimelineFadeOverlay } from "fade_overlay.slint";
 
 export component VisualTimeline inherits Rectangle {
     in property <float> duration: 1.0;
@@ -12,12 +13,20 @@ export component VisualTimeline inherits Rectangle {
     in property <float> in_point_sec: -1.0;
     in property <float> out_point_sec: -1.0;
     in property <bool> has_trim: false;
+    in property <float> fade_in_sec: 0.0;
+    in property <float> fade_out_sec: 0.0;
+    in property <string> fade_in_text: "0.00s";
+    in property <string> fade_out_text: "0.00s";
+    in property <bool> has_audio: true;
     in-out property <float> zoom_level: AppData.timeline_zoom;
     in property <int> center_trigger: AppData.center_timeline_trigger;
     callback seek(float);
     callback scrub(float);
     callback in_point_dragged(float);
     callback out_point_dragged(float);
+    callback fade_in_dragged(float);
+    callback fade_out_dragged(float);
+    callback fade_settled();
 
     changed center_trigger => {
         root.center_playhead();
@@ -176,11 +185,11 @@ export component VisualTimeline inherits Rectangle {
                     }
                 }
 
-                // In-Point Flag Marker & Drag Handle
+                // In-Point Flag Marker & Drag Handle (bottom-aligned)
                 Rectangle {
                     property <float> norm: root.in_point_sec >= 0.0 ? root.in_point_norm : 0.0;
                     x: max(0px, min(track.width - self.width, track.width * self.norm));
-                    y: (track.height - self.height) / 2;
+                    y: max(18px, track.height - self.height - 2px);
                     width: root.in_point_sec >= 0.0 ? 32px : 18px;
                     height: 22px;
                     border-radius: 3px;
@@ -216,11 +225,11 @@ export component VisualTimeline inherits Rectangle {
                     }
                 }
 
-                // Out-Point Flag Marker & Drag Handle
+                // Out-Point Flag Marker & Drag Handle (bottom-aligned)
                 Rectangle {
                     property <float> norm: root.out_point_sec >= 0.0 ? root.out_point_norm : 1.0;
                     x: max(0px, min(track.width - self.width, track.width * self.norm - self.width));
-                    y: (track.height - self.height) / 2;
+                    y: max(18px, track.height - self.height - 2px);
                     width: root.out_point_sec >= 0.0 ? 36px : 18px;
                     height: 22px;
                     border-radius: 3px;
@@ -254,6 +263,24 @@ export component VisualTimeline inherits Rectangle {
                             }
                         }
                     }
+                }
+
+                // Audio Fade-In (top-left of IN) & Fade-Out (top-right of OUT) Corner UI
+                TimelineFadeOverlay {
+                    width: 100%;
+                    height: 100%;
+                    duration: root.duration;
+                    in_point_norm: root.in_point_norm;
+                    out_point_norm: root.out_point_norm;
+                    has_trim: root.has_trim;
+                    fade_in_sec: root.fade_in_sec;
+                    fade_out_sec: root.fade_out_sec;
+                    fade_in_text: root.fade_in_text;
+                    fade_out_text: root.fade_out_text;
+                    has_audio: root.has_audio;
+                    fade_in_dragged(val) => { root.fade_in_dragged(val); }
+                    fade_out_dragged(val) => { root.fade_out_dragged(val); }
+                    fade_settled() => { root.fade_settled(); }
                 }
             }
         }

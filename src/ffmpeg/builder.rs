@@ -687,6 +687,9 @@ pub struct EncodeJobConfig {
     pub audio_channels: Option<u32>, // 1 = mono, 2 = stereo, 6 = 5.1
     pub audio_gain_db: Option<f32>,
     pub normalize_lufs: Option<f32>, // e.g. -23.0 (EBU R128) or -14.0 (web)
+    pub audio_fade_in_sec: Option<f32>,
+    pub audio_fade_out_sec: Option<f32>,
+    pub effective_duration_sec: Option<f64>,
 
     // Trimming / Cutting
     pub in_point: Option<String>,  // "00:00:10.000" or seconds
@@ -726,6 +729,9 @@ impl Default for EncodeJobConfig {
             audio_channels: Some(2),
             audio_gain_db: None,
             normalize_lufs: None,
+            audio_fade_in_sec: None,
+            audio_fade_out_sec: None,
+            effective_duration_sec: None,
 
             in_point: None,
             out_point: None,
@@ -1133,7 +1139,7 @@ impl FFmpegCommandBuilder {
         args.push(config.output_path.clone());
     }
 
-    /// Appends `-af` filters when gain or loudness normalization is active; returns true if added.
+    /// Appends `-af` filters when gain, loudness normalization, or audio fades are active; returns true if added.
     fn append_audio_filters(config: &EncodeJobConfig, fallback_lufs: Option<f32>, args: &mut Vec<String>) -> bool {
         let mut af_filters: Vec<String> = Vec::new();
         if let Some(gain) = config.audio_gain_db.filter(|g| g.is_finite() && g.abs() > 0.05) {
@@ -1141,6 +1147,43 @@ impl FFmpegCommandBuilder {
         }
         if let Some(lufs) = config.normalize_lufs.or(fallback_lufs).filter(|v| v.is_finite()) {
             af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs.clamp(-70.0, -5.0)));
+        }
+
+        // Determine clip output duration (0-based timestamps after input -ss/-to) for fade clamping and fade-out start.
+        let clip_duration = config
+            .effective_duration_sec
+            .filter(|d| d.is_finite() && *d > 0.0)
+            .or_else(|| {
+                let in_s = config
+                    .in_point
+                    .as_deref()
+                    .and_then(crate::sanitize::parse_timecode_to_seconds)
+                    .unwrap_or(0.0);
+                let out_s = config
+                    .out_point
+                    .as_deref()
+                    .and_then(crate::sanitize::parse_timecode_to_seconds)?;
+                (out_s > in_s).then_some(out_s - in_s)
+            });
+
+        if let Some(fade_in) = config.audio_fade_in_sec.filter(|v| v.is_finite() && *v > 0.01) {
+            let d = match clip_duration {
+                Some(dur) => (fade_in as f64).min(dur),
+                None => fade_in as f64,
+            };
+            if d > 0.01 {
+                af_filters.push(format!("afade=t=in:st=0.000:d={:.3}:curve=qsin", d));
+            }
+        }
+
+        if let Some(fade_out) = config.audio_fade_out_sec.filter(|v| v.is_finite() && *v > 0.01) {
+            if let Some(dur) = clip_duration.filter(|d| *d > 0.01) {
+                let d = (fade_out as f64).min(dur);
+                let st = (dur - d).max(0.0);
+                if d > 0.01 {
+                    af_filters.push(format!("afade=t=out:st={:.3}:d={:.3}:curve=qsin", st, d));
+                }
+            }
         }
 
         if !af_filters.is_empty() {

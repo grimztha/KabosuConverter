@@ -5,7 +5,7 @@ use std::thread;
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer, SharedString};
 
 use kabosu_converter::ffmpeg::{
-    format_duration_hms, spawn_audio_playback, spawn_ffplay,
+    format_duration_hms, spawn_audio_playback_with_fade, spawn_ffplay,
     spawn_playback_stream_transformed_with_duration, AudioPlaybackSession,
 };
 use crate::context::AppContext;
@@ -72,7 +72,8 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                 } else {
                     None
                 };
-                if let Ok(session) = spawn_audio_playback(
+                let fade_opt = AppContext::build_audio_fade_preview(&app_data);
+                if let Ok(session) = spawn_audio_playback_with_fade(
                     ffplay_bin,
                     &path,
                     start_sec,
@@ -80,6 +81,7 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                     vol_int,
                     edit_gain_opt,
                     edit_norm_opt,
+                    fade_opt,
                 ) {
                     initial_audio_clock = Some(session.master_clock.clone());
                     let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
@@ -331,7 +333,8 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
             } else {
                 None
             };
-            if let Ok(session) = spawn_audio_playback(
+            let fade_opt = AppContext::build_audio_fade_preview(&app_data);
+            if let Ok(session) = spawn_audio_playback_with_fade(
                 ffplay_bin,
                 &path,
                 start_sec,
@@ -339,6 +342,7 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                 vol_int,
                 edit_gain_opt,
                 edit_norm_opt,
+                fade_opt,
             ) {
                 let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
                 *lock = Some(session);

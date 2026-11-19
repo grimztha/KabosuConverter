@@ -18,8 +18,9 @@ pub use runner::{FFmpegRunner, ProgressUpdate};
 pub use preview::{
     parse_timecode_to_seconds, extract_frame, extract_frame_rgba, extract_frame_rgba_transformed,
     spawn_playback_stream, spawn_playback_stream_transformed, spawn_playback_stream_transformed_with_duration,
-    spawn_ffplay, spawn_audio_playback, extract_waveform_rgba, compute_letterbox_viewport,
-    AudioPlaybackSession, parse_ffplay_pts, parse_astats_level, read_ffplay_meter
+    spawn_ffplay, spawn_audio_playback, spawn_audio_playback_with_fade, extract_waveform_rgba,
+    compute_letterbox_viewport, AudioFadePreview, AudioPlaybackSession, build_preview_afade_filters,
+    parse_ffplay_pts, parse_astats_level, read_ffplay_meter
 };
 
 /// Spawn an FFmpeg-related process (ffprobe, ffmpeg, ffplay) with proper setup.

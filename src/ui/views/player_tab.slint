@@ -235,6 +235,11 @@ export component PlayerTab inherits VerticalLayout {
                             in_point_sec: AppData.in_point_seconds;
                             out_point_sec: AppData.out_point_seconds;
                             has_trim: AppData.has_active_trim;
+                            fade_in_sec: AppData.audio_fade_in_seconds;
+                            fade_out_sec: AppData.audio_fade_out_seconds;
+                            fade_in_text: AppData.audio_fade_in_text;
+                            fade_out_text: AppData.audio_fade_out_text;
+                            has_audio: AppData.selected_is_audio;
                             scrub(val) => {
                                 AppLogic.player_scrub(val);
                             }
@@ -246,6 +251,15 @@ export component PlayerTab inherits VerticalLayout {
                             }
                             out_point_dragged(val) => {
                                 AppLogic.set_out_point_from_timeline(val);
+                            }
+                            fade_in_dragged(val) => {
+                                AppLogic.set_audio_fade_in(val);
+                            }
+                            fade_out_dragged(val) => {
+                                AppLogic.set_audio_fade_out(val);
+                            }
+                            fade_settled() => {
+                                AppLogic.audio_fade_settled();
                             }
                         }
                     }
@@ -532,6 +546,11 @@ export component PlayerTab inherits VerticalLayout {
                     in_point_sec: AppData.in_point_seconds;
                     out_point_sec: AppData.out_point_seconds;
                     has_trim: AppData.has_active_trim;
+                    fade_in_sec: AppData.audio_fade_in_seconds;
+                    fade_out_sec: AppData.audio_fade_out_seconds;
+                    fade_in_text: AppData.audio_fade_in_text;
+                    fade_out_text: AppData.audio_fade_out_text;
+                    has_audio: AppData.selected_is_audio;
                     scrub(val) => {
                         AppLogic.player_scrub(val);
                     }
@@ -544,6 +563,15 @@ export component PlayerTab inherits VerticalLayout {
                     out_point_dragged(val) => {
                         AppLogic.set_out_point_from_timeline(val);
                     }
+                    fade_in_dragged(val) => {
+                        AppLogic.set_audio_fade_in(val);
+                    }
+                    fade_out_dragged(val) => {
+                        AppLogic.set_audio_fade_out(val);
+                    }
+                    fade_settled() => {
+                        AppLogic.audio_fade_settled();
+                    }
                 }
             }
 
@@ -553,29 +581,41 @@ export component PlayerTab inherits VerticalLayout {
                 alignment: center;
 
                 IconButton {
-                    btn_width: 52px;
+                    btn_width: 56px;
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
                     icon_size: 13px;
                     text: "-1s";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.player_step(-1.0); }
                 }
                 IconButton {
-                    btn_width: 54px;
+                    btn_width: 58px;
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevron-left.svg");
                     has_icon: true;
                     icon_size: 12px;
                     text: "-0.1s";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.player_step(-0.1); }
                 }
 
-                // Play / Pause Button (Neutral active when playing, Cyan when paused)
+                // Play / Pause Button (Neutral active when playing, Lime when paused)
                 ActionButton {
                     width: 88px;
                     height: Theme.btn_height_md;
@@ -583,121 +623,169 @@ export component PlayerTab inherits VerticalLayout {
                     icon_source: AppData.player_is_playing ? @image-url("../icons/pause.svg") : @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: AppData.player_is_playing ? Theme.btn_neutral_bg : Theme.accent_primary;
-                    hover_color: AppData.player_is_playing ? Theme.btn_neutral_hover : Theme.accent_primary_hover;
+                    fill_color: AppData.player_is_playing ? #24242f : Theme.accent_primary;
+                    hover_color: AppData.player_is_playing ? #30303e : Theme.accent_primary_hover;
                     text_color: AppData.player_is_playing ? Theme.accent_cyan : #ffffff;
+                    border_col: AppData.player_is_playing ? Theme.accent_cyan.with-alpha(0.55) : #a3e63577;
+                    hover_border_col: #a3e635aa;
+                    normal_border_width: 1px;
                     font_size: Theme.font_caption;
                     clicked => { AppLogic.player_play_pause(); }
                 }
 
                 IconButton {
-                    btn_width: 34px;
+                    btn_width: 36px;
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/stop.svg");
                     has_icon: true;
                     icon_size: 13px;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.player_stop(); }
                 }
 
                 IconButton {
-                    btn_width: 54px;
+                    btn_width: 58px;
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevron-right.svg");
                     has_icon: true;
                     icon_size: 12px;
                     text: "+0.1s";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.player_step(0.1); }
                 }
                 IconButton {
-                    btn_width: 52px;
+                    btn_width: 56px;
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
                     icon_size: 13px;
                     text: "+1s";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.player_step(1.0); }
                 }
             }
 
             // Row 2: In/Out Trim Markers & Range Deck
             HorizontalLayout {
-                spacing: 4px;
+                spacing: 6px;
                 alignment: center;
 
                 ActionButton {
-                    width: 66px;
+                    width: 72px;
                     height: Theme.btn_height_sm;
                     title: "[ Set In";
-                    fill_color: Theme.card_secondary_bg;
-                    hover_color: Theme.control_hover;
-                    text_color: Theme.accent_amber;
+                    fill_color: #2a2114;
+                    hover_color: #3d2e19;
+                    text_color: #fbbf24;
+                    border_col: Theme.accent_amber.with-alpha(0.5);
+                    hover_border_col: Theme.accent_amber.with-alpha(0.85);
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.set_in_point_current(); }
                 }
 
                 ActionButton {
-                    width: 66px;
+                    width: 74px;
                     height: Theme.btn_height_sm;
                     title: "Set Out ]";
-                    fill_color: Theme.card_secondary_bg;
-                    hover_color: Theme.control_hover;
-                    text_color: Theme.accent_amber;
+                    fill_color: #2a2114;
+                    hover_color: #3d2e19;
+                    text_color: #fbbf24;
+                    border_col: Theme.accent_amber.with-alpha(0.5);
+                    hover_border_col: Theme.accent_amber.with-alpha(0.85);
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.set_out_point_current(); }
                 }
 
                 IconButton {
-                    btn_width: 38px;
+                    btn_width: 46px;
                     btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "In";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.jump_to_in_point(); }
                 }
 
                 IconButton {
-                    btn_width: 40px;
+                    btn_width: 52px;
                     btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "Out";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #2e2e3b;
+                    pressed_bg: #393948;
+                    normal_border: #383848;
+                    hover_border: #525268;
+                    normal_border_width: 1px;
                     clicked => { AppLogic.jump_to_out_point(); }
                 }
 
                 ActionButton {
-                    width: 82px;
+                    width: 88px;
                     height: Theme.btn_height_sm;
                     title: "Play Trim";
                     icon_source: @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 10px;
-                    fill_color: Theme.card_secondary_bg;
-                    hover_color: Theme.control_hover;
-                    text_color: Theme.accent_emerald;
+                    fill_color: #112922;
+                    hover_color: #183d32;
+                    text_color: #34d399;
+                    border_col: Theme.accent_emerald.with-alpha(0.5);
+                    hover_border_col: Theme.accent_emerald.with-alpha(0.85);
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.play_trimmed_range(); }
                 }
 
                 IconButton {
-                    btn_width: 54px;
+                    btn_width: 62px;
                     btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/reset.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "Reset";
                     font_size: Theme.font_badge;
-                    hover_bg: Theme.control_hover;
+                    text_color: Theme.text_primary;
+                    normal_bg: #22222c;
+                    hover_bg: #352328;
+                    pressed_bg: #442930;
+                    normal_border: #383848;
+                    hover_border: Theme.accent_red.with-alpha(0.6);
+                    normal_border_width: 1px;
                     clicked => { AppLogic.clear_trim_points(); }
                 }
             }
@@ -744,7 +832,7 @@ export component PlayerTab inherits VerticalLayout {
                 Rectangle { width: 1px; height: 16px; background: Theme.card_border; }
 
                 ActionButton {
-                    width: 124px;
+                    width: 136px;
                     height: Theme.btn_height_sm;
                     title: "Lossless Cut Now";
                     icon_source: @image-url("../icons/scissors.svg");
@@ -753,21 +841,27 @@ export component PlayerTab inherits VerticalLayout {
                     fill_color: AppData.has_active_trim ? Theme.accent_emerald : Theme.control_bg;
                     hover_color: AppData.has_active_trim ? Theme.accent_emerald_hover : Theme.control_bg;
                     text_color: AppData.has_active_trim ? #ffffff : Theme.text_muted;
+                    border_col: AppData.has_active_trim ? #34d39999 : #32323e;
+                    hover_border_col: #6ee7b7cc;
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     is_disabled: !AppData.has_active_trim;
                     clicked => { AppLogic.quick_lossless_cut(); }
                 }
 
                 ActionButton {
-                    width: 114px;
+                    width: 120px;
                     height: Theme.btn_height_sm;
                     title: "Codec Settings";
                     icon_source: @image-url("../icons/settings.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: Theme.btn_neutral_bg;
-                    hover_color: Theme.btn_neutral_hover;
+                    fill_color: #20261b;
+                    hover_color: #2b3522;
                     text_color: Theme.accent_cyan;
+                    border_col: Theme.accent_cyan.with-alpha(0.45);
+                    hover_border_col: Theme.accent_cyan.with-alpha(0.8);
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.switch_tab(2); }
                 }

@@ -8,8 +8,8 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use kabosu_converter::ffmpeg::probe_file;
 use crate::context::{AppContext, TaskContext, WaveformTask};
 use crate::handlers::editor::{
-    request_current_preview_frame, sync_effective_dimensions_and_viewport,
-    update_video_edit_indicators,
+    request_current_preview_frame, reset_audio_fades, sync_effective_dimensions_and_viewport,
+    update_audio_edit_indicators, update_video_edit_indicators,
 };
 use crate::handlers::timeline::update_trim_indicators;
 use crate::utils::{collect_media_files_from_dir, format_bytes_fast};
@@ -113,7 +113,8 @@ pub fn load_selected_file(app_data: &AppData, item: &QueueFile, ctx: &TaskContex
     app_data.set_audio_normalize_enabled(false);
     app_data.set_audio_normalize_lufs(-16.0);
     app_data.set_audio_normalize_preset_index(0);
-    app_data.set_has_active_audio_edits(false);
+    reset_audio_fades(app_data);
+    update_audio_edit_indicators(app_data);
 
     // Reset timeline zoom to fit 1.0x on file load
     app_data.set_timeline_zoom(1.0);
@@ -423,6 +424,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             app_data.set_out_point(SharedString::from(""));
                             app_data.set_in_point_seconds(-1.0);
                             app_data.set_out_point_seconds(-1.0);
+                            reset_audio_fades(&app_data);
                             update_trim_indicators(&app_data);
                         } else {
                             let new_sel = (index as usize).min(list.len() - 1) as i32;
@@ -460,6 +462,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 app_data.set_out_point(SharedString::from(""));
                 app_data.set_in_point_seconds(-1.0);
                 app_data.set_out_point_seconds(-1.0);
+                reset_audio_fades(&app_data);
                 update_trim_indicators(&app_data);
             }
         });

@@ -291,6 +291,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let edit_gain_opt = if edit_gain_val.abs() > 0.05 { Some(edit_gain_val) } else { None };
                 let edit_norm_enabled = ui.global::<AppData>().get_audio_normalize_enabled();
                 let edit_norm_lufs = ui.global::<AppData>().get_audio_normalize_lufs();
+                let fade_in_val = ui.global::<AppData>().get_audio_fade_in_seconds();
+                let fade_out_val = ui.global::<AppData>().get_audio_fade_out_seconds();
+                let edit_fade_in_opt = if fade_in_val > 0.01 { Some(fade_in_val) } else { None };
+                let edit_fade_out_opt = if fade_out_val > 0.01 { Some(fade_out_val) } else { None };
                 let selected_idx = ui.global::<AppData>().get_selected_file_index();
 
                 // Persist user encoder choices to settings.json
@@ -438,9 +442,22 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             _ => None,
                         };
 
+                        let item_fade_in = if is_selected_or_single && item.is_audio {
+                            edit_fade_in_opt
+                        } else {
+                            None
+                        };
+                        let item_fade_out = if is_selected_or_single && item.is_audio {
+                            edit_fade_out_opt
+                        } else {
+                            None
+                        };
+
                         let has_audio_edits = (edit_gain_opt.is_some()
                             || edit_norm_enabled
-                            || normalize_lufs.is_some())
+                            || normalize_lufs.is_some()
+                            || item_fade_in.is_some()
+                            || item_fade_out.is_some())
                             && item.is_audio;
                         let has_video_edits =
                             rotation != VideoRotation::None || flip_h || flip_v || crop.is_some();
@@ -661,6 +678,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             audio_channels: if is_mp4_like { Some(2) } else { None },
                             audio_gain_db: final_gain_opt,
                             normalize_lufs: final_norm_opt,
+                            audio_fade_in_sec: item_fade_in,
+                            audio_fade_out_sec: item_fade_out,
+                            effective_duration_sec: (effective_duration > 0.0).then_some(effective_duration),
 
                             in_point,
                             out_point,

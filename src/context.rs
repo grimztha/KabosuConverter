@@ -60,6 +60,39 @@ pub struct AppContext {
     pub latest_release: Arc<Mutex<Option<kabosu_converter::updater::GithubRelease>>>,
 }
 
+/// Audio filter and volume snapshot extracted from UI state for `ffplay` preview.
+#[derive(Clone, Copy, Debug)]
+pub struct AudioPreviewParams {
+    pub volume_percent: i32,
+    pub gain_db: Option<f32>,
+    pub normalize_lufs: Option<f32>,
+    pub fade: Option<AudioFadePreview>,
+}
+
+impl AudioPreviewParams {
+    pub fn from_app_data(app_data: &crate::AppData) -> Self {
+        let vol_float = if app_data.get_player_is_muted() {
+            0.0
+        } else {
+            app_data.get_player_volume()
+        };
+        let volume_percent = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+        let raw_gain = app_data.get_audio_gain_db();
+        let gain_db = (raw_gain.is_finite() && raw_gain.abs() > 0.05).then_some(raw_gain);
+        let normalize_lufs = app_data
+            .get_audio_normalize_enabled()
+            .then(|| app_data.get_audio_normalize_lufs());
+        let fade = AppContext::build_audio_fade_preview(app_data);
+
+        Self {
+            volume_percent,
+            gain_db,
+            normalize_lufs,
+            fade,
+        }
+    }
+}
+
 impl AppContext {
     pub fn task_context(&self) -> TaskContext {
         TaskContext {
@@ -71,36 +104,48 @@ impl AppContext {
         }
     }
 
-    /// Stop any running preview playback stream and native ffplay session.
+    /// Stops any active preview stream and native `ffplay` session.
     pub fn stop_active_playback(&self, app_data: &crate::AppData) {
         self.playback_session_id.fetch_add(1, Ordering::SeqCst);
         self.playback_timer.borrow().stop();
-        let mut stream_lock = self.active_playback_child.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(mut child) = stream_lock.take() {
+        let stream_child = self
+            .active_playback_child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut child) = stream_child {
             let _ = child.kill();
             let _ = child.wait();
         }
-        let mut player_lock = self.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(mut session) = player_lock.take() {
+        let player_session = self
+            .active_player_child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut session) = player_session {
             let _ = session.kill();
         }
         app_data.set_player_is_playing(false);
     }
 
-    /// Stops all active playback, encoding, and downloader subprocesses on application exit.
+    /// Stops all active playback, encoding, and downloader subprocesses on exit.
     pub fn shutdown_all_processes(&self, app_data: &crate::AppData) {
         self.cancel_flag.store(true, Ordering::SeqCst);
         self.active_ytdlp_cancel.store(true, Ordering::SeqCst);
         self.meter_timer.borrow().stop();
         self.stop_active_playback(app_data);
-        let mut ytdlp_lock = self.active_ytdlp_child.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(mut child) = ytdlp_lock.take() {
+        let ytdlp_child = self
+            .active_ytdlp_child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut child) = ytdlp_child {
             let _ = child.kill();
             let _ = child.wait();
         }
     }
 
-    /// Restart live audio playback preview with updated audio filters (gain, normalization, volume).
+    /// Restarts live audio preview with updated filters (throttled to 80ms).
     pub fn restart_audio_preview(&self, app_data: &crate::AppData) {
         if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {
             return;
@@ -114,7 +159,7 @@ impl AppContext {
         self.do_restart_audio_preview(app_data);
     }
 
-    /// Immediately restart audio preview, bypassing throttle (e.g. for mute toggle or slider release).
+    /// Restarts live audio preview immediately, bypassing the throttle.
     pub fn restart_audio_preview_immediate(&self, app_data: &crate::AppData) {
         if !app_data.get_player_is_playing() || !app_data.get_selected_is_audio() {
             return;
@@ -125,7 +170,7 @@ impl AppContext {
         self.do_restart_audio_preview(app_data);
     }
 
-    /// Builds live audio fade preview settings from current UI state, or None when no fade is active.
+    /// Builds live audio fade preview settings from UI state, or `None` when inactive.
     pub fn build_audio_fade_preview(app_data: &crate::AppData) -> Option<AudioFadePreview> {
         let fade_in = app_data.get_audio_fade_in_seconds() as f64;
         let fade_out = app_data.get_audio_fade_out_seconds() as f64;
@@ -153,51 +198,40 @@ impl AppContext {
     }
 
     fn do_restart_audio_preview(&self, app_data: &crate::AppData) {
-        let vol_float = if app_data.get_player_is_muted() {
-            0.0
-        } else {
-            app_data.get_player_volume()
+        let Some(ref ffplay_bin) = self.binaries.ffplay else {
+            return;
         };
-        let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
 
-        if let Some(ref ffplay_bin) = self.binaries.ffplay {
-            let cur_time = app_data.get_player_current_time() as f64;
-            let out_sec = app_data.get_out_point_seconds() as f64;
-            let dur_opt = if out_sec > cur_time {
-                Some(out_sec - cur_time)
-            } else {
-                None
-            };
-            let path = app_data.get_selected_file_path().to_string();
-            let edit_gain_db = app_data.get_audio_gain_db();
-            let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
-                Some(edit_gain_db)
-            } else {
-                None
-            };
-            let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
-                Some(app_data.get_audio_normalize_lufs())
-            } else {
-                None
-            };
-            let fade_opt = Self::build_audio_fade_preview(app_data);
+        let cur_time = app_data.get_player_current_time() as f64;
+        let out_sec = app_data.get_out_point_seconds() as f64;
+        let dur_opt = (out_sec > cur_time).then_some(out_sec - cur_time);
+        let path = app_data.get_selected_file_path().to_string();
+        let params = AudioPreviewParams::from_app_data(app_data);
 
-            let mut lock = self.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(mut old) = lock.take() {
-                let _ = old.kill();
-            }
-            if let Ok(session) = spawn_audio_playback_with_fade(
-                ffplay_bin,
-                &path,
-                cur_time,
-                dur_opt,
-                vol_int,
-                edit_gain_opt,
-                edit_norm_opt,
-                fade_opt,
-            ) {
-                *lock = Some(session);
-            }
+        let old_session = self
+            .active_player_child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut old) = old_session {
+            let _ = old.kill();
+        }
+
+        if let Ok(session) = spawn_audio_playback_with_fade(
+            ffplay_bin,
+            &path,
+            cur_time,
+            dur_opt,
+            params.volume_percent,
+            params.gain_db,
+            params.normalize_lufs,
+            params.fade,
+        ) {
+            let mut lock = self
+                .active_player_child
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            *lock = Some(session);
         }
     }
 }

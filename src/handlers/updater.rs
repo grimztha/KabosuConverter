@@ -81,8 +81,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     if is_newer {
                                         data.set_has_update_available(true);
                                         data.set_update_status(3); // Update Available
-                                        data.set_update_latest_version(SharedString::from(&remote_ver));
-                                        data.set_update_release_url(SharedString::from(&release.html_url));
+                                        data.set_update_latest_version(SharedString::from(
+                                            &remote_ver,
+                                        ));
+                                        data.set_update_release_url(SharedString::from(
+                                            &release.html_url,
+                                        ));
                                         data.set_update_status_text(SharedString::from(format!(
                                             "Update to {}",
                                             remote_ver
@@ -102,7 +106,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     let data = ui.global::<AppData>();
                                     data.set_has_update_available(false);
                                     data.set_update_status(6); // Error
-                                    data.set_update_status_text("Check failed (Click to retry)".into());
+                                    data.set_update_status_text(
+                                        "Check failed (Click to retry)".into(),
+                                    );
                                 }
                             });
                         }
@@ -179,7 +185,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 if let Some(ui) = ui_dispatch.upgrade() {
                                     let data = ui.global::<AppData>();
                                     data.set_update_status(6);
-                                    data.set_update_status_text("Download blocked: invalid filename".into());
+                                    data.set_update_status_text(
+                                        "Download blocked: invalid filename".into(),
+                                    );
                                 }
                             });
                             return;
@@ -193,16 +201,22 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             if let Some(ui) = ui_dispatch.upgrade() {
                                 let data = ui.global::<AppData>();
                                 data.set_update_status(6);
-                                data.set_update_status_text("Download blocked: invalid path".into());
+                                data.set_update_status_text(
+                                    "Download blocked: invalid path".into(),
+                                );
                             }
                         });
                         return;
                     }
 
-                    let expected_hash = match updater::build_http_client(Some(Duration::from_secs(30))) {
-                        Ok(client) => updater::fetch_release_checksum(&client, &release.assets, safe_name).await,
-                        Err(_) => None,
-                    };
+                    let expected_hash =
+                        match updater::build_http_client(Some(Duration::from_secs(30))) {
+                            Ok(client) => {
+                                updater::fetch_release_checksum(&client, &release.assets, safe_name)
+                                    .await
+                            }
+                            Err(_) => None,
+                        };
 
                     let ui_prog = ui_cb.clone();
                     let download_start = Instant::now();
@@ -215,7 +229,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         move |ratio, downloaded, total| {
                             let elapsed_ms = download_start.elapsed().as_millis() as u64;
                             let prev_ms = last_tick_ms.load(Ordering::Relaxed);
-                            if ratio < 1.0 && prev_ms > 0 && elapsed_ms.saturating_sub(prev_ms) < 50 {
+                            if ratio < 1.0 && prev_ms > 0 && elapsed_ms.saturating_sub(prev_ms) < 50
+                            {
                                 return;
                             }
                             last_tick_ms.store(elapsed_ms.max(1), Ordering::Relaxed);
@@ -253,7 +268,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     data.set_update_status(5); // Downloaded
                                     data.set_update_download_progress(1.0);
                                     data.set_update_downloaded_path(SharedString::from(&path_str));
-                                    data.set_update_status_text("Update downloaded (Click to open)".into());
+                                    data.set_update_status_text(
+                                        "Update downloaded (Click to open)".into(),
+                                    );
                                 }
                             });
                             crate::utils::reveal_in_explorer(&dest_path);
@@ -264,7 +281,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 if let Some(ui) = ui_dispatch.upgrade() {
                                     let data = ui.global::<AppData>();
                                     data.set_update_status(6); // Error
-                                    data.set_update_status_text("Download failed (Click to retry)".into());
+                                    data.set_update_status_text(
+                                        "Download failed (Click to retry)".into(),
+                                    );
                                 }
                             });
                         }

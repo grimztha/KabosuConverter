@@ -4,13 +4,13 @@ use std::thread;
 
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer, SharedString};
 
+use crate::context::{AppContext, AudioPreviewParams};
+use crate::handlers::editor::{request_current_preview_frame, rotation_from_index};
+use crate::{AppData, AppLogic, MainWindow};
 use kabosu_converter::ffmpeg::{
     format_duration_hms, spawn_audio_playback_with_fade, spawn_ffplay,
     spawn_playback_stream_transformed_with_duration, AudioPlaybackSession,
 };
-use crate::context::AppContext;
-use crate::handlers::editor::{request_current_preview_frame, rotation_from_index};
-use crate::{AppData, AppLogic, MainWindow};
 
 /// Launches video decoding/rendering or audio playback stream starting at the given timestamp.
 pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
@@ -41,50 +41,30 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
         let out_sec = app_data.get_out_point_seconds() as f64;
         let dur_sec = app_data.get_player_duration() as f64;
         let ffmpeg_bin = ctx.binaries.ffmpeg.clone();
-
-        let vol_float = if app_data.get_player_is_muted() {
-            0.0
-        } else {
-            app_data.get_player_volume()
-        };
-        let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+        let audio_params = AudioPreviewParams::from_app_data(&app_data);
 
         let audio_expected = app_data.get_selected_is_audio() && ctx.binaries.ffplay.is_some();
         let mut initial_audio_clock: Option<Arc<std::sync::atomic::AtomicU64>> = None;
+        let dur_opt = (out_sec > start_sec).then_some(out_sec - start_sec);
 
-        let dur_opt = if out_sec > start_sec {
-            Some(out_sec - start_sec)
-        } else {
-            None
-        };
-
-        // Launch audio playback in parallel via ffplay in headless mode (-nodisp)
+        // Launch headless ffplay audio alongside the video frame stream.
         if app_data.get_selected_is_audio() {
             if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-                let edit_gain_db = app_data.get_audio_gain_db();
-                let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
-                    Some(edit_gain_db)
-                } else {
-                    None
-                };
-                let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
-                    Some(app_data.get_audio_normalize_lufs())
-                } else {
-                    None
-                };
-                let fade_opt = AppContext::build_audio_fade_preview(&app_data);
                 if let Ok(session) = spawn_audio_playback_with_fade(
                     ffplay_bin,
                     &path,
                     start_sec,
                     dur_opt,
-                    vol_int,
-                    edit_gain_opt,
-                    edit_norm_opt,
-                    fade_opt,
+                    audio_params.volume_percent,
+                    audio_params.gain_db,
+                    audio_params.normalize_lufs,
+                    audio_params.fade,
                 ) {
                     initial_audio_clock = Some(session.master_clock.clone());
-                    let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut lock = ctx
+                        .active_player_child
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     *lock = Some(session);
                 }
             }
@@ -111,7 +91,10 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                 let ui_w = ui.as_weak();
                 let mut stdout = child.stdout.take();
 
-                let mut lock = ctx.active_playback_child.lock().unwrap_or_else(|e| e.into_inner());
+                let mut lock = ctx
+                    .active_playback_child
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 *lock = Some(child);
 
                 thread::spawn(move || {
@@ -152,7 +135,9 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                                         let app_data = ui.global::<AppData>();
                                         app_data.set_player_is_playing(false);
                                         app_data.set_player_current_time(final_time as f32);
-                                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
+                                        app_data.set_player_time_text(SharedString::from(
+                                            format_duration_hms(final_time),
+                                        ));
                                     }
                                 });
                             }
@@ -173,22 +158,25 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                             }
                         }
 
-                        let get_pts = |clock: &Option<Arc<std::sync::atomic::AtomicU64>>| -> Option<f64> {
-                            if let Some(ref clk) = *clock {
-                                let val = clk.load(Ordering::Acquire);
-                                if val != u64::MAX {
-                                    return Some((val as f64) / 1_000_000.0);
+                        let get_pts =
+                            |clock: &Option<Arc<std::sync::atomic::AtomicU64>>| -> Option<f64> {
+                                if let Some(ref clk) = *clock {
+                                    let val = clk.load(Ordering::Acquire);
+                                    if val != u64::MAX {
+                                        return Some((val as f64) / 1_000_000.0);
+                                    }
                                 }
-                            }
-                            None
-                        };
+                                None
+                            };
 
                         // On the initial frame, if audio is playing, wait up to 350ms
                         // for ffplay to initialize so video and audio start simultaneously.
                         if !audio_wait_done && audio_expected {
                             audio_wait_done = true;
                             let wait_start = std::time::Instant::now();
-                            while get_pts(&cached_audio_clock).is_none() && wait_start.elapsed().as_millis() < 350 {
+                            while get_pts(&cached_audio_clock).is_none()
+                                && wait_start.elapsed().as_millis() < 350
+                            {
                                 if session_check.load(Ordering::SeqCst) != my_session {
                                     break;
                                 }
@@ -206,23 +194,22 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
 
                         let current_master_time = match get_pts(&cached_audio_clock) {
                             Some(pts) => pts,
-                            None => {
-                                start_sec + playback_start_instant.elapsed().as_secs_f64()
-                            }
+                            None => start_sec + playback_start_instant.elapsed().as_secs_f64(),
                         };
 
                         let frame_target_sec = start_sec + (frame_index as f64) * frame_dur;
 
-                        let has_reached_out = out_sec >= 0.0 && (
-                            current_master_time >= out_sec
-                            || frame_target_sec >= out_sec
-                            || (audio_finished && audio_wait_done)
-                        );
-                        let has_reached_end = current_master_time >= dur_sec || frame_target_sec >= dur_sec;
+                        let has_reached_out = out_sec >= 0.0
+                            && (current_master_time >= out_sec
+                                || frame_target_sec >= out_sec
+                                || (audio_finished && audio_wait_done));
+                        let has_reached_end =
+                            current_master_time >= dur_sec || frame_target_sec >= dur_sec;
 
                         if has_reached_out || has_reached_end {
                             if session_check.load(Ordering::SeqCst) == my_session {
-                                let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
+                                let mut pixel_buffer =
+                                    SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
                                 pixel_buffer.make_mut_bytes().copy_from_slice(&buf);
 
                                 let ui_w2 = ui_w.clone();
@@ -237,7 +224,9 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                                         app_data.set_preview_frame(img);
                                         app_data.set_player_is_playing(false);
                                         app_data.set_player_current_time(final_time as f32);
-                                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time)));
+                                        app_data.set_player_time_text(SharedString::from(
+                                            format_duration_hms(final_time),
+                                        ));
                                     }
                                 });
                             }
@@ -277,21 +266,29 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                                     let img = slint::Image::from_rgba8(pixel_buffer);
                                     app_data.set_preview_frame(img);
                                     app_data.set_player_current_time(current_master_time as f32);
-                                    app_data.set_player_time_text(SharedString::from(format_duration_hms(current_master_time)));
+                                    app_data.set_player_time_text(SharedString::from(
+                                        format_duration_hms(current_master_time),
+                                    ));
                                 }
                             }
                         });
                     }
 
-                    // Clean up process handles if still belonging to this session
+                    // Release handles if this session is still active.
                     if session_check.load(Ordering::SeqCst) == my_session {
-                        let mut s_lock = stream_child_ref.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut c) = s_lock.take() {
+                        let stream_child = stream_child_ref
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .take();
+                        if let Some(mut c) = stream_child {
                             let _ = c.kill();
                             let _ = c.wait();
                         }
-                        let mut p_lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut s) = p_lock.take() {
+                        let player_session = ffplay_child_ref
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .take();
+                        if let Some(mut s) = player_session {
                             let _ = s.kill();
                         }
                     }
@@ -299,52 +296,34 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
             }
             Err(_e) => {
                 #[cfg(debug_assertions)]
-                eprintln!("Failed to spawn playback stream: {}", _e);
+                eprintln!("Failed to spawn playback stream: {_e}");
                 app_data.set_player_is_playing(false);
             }
         }
     } else {
-        // Audio-only playback with ffplay
+        // Audio-only playback via ffplay
         let path = app_data.get_selected_file_path().to_string();
         let start_sec = actual_start as f64;
         let out_sec = app_data.get_out_point_seconds() as f64;
-
-        let vol_float = if app_data.get_player_is_muted() {
-            0.0
-        } else {
-            app_data.get_player_volume()
-        };
-        let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
+        let audio_params = AudioPreviewParams::from_app_data(&app_data);
+        let vol_int = audio_params.volume_percent;
 
         if let Some(ref ffplay_bin) = ctx.binaries.ffplay {
-            let dur_opt = if out_sec > start_sec {
-                Some(out_sec - start_sec)
-            } else {
-                None
-            };
-            let edit_gain_db = app_data.get_audio_gain_db();
-            let edit_gain_opt = if edit_gain_db.abs() > 0.05 {
-                Some(edit_gain_db)
-            } else {
-                None
-            };
-            let edit_norm_opt = if app_data.get_audio_normalize_enabled() {
-                Some(app_data.get_audio_normalize_lufs())
-            } else {
-                None
-            };
-            let fade_opt = AppContext::build_audio_fade_preview(&app_data);
+            let dur_opt = (out_sec > start_sec).then_some(out_sec - start_sec);
             if let Ok(session) = spawn_audio_playback_with_fade(
                 ffplay_bin,
                 &path,
                 start_sec,
                 dur_opt,
-                vol_int,
-                edit_gain_opt,
-                edit_norm_opt,
-                fade_opt,
+                audio_params.volume_percent,
+                audio_params.gain_db,
+                audio_params.normalize_lufs,
+                audio_params.fade,
             ) {
-                let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
+                let mut lock = ctx
+                    .active_player_child
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 *lock = Some(session);
             } else {
                 #[cfg(not(test))]
@@ -393,10 +372,16 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                     let out_sec = app_data.get_out_point_seconds();
 
                     if is_finished {
-                        let final_time = if out_sec >= 0.0 { out_sec.min(dur) } else { dur };
+                        let final_time = if out_sec >= 0.0 {
+                            out_sec.min(dur)
+                        } else {
+                            dur
+                        };
                         app_data.set_player_is_playing(false);
                         app_data.set_player_current_time(final_time);
-                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time as f64)));
+                        app_data.set_player_time_text(SharedString::from(format_duration_hms(
+                            final_time as f64,
+                        )));
                         timer_ref.borrow().stop();
                         let mut lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
                         let _ = lock.take();
@@ -420,15 +405,22 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
                         };
                         app_data.set_player_is_playing(false);
                         app_data.set_player_current_time(final_time);
-                        app_data.set_player_time_text(SharedString::from(format_duration_hms(final_time as f64)));
+                        app_data.set_player_time_text(SharedString::from(format_duration_hms(
+                            final_time as f64,
+                        )));
                         timer_ref.borrow().stop();
-                        let mut lock = ffplay_child_ref.lock().unwrap_or_else(|e| e.into_inner());
-                        if let Some(mut s) = lock.take() {
+                        let session = ffplay_child_ref
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .take();
+                        if let Some(mut s) = session {
                             let _ = s.kill();
                         }
                     } else {
                         app_data.set_player_current_time(cur);
-                        app_data.set_player_time_text(SharedString::from(format_duration_hms(cur as f64)));
+                        app_data.set_player_time_text(SharedString::from(format_duration_hms(
+                            cur as f64,
+                        )));
                     }
                 }
             },
@@ -437,7 +429,6 @@ pub fn start_playback_from(ui: &MainWindow, ctx: &AppContext, start_at: f32) {
 }
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
-    // Handle Player Seek (Scrubber slider / timeline click)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -452,18 +443,22 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let dur = app_data.get_player_duration();
                 let clamped = val.clamp(0.0, dur.max(0.0));
                 app_data.set_player_current_time(clamped);
-                app_data.set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
+                app_data
+                    .set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
 
                 if was_playing {
                     start_playback_from(&ui, &ctx, clamped);
                 } else if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
             }
         });
     }
 
-    // Handle Player Scrub (Continuous dragging)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -478,16 +473,20 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let dur = app_data.get_player_duration();
                 let clamped = val.clamp(0.0, dur.max(0.0));
                 app_data.set_player_current_time(clamped);
-                app_data.set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
+                app_data
+                    .set_player_time_text(SharedString::from(format_duration_hms(clamped as f64)));
 
                 if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
             }
         });
     }
 
-    // Handle Player Step (Relative stepping: -1s, -0.1s, +0.1s, +1s)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -503,18 +502,22 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let dur = app_data.get_player_duration();
                 let new_val = (cur + delta).clamp(0.0, dur.max(0.0));
                 app_data.set_player_current_time(new_val);
-                app_data.set_player_time_text(SharedString::from(format_duration_hms(new_val as f64)));
+                app_data
+                    .set_player_time_text(SharedString::from(format_duration_hms(new_val as f64)));
 
                 if was_playing {
                     start_playback_from(&ui, &ctx, new_val);
                 } else if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
             }
         });
     }
 
-    // Handle Player Play/Pause
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -537,7 +540,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Player Stop
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -548,16 +550,21 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                 let reset_pos = app_data.get_in_point_seconds().max(0.0);
                 app_data.set_player_current_time(reset_pos);
-                app_data.set_player_time_text(SharedString::from(format_duration_hms(reset_pos as f64)));
+                app_data.set_player_time_text(SharedString::from(format_duration_hms(
+                    reset_pos as f64,
+                )));
 
                 if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
             }
         });
     }
 
-    // Handle Play Trimmed Range
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -570,13 +577,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                 let start = app_data.get_in_point_seconds().max(0.0);
                 app_data.set_player_current_time(start);
-                app_data.set_player_time_text(SharedString::from(format_duration_hms(start as f64)));
+                app_data
+                    .set_player_time_text(SharedString::from(format_duration_hms(start as f64)));
 
                 if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
 
-                // If currently playing, stop first then restart at trimmed start
                 if app_data.get_player_is_playing() {
                     ui.global::<AppLogic>().invoke_player_play_pause();
                 }
@@ -585,7 +596,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Launch FFplay (Native full-fps audio/video preview)
+    // External full-FPS ffplay preview
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -607,9 +618,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 };
 
                 let ffplay_bin = ctx.binaries.ffplay.clone().unwrap_or_else(|| {
-                    ctx.binaries
-                        .ffmpeg
-                        .with_file_name(if cfg!(windows) { "ffplay.exe" } else { "ffplay" })
+                    ctx.binaries.ffmpeg.with_file_name(if cfg!(windows) {
+                        "ffplay.exe"
+                    } else {
+                        "ffplay"
+                    })
                 });
 
                 let vol_float = if app_data.get_player_is_muted() {
@@ -619,66 +632,82 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 };
                 let vol_int = (vol_float * 100.0).round().clamp(0.0, 100.0) as i32;
 
-                let mut lock = ctx.active_player_child.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(mut old) = lock.take() {
+                let old_session = ctx
+                    .active_player_child
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take();
+                if let Some(mut old) = old_session {
                     let _ = old.kill();
                 }
-                if let Ok(child) = spawn_ffplay(&ffplay_bin, &media_path, cur, duration, !is_video, Some(vol_int)) {
+                if let Ok(child) = spawn_ffplay(
+                    &ffplay_bin,
+                    &media_path,
+                    cur,
+                    duration,
+                    !is_video,
+                    Some(vol_int),
+                ) {
+                    let mut lock = ctx
+                        .active_player_child
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     *lock = Some(AudioPlaybackSession::from_child(child));
                 }
             }
         });
     }
 
-    // Handle Player Volume Changed (Throttled real-time updates)
+    // Volume drag (throttled restart)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
 
-        ui.global::<AppLogic>().on_player_volume_changed(move |val| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                let clamped = val.clamp(0.0, 1.0);
-                app_data.set_player_volume(clamped);
+        ui.global::<AppLogic>()
+            .on_player_volume_changed(move |val| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let clamped = val.clamp(0.0, 1.0);
+                    app_data.set_player_volume(clamped);
 
-                if clamped <= 0.001 {
-                    app_data.set_player_is_muted(true);
-                } else if app_data.get_player_is_muted() {
-                    app_data.set_player_is_muted(false);
-                }
+                    if clamped <= 0.001 {
+                        app_data.set_player_is_muted(true);
+                    } else if app_data.get_player_is_muted() {
+                        app_data.set_player_is_muted(false);
+                    }
 
-                if app_data.get_player_is_playing() {
-                    ctx.restart_audio_preview(&app_data);
+                    if app_data.get_player_is_playing() {
+                        ctx.restart_audio_preview(&app_data);
+                    }
                 }
-            }
-        });
+            });
     }
 
-    // Handle Player Volume Settled (Immediate guaranteed final update on release or click)
+    // Volume release (immediate restart)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
 
-        ui.global::<AppLogic>().on_player_volume_settled(move |val| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                let clamped = val.clamp(0.0, 1.0);
-                app_data.set_player_volume(clamped);
+        ui.global::<AppLogic>()
+            .on_player_volume_settled(move |val| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let clamped = val.clamp(0.0, 1.0);
+                    app_data.set_player_volume(clamped);
 
-                if clamped <= 0.001 {
-                    app_data.set_player_is_muted(true);
-                } else if app_data.get_player_is_muted() {
-                    app_data.set_player_is_muted(false);
-                }
+                    if clamped <= 0.001 {
+                        app_data.set_player_is_muted(true);
+                    } else if app_data.get_player_is_muted() {
+                        app_data.set_player_is_muted(false);
+                    }
 
-                if app_data.get_player_is_playing() {
-                    ctx.restart_audio_preview_immediate(&app_data);
+                    if app_data.get_player_is_playing() {
+                        ctx.restart_audio_preview_immediate(&app_data);
+                    }
                 }
-            }
-        });
+            });
     }
 
-    // Handle Player Toggle Mute
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -705,20 +734,21 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 if app_data.get_player_is_playing() {
                     if app_data.get_selected_is_audio() {
                         ctx.restart_audio_preview_immediate(&app_data);
-                    } else if let Some(mut old) = ctx
-                        .active_player_child
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .take()
-                    {
-                        let _ = old.kill();
+                    } else {
+                        let old_session = ctx
+                            .active_player_child
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .take();
+                        if let Some(mut old) = old_session {
+                            let _ = old.kill();
+                        }
                     }
                 }
             }
         });
     }
 
-    // Handle Toggle Volume Meter
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_toggle_volume_meter(move || {
@@ -804,8 +834,20 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     };
 
                     let now = std::time::Instant::now();
-                    smooth_channel(target_l, &mut disp_l, &mut peak_l, &mut peak_hold_time_l, now);
-                    smooth_channel(target_r, &mut disp_r, &mut peak_r, &mut peak_hold_time_r, now);
+                    smooth_channel(
+                        target_l,
+                        &mut disp_l,
+                        &mut peak_l,
+                        &mut peak_hold_time_l,
+                        now,
+                    );
+                    smooth_channel(
+                        target_r,
+                        &mut disp_r,
+                        &mut peak_r,
+                        &mut peak_hold_time_r,
+                        now,
+                    );
 
                     app_data.set_audio_meter_l_db(disp_l);
                     app_data.set_audio_meter_r_db(disp_r);
@@ -820,12 +862,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kabosu_converter::ffmpeg::FFmpegBinaries;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, AtomicU64};
     use std::sync::{mpsc, Mutex};
     use std::time::Instant;
-    use kabosu_converter::ffmpeg::FFmpegBinaries;
 
     fn create_test_context() -> AppContext {
         let (preview_tx, _) = mpsc::channel();
@@ -837,9 +879,21 @@ mod tests {
             .join("bin");
 
         let binaries = FFmpegBinaries::locate().unwrap_or_else(|_| FFmpegBinaries {
-            ffmpeg: default_bin_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
-            ffprobe: default_bin_dir.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
-            ffplay: Some(default_bin_dir.join(if cfg!(windows) { "ffplay.exe" } else { "ffplay" })),
+            ffmpeg: default_bin_dir.join(if cfg!(windows) {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            }),
+            ffprobe: default_bin_dir.join(if cfg!(windows) {
+                "ffprobe.exe"
+            } else {
+                "ffprobe"
+            }),
+            ffplay: Some(default_bin_dir.join(if cfg!(windows) {
+                "ffplay.exe"
+            } else {
+                "ffplay"
+            })),
         });
 
         AppContext {
@@ -910,7 +964,10 @@ mod tests {
         app_data.set_player_is_playing(true);
         ui.global::<AppLogic>().invoke_player_seek(75.0);
         assert_eq!(app_data.get_player_current_time(), 75.0);
-        assert!(app_data.get_player_is_playing(), "Seeking while playing must continue playing");
+        assert!(
+            app_data.get_player_is_playing(),
+            "Seeking while playing must continue playing"
+        );
 
         // 3. Scrubbing drag and release (seek) flow
         ui.global::<AppLogic>().invoke_player_scrub(40.0);
@@ -922,7 +979,10 @@ mod tests {
 
         ui.global::<AppLogic>().invoke_player_seek(55.0);
         assert_eq!(app_data.get_player_current_time(), 55.0);
-        assert!(app_data.get_player_is_playing(), "Releasing scrubber must resume playback");
+        assert!(
+            app_data.get_player_is_playing(),
+            "Releasing scrubber must resume playback"
+        );
         assert!(!ctx.was_playing_before_scrub.load(Ordering::SeqCst));
 
         ctx.stop_active_playback(&app_data);

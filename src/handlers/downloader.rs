@@ -4,13 +4,13 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
-use kabosu_converter::ffmpeg::format_duration_hms;
-use kabosu_converter::sanitize::redact_url_query;
-use kabosu_converter::ytdlp;
 use crate::context::AppContext;
 use crate::handlers::queue::{load_selected_file, probe_to_queue_file, process_incoming_paths};
 use crate::utils::{get_clipboard_string, normalize_path_for_explorer, open_folder_in_explorer};
 use crate::{AppData, AppLogic, DownloadHistoryItem, MainWindow, QueueFile};
+use kabosu_converter::ffmpeg::format_duration_hms;
+use kabosu_converter::sanitize::redact_url_query;
+use kabosu_converter::ytdlp;
 
 fn resolve_ytdlp_binary(cached: &Option<PathBuf>) -> Option<PathBuf> {
     cached
@@ -21,17 +21,16 @@ fn resolve_ytdlp_binary(cached: &Option<PathBuf>) -> Option<PathBuf> {
 }
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
-    // Handle yt-dlp URL Changed
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_ytdlp_url_changed(move |new_url| {
-            if let Some(ui) = ui_handle.upgrade() {
-                ui.global::<AppData>().set_ytdlp_url(new_url);
-            }
-        });
+        ui.global::<AppLogic>()
+            .on_ytdlp_url_changed(move |new_url| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    ui.global::<AppData>().set_ytdlp_url(new_url);
+                }
+            });
     }
 
-    // Handle yt-dlp Clear URL
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_clear_url(move || {
@@ -50,26 +49,29 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Paste Clipboard
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_paste_clipboard(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 if let Some(clip) = get_clipboard_string() {
-                    ui.global::<AppData>().set_ytdlp_url(SharedString::from(clip));
+                    ui.global::<AppData>()
+                        .set_ytdlp_url(SharedString::from(clip));
                 }
             }
         });
     }
 
-    // Handle yt-dlp Select Output Directory
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_select_output_dir(move || {
             let (parent_hwnd, suggested) = if let Some(ui) = ui_handle.upgrade() {
                 let hwnd = crate::dialogs::get_window_hwnd(ui.window());
                 let cur = ui.global::<AppData>().get_ytdlp_output_dir().to_string();
-                let dir = if !cur.is_empty() { Some(PathBuf::from(cur)) } else { None };
+                let dir = if !cur.is_empty() {
+                    Some(PathBuf::from(cur))
+                } else {
+                    None
+                };
                 (hwnd, dir)
             } else {
                 (std::ptr::null_mut(), None)
@@ -91,7 +93,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Open Output Directory
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_open_output_dir(move || {
@@ -133,7 +134,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Discover
+    // Stream metadata & format discovery
     {
         let ui_handle = ui.as_weak();
         let ytdlp_bin_arc = ctx.ytdlp_binary.clone();
@@ -146,7 +147,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             };
             let data = ui.global::<AppData>();
             if data.get_ytdlp_is_discovering() {
-                // Concurrency / rate limiting guard: prevent concurrent discoveries
                 return;
             }
             let url = data.get_ytdlp_url().trim().to_string();
@@ -186,7 +186,10 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         match result {
                             Ok((info, options)) => {
                                 data.set_ytdlp_has_discovered(true);
-                                let title_str = info.title.clone().unwrap_or_else(|| "Unknown Title".to_string());
+                                let title_str = info
+                                    .title
+                                    .clone()
+                                    .unwrap_or_else(|| "Unknown Title".to_string());
                                 data.set_ytdlp_title(SharedString::from(&title_str));
                                 let clean_stem = ytdlp::sanitize_filename_stem(&title_str);
                                 data.set_ytdlp_custom_filename(SharedString::from(clean_stem));
@@ -195,9 +198,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                 ));
                                 data.set_ytdlp_duration(SharedString::from(
                                     info.duration_string.unwrap_or_else(|| {
-                                        info.duration
-                                            .map(format_duration_hms)
-                                            .unwrap_or_default()
+                                        info.duration.map(format_duration_hms).unwrap_or_default()
                                     }),
                                 ));
                                 data.set_ytdlp_discovered_id(SharedString::from(
@@ -233,7 +234,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Start Download
+    // Start download
     {
         let ui_handle = ui.as_weak();
         let ytdlp_bin_arc = ctx.ytdlp_binary.clone();
@@ -249,7 +250,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             };
             let data = ui.global::<AppData>();
             if data.get_ytdlp_is_downloading() {
-                // Concurrency / rate limiting guard: prevent starting concurrent downloads
                 return;
             }
             let url = data.get_ytdlp_url().trim().to_string();
@@ -320,6 +320,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             };
 
             let dest_dir_complete = dest_dir.clone();
+            let dl_start = std::time::Instant::now();
+            let last_prog_ms = std::sync::atomic::AtomicU64::new(0);
 
             let job = ytdlp::start_download(
                 &bin_path,
@@ -331,6 +333,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 child_store_inner.clone(),
                 cancel_clone,
                 move |prog| {
+                    let elapsed_ms = dl_start.elapsed().as_millis() as u64;
+                    let prev_ms = last_prog_ms.load(Ordering::Relaxed);
+                    let is_phase_event = prog.percent >= 95.0;
+                    if !is_phase_event && prev_ms > 0 && elapsed_ms.saturating_sub(prev_ms) < 40 {
+                        return;
+                    }
+                    last_prog_ms.store(elapsed_ms.max(1), Ordering::Relaxed);
+
                     let ui_w = ui_progress.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w.upgrade() {
@@ -357,25 +367,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 },
                 move |log_line| {
                     let ui_w = ui_log.clone();
+                    let sanitized_log = redact_url_query(&log_line);
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_w.upgrade() {
                             let app_data = ui.global::<AppData>();
                             let mut cur = app_data.get_log_preview().to_string();
-                            if !cur.is_empty() {
-                                cur.push('\n');
-                            }
-                            let sanitized_log = kabosu_converter::sanitize::redact_url_query(&log_line);
-                            cur.push_str(&sanitized_log);
-                            if cur.len() > 8000 {
-                                let mut start = cur.len() - 6000;
-                                while start < cur.len() && !cur.is_char_boundary(start) {
-                                    start += 1;
-                                }
-                                if let Some(newline_offset) = cur[start..].find('\n') {
-                                    start += newline_offset + 1;
-                                }
-                                cur = cur[start..].to_string();
-                            }
+                            crate::utils::append_log_line(&mut cur, &sanitized_log, 8000, 6000);
                             app_data.set_log_preview(SharedString::from(cur));
                         }
                     });
@@ -394,7 +391,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     } else {
                                         dest_dir_inner.join(&file_path)
                                     };
-                                    let clean_file_path = normalize_path_for_explorer(&resolved_file_path);
+                                    let clean_file_path =
+                                        normalize_path_for_explorer(&resolved_file_path);
                                     data.set_ytdlp_has_error(false);
                                     data.set_ytdlp_error_message(SharedString::from(""));
                                     data.set_ytdlp_download_finished(true);
@@ -430,11 +428,19 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                         .unwrap_or_default();
 
                                     let cur_history = data.get_ytdlp_history();
-                                    let mut history_vec: Vec<DownloadHistoryItem> = (0..cur_history.row_count())
+                                    let mut history_vec: Vec<DownloadHistoryItem> = (0
+                                        ..cur_history.row_count())
                                         .filter_map(|i| cur_history.row_data(i))
                                         .collect();
-                                    add_item_to_history(&mut history_vec, &fname, &path_str, &size_formatted);
-                                    data.set_ytdlp_history(ModelRc::new(VecModel::from(history_vec)));
+                                    add_item_to_history(
+                                        &mut history_vec,
+                                        &fname,
+                                        &path_str,
+                                        &size_formatted,
+                                    );
+                                    data.set_ytdlp_history(ModelRc::new(VecModel::from(
+                                        history_vec,
+                                    )));
                                 }
                                 Err(e) => {
                                     let safe_err = redact_url_query(&e.to_string());
@@ -463,7 +469,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Cancel Download
     {
         let ui_handle = ui.as_weak();
         let child_store = ctx.active_ytdlp_child.clone();
@@ -471,8 +476,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
         ui.global::<AppLogic>().on_ytdlp_cancel_download(move || {
             cancel_store.store(true, Ordering::SeqCst);
-            let mut lock = child_store.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(mut child) = lock.take() {
+            let child = child_store.lock().unwrap_or_else(|e| e.into_inner()).take();
+            if let Some(mut child) = child {
                 let _ = child.kill();
                 let _ = child.wait();
             }
@@ -484,7 +489,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Load in Player
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -497,9 +501,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => return,
             };
             let app_data = ui.global::<AppData>();
-            let file_path_str = app_data
-                .get_ytdlp_last_downloaded_file()
-                .to_string();
+            let file_path_str = app_data.get_ytdlp_last_downloaded_file().to_string();
             if file_path_str.is_empty() {
                 return;
             }
@@ -533,7 +535,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Send to Queue
     {
         let ui_handle = ui.as_weak();
         let task_ctx = ctx.task_context();
@@ -544,9 +545,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 None => return,
             };
             let app_data = ui.global::<AppData>();
-            let file_path_str = app_data
-                .get_ytdlp_last_downloaded_file()
-                .to_string();
+            let file_path_str = app_data.get_ytdlp_last_downloaded_file().to_string();
             if file_path_str.is_empty() {
                 return;
             }
@@ -560,86 +559,93 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle yt-dlp Add History Item to Input Queue
     {
         let ui_handle = ui.as_weak();
         let task_ctx = ctx.task_context();
 
-        ui.global::<AppLogic>().on_ytdlp_add_history_item_to_queue(move |idx| {
-            let Ok(idx) = usize::try_from(idx) else {
-                return;
-            };
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                let history = app_data.get_ytdlp_history();
-                if idx < history.row_count() {
-                    if let Some(item) = history.row_data(idx) {
-                        let path = PathBuf::from(item.file_path.as_str());
-                        if path.exists() {
-                            process_incoming_paths(vec![path], ui_handle.clone(), task_ctx.clone());
-                            app_data.set_status_summary(SharedString::from(format!(
-                                "Added '{}' to queue",
-                                item.file_name
-                            )));
-                        } else {
-                            app_data.set_status_summary(SharedString::from(format!(
-                                "File not found: {}",
-                                item.file_path
-                            )));
+        ui.global::<AppLogic>()
+            .on_ytdlp_add_history_item_to_queue(move |idx| {
+                let Ok(idx) = usize::try_from(idx) else {
+                    return;
+                };
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let history = app_data.get_ytdlp_history();
+                    if idx < history.row_count() {
+                        if let Some(item) = history.row_data(idx) {
+                            let path = PathBuf::from(item.file_path.as_str());
+                            if path.exists() {
+                                process_incoming_paths(
+                                    vec![path],
+                                    ui_handle.clone(),
+                                    task_ctx.clone(),
+                                );
+                                app_data.set_status_summary(SharedString::from(format!(
+                                    "Added '{}' to queue",
+                                    item.file_name
+                                )));
+                            } else {
+                                app_data.set_status_summary(SharedString::from(format!(
+                                    "File not found: {}",
+                                    item.file_path
+                                )));
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
     }
 
-    // Handle yt-dlp Open History Item in Explorer (with file selected)
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_ytdlp_open_history_item(move |idx| {
-            let Ok(idx) = usize::try_from(idx) else {
-                return;
-            };
-            if let Some(ui) = ui_handle.upgrade() {
-                let history = ui.global::<AppData>().get_ytdlp_history();
-                if idx < history.row_count() {
-                    if let Some(item) = history.row_data(idx) {
-                        let path = PathBuf::from(item.file_path.as_str());
-                        crate::utils::reveal_in_explorer(&path);
+        ui.global::<AppLogic>()
+            .on_ytdlp_open_history_item(move |idx| {
+                let Ok(idx) = usize::try_from(idx) else {
+                    return;
+                };
+                if let Some(ui) = ui_handle.upgrade() {
+                    let history = ui.global::<AppData>().get_ytdlp_history();
+                    if idx < history.row_count() {
+                        if let Some(item) = history.row_data(idx) {
+                            let path = PathBuf::from(item.file_path.as_str());
+                            crate::utils::reveal_in_explorer(&path);
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 
-    // Handle yt-dlp Remove History Item from session list
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_ytdlp_remove_history_item(move |idx| {
-            let Ok(idx) = usize::try_from(idx) else {
-                return;
-            };
-            if let Some(ui) = ui_handle.upgrade() {
-                let history = ui.global::<AppData>().get_ytdlp_history();
-                if idx < history.row_count() {
-                    let mut list: Vec<DownloadHistoryItem> = (0..history.row_count())
-                        .filter_map(|i| history.row_data(i))
-                        .collect();
-                    if idx < list.len() {
-                        list.remove(idx);
-                        ui.global::<AppData>().set_ytdlp_history(ModelRc::new(VecModel::from(list)));
+        ui.global::<AppLogic>()
+            .on_ytdlp_remove_history_item(move |idx| {
+                let Ok(idx) = usize::try_from(idx) else {
+                    return;
+                };
+                if let Some(ui) = ui_handle.upgrade() {
+                    let history = ui.global::<AppData>().get_ytdlp_history();
+                    if idx < history.row_count() {
+                        let mut list: Vec<DownloadHistoryItem> = (0..history.row_count())
+                            .filter_map(|i| history.row_data(i))
+                            .collect();
+                        if idx < list.len() {
+                            list.remove(idx);
+                            ui.global::<AppData>()
+                                .set_ytdlp_history(ModelRc::new(VecModel::from(list)));
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 
-    // Handle yt-dlp Clear All History
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_ytdlp_clear_history(move || {
             if let Some(ui) = ui_handle.upgrade() {
-                ui.global::<AppData>().set_ytdlp_history(ModelRc::new(VecModel::from(Vec::<DownloadHistoryItem>::new())));
+                ui.global::<AppData>()
+                    .set_ytdlp_history(ModelRc::new(VecModel::from(
+                        Vec::<DownloadHistoryItem>::new(),
+                    )));
             }
         });
     }
@@ -721,11 +727,19 @@ mod tests {
 
         // Case 1: Non-existent file
         let mut history = Vec::new();
-        add_item_to_history(&mut history, "missing.mp4", "C:/non_existent_path/missing.mp4", "10 MB");
+        add_item_to_history(
+            &mut history,
+            "missing.mp4",
+            "C:/non_existent_path/missing.mp4",
+            "10 MB",
+        );
         app_data.set_ytdlp_history(ModelRc::new(VecModel::from(history)));
 
         app_logic.invoke_ytdlp_add_history_item_to_queue(0);
-        assert!(app_data.get_status_summary().as_str().contains("File not found"));
+        assert!(app_data
+            .get_status_summary()
+            .as_str()
+            .contains("File not found"));
 
         // Case 2: Real temporary file
         let temp_dir = tempfile::tempdir().expect("tempdir");
@@ -733,11 +747,19 @@ mod tests {
         std::fs::write(&temp_file, b"fake video content").expect("write temp file");
 
         let mut history2 = Vec::new();
-        add_item_to_history(&mut history2, "downloaded_sample.mp4", &temp_file.to_string_lossy(), "18 B");
+        add_item_to_history(
+            &mut history2,
+            "downloaded_sample.mp4",
+            &temp_file.to_string_lossy(),
+            "18 B",
+        );
         app_data.set_ytdlp_history(ModelRc::new(VecModel::from(history2)));
 
         app_logic.invoke_ytdlp_add_history_item_to_queue(0);
-        assert!(app_data.get_status_summary().as_str().contains("downloaded_sample.mp4"));
+        assert!(app_data
+            .get_status_summary()
+            .as_str()
+            .contains("downloaded_sample.mp4"));
     }
 
     #[test]

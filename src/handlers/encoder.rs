@@ -4,18 +4,37 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, SharedString};
 
+use crate::context::AppContext;
+use crate::handlers::editor::rotation_from_index;
+use crate::utils::open_folder_in_explorer;
+use crate::{AppData, AppLogic, MainWindow, QueueFile};
 use kabosu_converter::ffmpeg::{
     format_duration_hms, parse_timecode_to_seconds, AudioCodecChoice, CropRect, DeinterlaceMode,
     EncodeJobConfig, EncoderFunction, FFmpegCommandBuilder, FFmpegRunner, HwAccel, ProResProfile,
     RateControlMode, ResolutionPreset, VideoCodec, VideoRotation,
 };
 use kabosu_converter::sanitize::{ensure_path_within_dir, sanitize_filename_stem, validate_path};
-use crate::context::AppContext;
-use crate::handlers::editor::rotation_from_index;
-use crate::utils::open_folder_in_explorer;
-use crate::{AppData, AppLogic, MainWindow, QueueFile};
 
-/// Finds the matching queue row (preferring `preferred_idx` if its path matches) and updates it.
+/// Finds a queue row by path, checking `preferred_idx` first for O(1) lookup.
+fn find_queue_row(
+    model: &slint::ModelRc<QueueFile>,
+    preferred_idx: usize,
+    expected_path: &str,
+) -> Option<usize> {
+    model
+        .row_data(preferred_idx)
+        .filter(|r| r.file_path.as_str() == expected_path)
+        .map(|_| preferred_idx)
+        .or_else(|| {
+            (0..model.row_count()).find(|&i| {
+                model
+                    .row_data(i)
+                    .is_some_and(|r| r.file_path.as_str() == expected_path)
+            })
+        })
+}
+
+/// Updates a queue row's status (and optional progress/summary) on the UI thread.
 fn update_queue_row(
     ui_weak: &slint::Weak<MainWindow>,
     preferred_idx: usize,
@@ -35,18 +54,7 @@ fn update_queue_row(
             app_data.set_status_summary(SharedString::from(summary));
         }
         let model = app_data.get_queue();
-        let target_idx = model
-            .row_data(preferred_idx)
-            .filter(|r| r.file_path.as_str() == expected)
-            .map(|_| preferred_idx)
-            .or_else(|| {
-                (0..model.row_count()).find(|&i| {
-                    model
-                        .row_data(i)
-                        .is_some_and(|r| r.file_path.as_str() == expected)
-                })
-            });
-        if let Some(idx) = target_idx {
+        if let Some(idx) = find_queue_row(&model, preferred_idx, &expected) {
             if let Some(mut row) = model.row_data(idx) {
                 row.status = SharedString::from(status);
                 if let Some(p) = progress {
@@ -56,6 +64,48 @@ fn update_queue_row(
             }
         }
     });
+}
+
+/// Maps UI function, container, and audio codec indices to the output file extension.
+fn resolve_output_container(
+    func_idx: i32,
+    container_idx: i32,
+    audio_codec_idx: i32,
+) -> &'static str {
+    if func_idx == 12 {
+        ".srt"
+    } else if func_idx == 9 || func_idx == 11 {
+        match container_idx {
+            6 => ".mp3",
+            7 => ".wav",
+            8 => ".flac",
+            _ => match audio_codec_idx {
+                1 => ".mp3",
+                2 => ".opus",
+                3 => ".flac",
+                4 => ".wav",
+                _ => ".m4a",
+            },
+        }
+    } else if func_idx == 3 || func_idx == 4 {
+        // ProRes and DNxHD require QuickTime (.mov) or Matroska (.mkv).
+        match container_idx {
+            1 => ".mkv",
+            _ => ".mov",
+        }
+    } else {
+        match container_idx {
+            1 => ".mkv",
+            2 => ".mov",
+            3 => ".webm",
+            4 => ".avi",
+            5 => ".ts",
+            6 => ".mp3",
+            7 => ".wav",
+            8 => ".flac",
+            _ => ".mp4",
+        }
+    }
 }
 
 /// Ensures `is_processing` is cleared on the UI if the batch worker exits abnormally.
@@ -116,7 +166,6 @@ fn pick_unique_output_path(
 }
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
-    // Handle Select Output Directory
     {
         let ui_handle = ui.as_weak();
 
@@ -124,7 +173,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
             let (parent_hwnd, suggested) = if let Some(ui) = ui_handle.upgrade() {
                 let hwnd = crate::dialogs::get_window_hwnd(ui.window());
                 let cur = ui.global::<AppData>().get_output_directory().to_string();
-                let dir = if !cur.is_empty() { Some(PathBuf::from(cur)) } else { None };
+                let dir = if !cur.is_empty() {
+                    Some(PathBuf::from(cur))
+                } else {
+                    None
+                };
                 (hwnd, dir)
             } else {
                 (std::ptr::null_mut(), None)
@@ -147,7 +200,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Open Output Directory
     {
         let ui_handle = ui.as_weak();
 
@@ -161,7 +213,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         Path::new(&sel_path)
                             .parent()
                             .map(|p| p.to_path_buf())
-                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+                            .unwrap_or_else(|| {
+                                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                            })
                     } else {
                         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
                     }
@@ -174,7 +228,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Toggle Logs
     {
         let ui_handle = ui.as_weak();
 
@@ -186,7 +239,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Switch Tab
     {
         let ui_handle = ui.as_weak();
 
@@ -197,7 +249,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Quick Lossless Cut
     {
         let ui_handle = ui.as_weak();
 
@@ -207,14 +258,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 if !app_data.get_has_active_trim() || !app_data.get_player_has_media() {
                     return;
                 }
-                // Function 7 corresponds to LosslessCut
+                // Function index 7 = LosslessCut
                 app_data.set_function_index(7);
                 ui.global::<AppLogic>().invoke_run_task();
             }
         });
     }
 
-    // Handle Cancel Processing
     {
         let cancel_flag = ctx.cancel_flag.clone();
         let ui_handle = ui.as_weak();
@@ -228,7 +278,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Run Task (formerly Start Processing)
+    // Batch encode queue runner
     {
         let ui_handle = ui.as_weak();
         let binaries = ctx.binaries.clone();
@@ -239,27 +289,23 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 if ui.global::<AppData>().get_is_processing() {
                     return;
                 }
-                let items: Vec<QueueFile> =
-                    ui.global::<AppData>().get_queue().iter().collect();
+                let items: Vec<QueueFile> = ui.global::<AppData>().get_queue().iter().collect();
                 if items.is_empty() {
                     return;
                 }
 
-                // Reset cancellation flag
                 cancel_flag.store(false, Ordering::SeqCst);
-
-                // Set processing state
                 ui.global::<AppData>().set_is_processing(true);
                 ui.global::<AppData>().set_progress_percent(0.0);
                 ui.global::<AppData>()
                     .set_progress_text(SharedString::from("Starting..."));
 
-                // Read all parameters from UI
+                // Snapshot UI parameters before spawning the worker thread
                 let func_idx = ui.global::<AppData>().get_function_index();
                 let hw_accel_idx = ui.global::<AppData>().get_hw_accel_index();
                 let rate_ctrl_idx = ui.global::<AppData>().get_rate_control_index();
                 let crf_raw = ui.global::<AppData>().get_crf_value().round() as u32;
-                let crf = crf_raw.min(51); // Clamp to valid range [0, 51]
+                let crf = crf_raw.min(51);
                 let video_br_idx = ui.global::<AppData>().get_video_bitrate_index();
                 let preset_idx = ui.global::<AppData>().get_preset_index();
                 let res_idx = ui.global::<AppData>().get_resolution_index();
@@ -288,13 +334,25 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let crop_h = ui.global::<AppData>().get_crop_height();
 
                 let edit_gain_val = ui.global::<AppData>().get_audio_gain_db();
-                let edit_gain_opt = if edit_gain_val.abs() > 0.05 { Some(edit_gain_val) } else { None };
+                let edit_gain_opt = if edit_gain_val.abs() > 0.05 {
+                    Some(edit_gain_val)
+                } else {
+                    None
+                };
                 let edit_norm_enabled = ui.global::<AppData>().get_audio_normalize_enabled();
                 let edit_norm_lufs = ui.global::<AppData>().get_audio_normalize_lufs();
                 let fade_in_val = ui.global::<AppData>().get_audio_fade_in_seconds();
                 let fade_out_val = ui.global::<AppData>().get_audio_fade_out_seconds();
-                let edit_fade_in_opt = if fade_in_val > 0.01 { Some(fade_in_val) } else { None };
-                let edit_fade_out_opt = if fade_out_val > 0.01 { Some(fade_out_val) } else { None };
+                let edit_fade_in_opt = if fade_in_val > 0.01 {
+                    Some(fade_in_val)
+                } else {
+                    None
+                };
+                let edit_fade_out_opt = if fade_out_val > 0.01 {
+                    Some(fade_out_val)
+                } else {
+                    None
+                };
                 let selected_idx = ui.global::<AppData>().get_selected_file_index();
 
                 // Persist user encoder choices to settings.json
@@ -318,42 +376,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         let input_path = item.file_path.to_string();
                         let in_p = Path::new(&input_path);
-
-                        // Determine destination container extension
-                        let out_container = if func_idx == 12 {
-                            ".srt"
-                        } else if func_idx == 9 || func_idx == 11 {
-                            match container_idx {
-                                6 => ".mp3",
-                                7 => ".wav",
-                                8 => ".flac",
-                                _ => match audio_codec_idx {
-                                    1 => ".mp3",
-                                    2 => ".opus",
-                                    3 => ".flac",
-                                    4 => ".wav",
-                                    _ => ".m4a",
-                                },
-                            }
-                        } else if func_idx == 3 || func_idx == 4 {
-                            // ProRes and DNxHD require QuickTime (.mov) or Matroska (.mkv).
-                            match container_idx {
-                                1 => ".mkv",
-                                _ => ".mov",
-                            }
-                        } else {
-                            match container_idx {
-                                1 => ".mkv",
-                                2 => ".mov",
-                                3 => ".webm",
-                                4 => ".avi",
-                                5 => ".ts",
-                                6 => ".mp3",
-                                7 => ".wav",
-                                8 => ".flac",
-                                _ => ".mp4",
-                            }
-                        };
+                        let out_container =
+                            resolve_output_container(func_idx, container_idx, audio_codec_idx);
 
                         let parent_dir =
                             if out_dir_str != "Same as source" && !out_dir_str.is_empty() {
@@ -414,7 +438,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         // Clip-specific edits (crop, rotation, mirror flip) apply only to the
                         // active/edited clip, or when there is a single file in the queue.
-                        let is_selected_or_single = total_items == 1 || item_idx as i32 == selected_idx;
+                        let is_selected_or_single =
+                            total_items == 1 || item_idx as i32 == selected_idx;
 
                         let (rotation, flip_h, flip_v, crop) = if is_selected_or_single {
                             let rot = rotation_from_index(rot_idx);
@@ -465,7 +490,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         // Upgrade Rewrap/LosslessCut to Transcode if video or audio filters are active.
                         let function = match func_idx {
                             0..=5 => EncoderFunction::Transcode,
-                            6 | 7 if has_video_edits || has_audio_edits => EncoderFunction::Transcode,
+                            6 | 7 if has_video_edits || has_audio_edits => {
+                                EncoderFunction::Transcode
+                            }
                             6 => EncoderFunction::Rewrap,
                             7 => EncoderFunction::LosslessCut,
                             8 => EncoderFunction::ExtractVideo,
@@ -543,14 +570,18 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         // Intelligent safety guard: For MP4/MOV containers, enforce mobile/messenger compatible audio (AAC).
                         // MP3, Opus, or copying non-AAC streams (e.g. from VP9/AV1 WebM) causes silent playback
                         // on Facebook Messenger, Signal, iOS (AVFoundation), and Android.
-                        let is_mp4_like = out_container == ".mp4" || out_container == ".mov" || out_container == ".m4v";
+                        let is_mp4_like = out_container == ".mp4"
+                            || out_container == ".mov"
+                            || out_container == ".m4v";
                         if is_mp4_like {
-                            if matches!(audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus) {
+                            if matches!(audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus)
+                            {
                                 audio_codec = AudioCodecChoice::AAC;
                             } else if audio_codec == AudioCodecChoice::Copy {
                                 // If source audio is not already AAC or ALAC, copying into MP4 will fail or play silently on mobile.
                                 let source_codecs = item.codecs.to_lowercase();
-                                let is_source_aac = source_codecs.contains("a: aac") || source_codecs.contains("a: alac");
+                                let is_source_aac = source_codecs.contains("a: aac")
+                                    || source_codecs.contains("a: alac");
                                 if !is_source_aac {
                                     audio_codec = AudioCodecChoice::AAC;
                                 }
@@ -563,7 +594,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             None
                         };
 
-                        let out_point = if is_selected_or_single && !out_point_str.trim().is_empty() {
+                        let out_point = if is_selected_or_single && !out_point_str.trim().is_empty()
+                        {
                             Some(out_point_str.clone())
                         } else {
                             None
@@ -581,7 +613,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 
                         // Validate timecodes
                         let in_secs = in_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
-                        let out_secs = out_point.as_ref().and_then(|s| parse_timecode_to_seconds(s));
+                        let out_secs = out_point
+                            .as_ref()
+                            .and_then(|s| parse_timecode_to_seconds(s));
 
                         if let (Some(in_s), Some(out_s)) = (in_secs, out_secs) {
                             if in_s >= out_s {
@@ -663,7 +697,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             rate_control,
                             crf,
                             video_bitrate_kbps,
-                            max_bitrate_kbps: video_bitrate_kbps * 2,
+                            max_bitrate_kbps: video_bitrate_kbps.saturating_mul(2),
                             preset,
                             resolution,
                             custom_resolution: None,
@@ -680,7 +714,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             normalize_lufs: final_norm_opt,
                             audio_fade_in_sec: item_fade_in,
                             audio_fade_out_sec: item_fade_out,
-                            effective_duration_sec: (effective_duration > 0.0).then_some(effective_duration),
+                            effective_duration_sec: (effective_duration > 0.0)
+                                .then_some(effective_duration),
 
                             in_point,
                             out_point,
@@ -692,7 +727,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         };
 
                         // Build FFmpeg command safely (reject bad inputs without panicking the worker).
-                        let cmd_args = match FFmpegCommandBuilder::try_build(&config, &bins.ffmpeg) {
+                        let cmd_args = match FFmpegCommandBuilder::try_build(&config, &bins.ffmpeg)
+                        {
                             Ok(args) => args,
                             Err(e) => {
                                 any_errors = true;
@@ -754,18 +790,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     if let Some(ui) = ui_w.upgrade() {
                                         let app_data = ui.global::<AppData>();
                                         let model = app_data.get_queue();
-                                        let target_idx = model
-                                            .row_data(idx)
-                                            .filter(|r| r.file_path.as_str() == expected)
-                                            .map(|_| idx)
-                                            .or_else(|| {
-                                                (0..model.row_count()).find(|&i| {
-                                                    model
-                                                        .row_data(i)
-                                                        .is_some_and(|r| r.file_path.as_str() == expected)
-                                                })
-                                            });
-                                        if let Some(target_idx) = target_idx {
+                                        if let Some(target_idx) =
+                                            find_queue_row(&model, idx, &expected)
+                                        {
                                             if let Some(mut row) = model.row_data(target_idx) {
                                                 row.progress = p.percentage;
                                                 row.status = SharedString::from(format!(
@@ -786,10 +813,12 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                             p.percentage * 100.0
                                         )));
                                         app_data.set_speed_text(SharedString::from(format!(
-                                            "{:.2}x", p.speed
+                                            "{:.2}x",
+                                            p.speed
                                         )));
                                         app_data.set_fps_text(SharedString::from(format!(
-                                            "{:.0} fps", p.fps
+                                            "{:.0} fps",
+                                            p.fps
                                         )));
                                         app_data.set_time_text(SharedString::from(format!(
                                             "{} / {}",
@@ -803,8 +832,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         let ui_w_log = ui_weak.clone();
                         let log_callback = move |line: String| {
                             let trimmed = line.trim();
-                            // Filter out high-frequency in-place progress updates (frame=... or size=... time=...)
-                            // These are already handled by progress_callback and would flood the Slint UI event loop.
+                            // Skip in-place progress lines; progress_callback already handles them.
                             if trimmed.starts_with("frame=")
                                 || (trimmed.starts_with("size=") && trimmed.contains("time="))
                             {
@@ -814,27 +842,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             let ui_w = ui_w_log.clone();
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_w.upgrade() {
-                                    let mut cur =
-                                        ui.global::<AppData>().get_log_preview().to_string();
-                                    if cur.len() > 4000 {
-                                        let mut split_idx = cur.len() - 3000;
-                                        while split_idx < cur.len() && !cur.is_char_boundary(split_idx) {
-                                            split_idx += 1;
-                                        }
-                                        if let Some(nl) = cur[split_idx..].find('\n') {
-                                            split_idx += nl + 1;
-                                        }
-                                        cur = cur[split_idx..].to_string();
-                                    }
-                                    cur.push_str(&line);
-                                    cur.push('\n');
-                                    ui.global::<AppData>()
-                                        .set_log_preview(SharedString::from(cur));
+                                    let app_data = ui.global::<AppData>();
+                                    let mut cur = app_data.get_log_preview().to_string();
+                                    crate::utils::append_log_line(&mut cur, &line, 4000, 3000);
+                                    app_data.set_log_preview(SharedString::from(cur));
                                 }
                             });
                         };
 
-                        // Run execution
                         let result = FFmpegRunner::run_with_progress(
                             &cmd_args,
                             effective_duration,
@@ -908,7 +923,9 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                                     } else {
                                         let out_dir = app_data.get_output_directory().to_string();
                                         if !out_dir.is_empty() && out_dir != "Same as source" {
-                                            crate::utils::open_folder_in_explorer(Path::new(&out_dir));
+                                            crate::utils::open_folder_in_explorer(Path::new(
+                                                &out_dir,
+                                            ));
                                         }
                                     }
                                 }

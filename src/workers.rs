@@ -5,8 +5,8 @@ use std::thread;
 
 use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer};
 
-use kabosu_converter::ffmpeg::{extract_frame_rgba_transformed, extract_waveform_rgba};
 use crate::context::{PreviewTask, WaveformTask};
+use kabosu_converter::ffmpeg::{extract_frame_rgba_transformed, extract_waveform_rgba};
 
 /// Background worker that extracts video frames for preview scrubbing.
 pub fn spawn_preview_worker(
@@ -40,23 +40,27 @@ pub fn spawn_preview_worker(
                     continue;
                 }
 
+                // Copy pixels off the UI thread before handing the buffer to Slint.
+                let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
+                let bytes = pixel_buffer.make_mut_bytes();
+                let len = bytes.len().min(rgba_bytes.len());
+                bytes[..len].copy_from_slice(&rgba_bytes[..len]);
+
                 let ui_w = ui_weak.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_w.upgrade() {
-                        let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(640, 360);
-                        let bytes = pixel_buffer.make_mut_bytes();
-                        let len = bytes.len().min(rgba_bytes.len());
-                        bytes[..len].copy_from_slice(&rgba_bytes[..len]);
                         let img = slint::Image::from_rgba8(pixel_buffer);
                         ui.global::<crate::AppData>().set_preview_frame(img);
-                        ui.global::<crate::AppData>().set_preview_frame_loading(false);
+                        ui.global::<crate::AppData>()
+                            .set_preview_frame_loading(false);
                     }
                 });
             } else {
                 let ui_w = ui_weak.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_w.upgrade() {
-                        ui.global::<crate::AppData>().set_preview_frame_loading(false);
+                        ui.global::<crate::AppData>()
+                            .set_preview_frame_loading(false);
                     }
                 });
             }
@@ -91,13 +95,14 @@ pub fn spawn_waveform_worker(
             match extract_waveform_rgba(&ffmpeg_bin, &current_task.media_path, wf_w, wf_h) {
                 Ok(rgba) => {
                     if current_task.id == latest_id.load(Ordering::SeqCst) {
+                        let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(wf_w, wf_h);
+                        let bytes = pixel_buffer.make_mut_bytes();
+                        let len = bytes.len().min(rgba.len());
+                        bytes[..len].copy_from_slice(&rgba[..len]);
+
                         let ui_w = ui_weak.clone();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_w.upgrade() {
-                                let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(wf_w, wf_h);
-                                let bytes = pixel_buffer.make_mut_bytes();
-                                let len = bytes.len().min(rgba.len());
-                                bytes[..len].copy_from_slice(&rgba[..len]);
                                 let img = slint::Image::from_rgba8(pixel_buffer);
                                 let data = ui.global::<crate::AppData>();
                                 data.set_timeline_waveform(img);

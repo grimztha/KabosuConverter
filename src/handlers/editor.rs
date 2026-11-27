@@ -5,12 +5,12 @@ use std::sync::mpsc::Sender;
 
 use slint::{ComponentHandle, SharedString};
 
+use crate::context::{AppContext, PreviewTask};
+use crate::{AppData, AppLogic, MainWindow};
 use kabosu_converter::ffmpeg::{
     compute_letterbox_viewport, CropAspectRatio, CropBoxDragSession, CropHandleDragSession,
     CropRect, VideoRotation,
 };
-use crate::context::{AppContext, PreviewTask};
-use crate::{AppData, AppLogic, MainWindow};
 
 pub fn rotation_from_index(idx: i32) -> VideoRotation {
     match idx {
@@ -34,7 +34,45 @@ pub fn update_audio_edit_indicators(app_data: &AppData) {
     let norm_active = app_data.get_audio_normalize_enabled();
     let fade_in_active = app_data.get_audio_fade_in_seconds() > 0.01;
     let fade_out_active = app_data.get_audio_fade_out_seconds() > 0.01;
-    app_data.set_has_active_audio_edits(gain_active || norm_active || fade_in_active || fade_out_active);
+    app_data.set_has_active_audio_edits(
+        gain_active || norm_active || fade_in_active || fade_out_active,
+    );
+}
+
+pub fn effective_video_dims(app_data: &AppData, min_dim: i32) -> (u32, u32) {
+    (
+        app_data.get_effective_video_width().max(min_dim) as u32,
+        app_data.get_effective_video_height().max(min_dim) as u32,
+    )
+}
+
+pub fn current_crop_rect(app_data: &AppData, min_size: i32) -> CropRect {
+    CropRect {
+        x: app_data.get_crop_x().max(0) as u32,
+        y: app_data.get_crop_y().max(0) as u32,
+        width: app_data.get_crop_width().max(min_size) as u32,
+        height: app_data.get_crop_height().max(min_size) as u32,
+    }
+}
+
+pub fn reset_video_edits_state(app_data: &AppData) {
+    app_data.set_video_rotation_index(0);
+    app_data.set_video_flip_horizontal(false);
+    app_data.set_video_flip_vertical(false);
+    app_data.set_crop_enabled(false);
+    app_data.set_crop_aspect_index(0);
+    sync_effective_dimensions_and_viewport(app_data, true);
+    update_video_edit_indicators(app_data);
+}
+
+pub fn reset_audio_edits_state(app_data: &AppData) {
+    app_data.set_audio_gain_db(0.0);
+    app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
+    app_data.set_audio_normalize_enabled(false);
+    app_data.set_audio_normalize_lufs(-16.0);
+    app_data.set_audio_normalize_preset_index(0);
+    reset_audio_fades(app_data);
+    update_audio_edit_indicators(app_data);
 }
 
 pub fn reset_audio_fades(app_data: &AppData) {
@@ -140,7 +178,6 @@ pub fn request_current_preview_frame(
 }
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
-    // Handle Toggle Edit Panel
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_toggle_edit_panel(move || {
@@ -152,26 +189,30 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Set Video Rotation (0: 0°, 1: 90°, 2: -90°, 3: 180°)
+    // Video rotation (0: 0°, 1: 90°, 2: -90°, 3: 180°)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
-        ui.global::<AppLogic>().on_set_video_rotation(move |rot_idx| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                if app_data.get_player_is_playing() {
-                    ctx.stop_active_playback(&app_data);
-                }
+        ui.global::<AppLogic>()
+            .on_set_video_rotation(move |rot_idx| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    if app_data.get_player_is_playing() {
+                        ctx.stop_active_playback(&app_data);
+                    }
 
-                app_data.set_video_rotation_index(rot_idx.clamp(0, 3));
-                sync_effective_dimensions_and_viewport(&app_data, false);
-                update_video_edit_indicators(&app_data);
-                request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
-            }
-        });
+                    app_data.set_video_rotation_index(rot_idx.clamp(0, 3));
+                    sync_effective_dimensions_and_viewport(&app_data, false);
+                    update_video_edit_indicators(&app_data);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
+                }
+            });
     }
 
-    // Handle Toggle Flip Horizontal
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -189,7 +230,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Toggle Flip Vertical
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -207,7 +247,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Toggle Crop Enabled
+    // Toggle crop overlay
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_toggle_crop_enabled(move || {
@@ -216,15 +256,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let next = !app_data.get_crop_enabled();
                 app_data.set_crop_enabled(next);
                 if next {
-                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                    let rect = CropRect {
-                        x: app_data.get_crop_x().max(0) as u32,
-                        y: app_data.get_crop_y().max(0) as u32,
-                        width: app_data.get_crop_width().max(2) as u32,
-                        height: app_data.get_crop_height().max(2) as u32,
-                    }
-                    .sanitize(eff_w, eff_h);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let rect = current_crop_rect(&app_data, 2).sanitize(eff_w, eff_h);
                     sync_crop_rect_to_ui(&app_data, rect, true);
                 } else {
                     update_video_edit_indicators(&app_data);
@@ -233,25 +266,25 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Set Crop Aspect Preset
+    // Crop aspect preset
     {
         let ui_handle = ui.as_weak();
-        ui.global::<AppLogic>().on_set_crop_aspect_preset(move |preset_idx| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                app_data.set_crop_aspect_index(preset_idx.max(0));
-                app_data.set_crop_enabled(true);
+        ui.global::<AppLogic>()
+            .on_set_crop_aspect_preset(move |preset_idx| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    app_data.set_crop_aspect_index(preset_idx.max(0));
+                    app_data.set_crop_enabled(true);
 
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                let aspect = CropAspectRatio::from_index(preset_idx);
-                let rect = aspect.compute_centered_rect(eff_w, eff_h);
-                sync_crop_rect_to_ui(&app_data, rect, true);
-            }
-        });
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let aspect = CropAspectRatio::from_index(preset_idx);
+                    let rect = aspect.compute_centered_rect(eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, true);
+                }
+            });
     }
 
-    // Handle Manual Crop Width Edited
+    // Manual crop width
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_crop_width_edited(move |txt| {
@@ -259,11 +292,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 if let Ok(parsed_w) = txt.trim().parse::<u32>() {
                     app_data.set_crop_enabled(true);
-                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
                     let w = parsed_w.clamp(16, eff_w);
                     let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
-                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio() {
+                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio()
+                    {
                         let mut h = ((w as u64 * den as u64) / num as u64) as u32;
                         let mut adj_w = w;
                         if h > eff_h {
@@ -275,20 +308,16 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         (w, app_data.get_crop_height().max(16) as u32, false)
                     };
 
-                    let rect = CropRect {
-                        x: app_data.get_crop_x().max(0) as u32,
-                        y: app_data.get_crop_y().max(0) as u32,
-                        width: final_w,
-                        height: final_h,
-                    }
-                    .sanitize(eff_w, eff_h);
-                    sync_crop_rect_to_ui(&app_data, rect, update_texts);
+                    let mut rect = current_crop_rect(&app_data, 16);
+                    rect.width = final_w;
+                    rect.height = final_h;
+                    sync_crop_rect_to_ui(&app_data, rect.sanitize(eff_w, eff_h), update_texts);
                 }
             }
         });
     }
 
-    // Handle Manual Crop Height Edited
+    // Manual crop height
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_crop_height_edited(move |txt| {
@@ -296,11 +325,11 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 if let Ok(parsed_h) = txt.trim().parse::<u32>() {
                     app_data.set_crop_enabled(true);
-                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
                     let h = parsed_h.clamp(16, eff_h);
                     let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
-                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio() {
+                    let (final_w, final_h, update_texts) = if let Some((num, den)) = aspect.ratio()
+                    {
                         let mut w = ((h as u64 * num as u64) / den as u64) as u32;
                         let mut adj_h = h;
                         if w > eff_w {
@@ -312,20 +341,16 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         (app_data.get_crop_width().max(16) as u32, h, false)
                     };
 
-                    let rect = CropRect {
-                        x: app_data.get_crop_x().max(0) as u32,
-                        y: app_data.get_crop_y().max(0) as u32,
-                        width: final_w,
-                        height: final_h,
-                    }
-                    .sanitize(eff_w, eff_h);
-                    sync_crop_rect_to_ui(&app_data, rect, update_texts);
+                    let mut rect = current_crop_rect(&app_data, 16);
+                    rect.width = final_w;
+                    rect.height = final_h;
+                    sync_crop_rect_to_ui(&app_data, rect.sanitize(eff_w, eff_h), update_texts);
                 }
             }
         });
     }
 
-    // Handle Manual Crop X Edited
+    // Manual crop X
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_crop_x_edited(move |txt| {
@@ -333,22 +358,16 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 if let Ok(parsed_x) = txt.trim().parse::<u32>() {
                     app_data.set_crop_enabled(true);
-                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                    let rect = CropRect {
-                        x: parsed_x,
-                        y: app_data.get_crop_y().max(0) as u32,
-                        width: app_data.get_crop_width().max(16) as u32,
-                        height: app_data.get_crop_height().max(16) as u32,
-                    }
-                    .sanitize(eff_w, eff_h);
-                    sync_crop_rect_to_ui(&app_data, rect, false);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let mut rect = current_crop_rect(&app_data, 16);
+                    rect.x = parsed_x;
+                    sync_crop_rect_to_ui(&app_data, rect.sanitize(eff_w, eff_h), false);
                 }
             }
         });
     }
 
-    // Handle Manual Crop Y Edited
+    // Manual crop Y
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_crop_y_edited(move |txt| {
@@ -356,73 +375,59 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 if let Ok(parsed_y) = txt.trim().parse::<u32>() {
                     app_data.set_crop_enabled(true);
-                    let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                    let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                    let rect = CropRect {
-                        x: app_data.get_crop_x().max(0) as u32,
-                        y: parsed_y,
-                        width: app_data.get_crop_width().max(16) as u32,
-                        height: app_data.get_crop_height().max(16) as u32,
-                    }
-                    .sanitize(eff_w, eff_h);
-                    sync_crop_rect_to_ui(&app_data, rect, false);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let mut rect = current_crop_rect(&app_data, 16);
+                    rect.y = parsed_y;
+                    sync_crop_rect_to_ui(&app_data, rect.sanitize(eff_w, eff_h), false);
                 }
             }
         });
     }
 
     let box_drag_session: Rc<RefCell<Option<CropBoxDragSession>>> = Rc::new(RefCell::new(None));
-    let handle_drag_session: Rc<RefCell<Option<CropHandleDragSession>>> = Rc::new(RefCell::new(None));
+    let handle_drag_session: Rc<RefCell<Option<CropHandleDragSession>>> =
+        Rc::new(RefCell::new(None));
 
-    // Handle Visual Crop Box Drag (Start, Move, End)
+    // Crop box drag
     {
         let ui_handle = ui.as_weak();
         let session_cell = Rc::clone(&box_drag_session);
-        ui.global::<AppLogic>().on_crop_box_drag_start(move |norm_x, norm_y| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                app_data.set_crop_enabled(true);
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                let cur = CropRect {
-                    x: app_data.get_crop_x().max(0) as u32,
-                    y: app_data.get_crop_y().max(0) as u32,
-                    width: app_data.get_crop_width().max(16) as u32,
-                    height: app_data.get_crop_height().max(16) as u32,
-                };
-                *session_cell.borrow_mut() = Some(CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h));
-            }
-        });
+        ui.global::<AppLogic>()
+            .on_crop_box_drag_start(move |norm_x, norm_y| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    app_data.set_crop_enabled(true);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let cur = current_crop_rect(&app_data, 16);
+                    *session_cell.borrow_mut() =
+                        Some(CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h));
+                }
+            });
     }
     {
         let ui_handle = ui.as_weak();
         let session_cell = Rc::clone(&box_drag_session);
-        ui.global::<AppLogic>().on_crop_box_drag_move(move |norm_x, norm_y| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                let session = {
-                    let mut b = session_cell.borrow_mut();
-                    match *b {
-                        Some(ref s) => *s,
-                        None => {
-                            let cur = CropRect {
-                                x: app_data.get_crop_x().max(0) as u32,
-                                y: app_data.get_crop_y().max(0) as u32,
-                                width: app_data.get_crop_width().max(16) as u32,
-                                height: app_data.get_crop_height().max(16) as u32,
-                            };
-                            let s = CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h);
-                            *b = Some(s);
-                            s
+        ui.global::<AppLogic>()
+            .on_crop_box_drag_move(move |norm_x, norm_y| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                    let session = {
+                        let mut b = session_cell.borrow_mut();
+                        match *b {
+                            Some(ref s) => *s,
+                            None => {
+                                let cur = current_crop_rect(&app_data, 16);
+                                let s = CropBoxDragSession::new(cur, norm_x, norm_y, eff_w, eff_h);
+                                *b = Some(s);
+                                s
+                            }
                         }
-                    }
-                };
-                let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h);
-                sync_crop_rect_to_ui(&app_data, rect, true);
-            }
-        });
+                    };
+                    let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h);
+                    sync_crop_rect_to_ui(&app_data, rect, true);
+                }
+            });
     }
     {
         let session_cell = Rc::clone(&box_drag_session);
@@ -431,61 +436,51 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Visual Crop Resize Handles (0..7)
+    // Crop resize handles (0..7)
     {
         let ui_handle = ui.as_weak();
         let session_cell = Rc::clone(&handle_drag_session);
-        ui.global::<AppLogic>().on_crop_handle_drag_start(move |handle_id, norm_x, norm_y| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                app_data.set_crop_enabled(true);
-                let eff_w = app_data.get_effective_video_width().max(32) as u32;
-                let eff_h = app_data.get_effective_video_height().max(32) as u32;
-                let cur = CropRect {
-                    x: app_data.get_crop_x().max(0) as u32,
-                    y: app_data.get_crop_y().max(0) as u32,
-                    width: app_data.get_crop_width().max(16) as u32,
-                    height: app_data.get_crop_height().max(16) as u32,
-                };
-                *session_cell.borrow_mut() = Some(CropHandleDragSession::new(
-                    handle_id, cur, norm_x, norm_y, eff_w, eff_h,
-                ));
-            }
-        });
+        ui.global::<AppLogic>()
+            .on_crop_handle_drag_start(move |handle_id, norm_x, norm_y| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    app_data.set_crop_enabled(true);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 32);
+                    let cur = current_crop_rect(&app_data, 16);
+                    *session_cell.borrow_mut() = Some(CropHandleDragSession::new(
+                        handle_id, cur, norm_x, norm_y, eff_w, eff_h,
+                    ));
+                }
+            });
     }
     {
         let ui_handle = ui.as_weak();
         let session_cell = Rc::clone(&handle_drag_session);
-        ui.global::<AppLogic>().on_crop_handle_drag(move |handle_id, norm_x, norm_y| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                app_data.set_crop_enabled(true);
-                let eff_w = app_data.get_effective_video_width().max(32) as u32;
-                let eff_h = app_data.get_effective_video_height().max(32) as u32;
-                let session = {
-                    let mut b = session_cell.borrow_mut();
-                    match *b {
-                        Some(ref s) if s.handle_id == handle_id => *s,
-                        _ => {
-                            let cur = CropRect {
-                                x: app_data.get_crop_x().max(0) as u32,
-                                y: app_data.get_crop_y().max(0) as u32,
-                                width: app_data.get_crop_width().max(16) as u32,
-                                height: app_data.get_crop_height().max(16) as u32,
-                            };
-                            let s = CropHandleDragSession::new(
-                                handle_id, cur, norm_x, norm_y, eff_w, eff_h,
-                            );
-                            *b = Some(s);
-                            s
+        ui.global::<AppLogic>()
+            .on_crop_handle_drag(move |handle_id, norm_x, norm_y| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    app_data.set_crop_enabled(true);
+                    let (eff_w, eff_h) = effective_video_dims(&app_data, 32);
+                    let session = {
+                        let mut b = session_cell.borrow_mut();
+                        match *b {
+                            Some(ref s) if s.handle_id == handle_id => *s,
+                            _ => {
+                                let cur = current_crop_rect(&app_data, 16);
+                                let s = CropHandleDragSession::new(
+                                    handle_id, cur, norm_x, norm_y, eff_w, eff_h,
+                                );
+                                *b = Some(s);
+                                s
+                            }
                         }
-                    }
-                };
-                let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
-                let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h, aspect);
-                sync_crop_rect_to_ui(&app_data, rect, true);
-            }
-        });
+                    };
+                    let aspect = CropAspectRatio::from_index(app_data.get_crop_aspect_index());
+                    let rect = session.compute_rect(norm_x, norm_y, eff_w, eff_h, aspect);
+                    sync_crop_rect_to_ui(&app_data, rect, true);
+                }
+            });
     }
     {
         let session_cell = Rc::clone(&handle_drag_session);
@@ -494,7 +489,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Crop Nudge (Arrow keys & panel directional buttons)
+    // Crop nudge
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_crop_nudge(move |dx, dy| {
@@ -503,28 +498,20 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 if !app_data.get_crop_enabled() {
                     return;
                 }
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
-                let rect = CropRect {
-                    x: app_data.get_crop_x().max(0) as u32,
-                    y: app_data.get_crop_y().max(0) as u32,
-                    width: app_data.get_crop_width().max(16) as u32,
-                    height: app_data.get_crop_height().max(16) as u32,
-                }
-                .nudge(dx, dy, eff_w, eff_h);
+                let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
+                let rect = current_crop_rect(&app_data, 16).nudge(dx, dy, eff_w, eff_h);
                 sync_crop_rect_to_ui(&app_data, rect, true);
             }
         });
     }
 
-    // Handle Center Crop Box
+    // Center crop box
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_center_crop_box(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
                 let w = (app_data.get_crop_width().max(16) as u32).min(eff_w);
                 let h = (app_data.get_crop_height().max(16) as u32).min(eff_h);
                 let x = (eff_w.saturating_sub(w) / 2) & !1;
@@ -541,7 +528,7 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Reset Crop
+    // Reset crop
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_reset_crop(move || {
@@ -549,15 +536,14 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                 let app_data = ui.global::<AppData>();
                 app_data.set_crop_aspect_index(0);
                 app_data.set_crop_enabled(false);
-                let eff_w = app_data.get_effective_video_width().max(2) as u32;
-                let eff_h = app_data.get_effective_video_height().max(2) as u32;
+                let (eff_w, eff_h) = effective_video_dims(&app_data, 2);
                 let rect = CropRect::new(0, 0, eff_w, eff_h).sanitize(eff_w, eff_h);
                 sync_crop_rect_to_ui(&app_data, rect, true);
             }
         });
     }
 
-    // Handle Reset All Video Edits
+    // Reset video edits
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -568,19 +554,13 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     ctx.stop_active_playback(&app_data);
                 }
 
-                app_data.set_video_rotation_index(0);
-                app_data.set_video_flip_horizontal(false);
-                app_data.set_video_flip_vertical(false);
-                app_data.set_crop_enabled(false);
-                app_data.set_crop_aspect_index(0);
-                sync_effective_dimensions_and_viewport(&app_data, true);
-                update_video_edit_indicators(&app_data);
+                reset_video_edits_state(&app_data);
                 request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
             }
         });
     }
 
-    // Handle Reset All Edits (Video + Audio)
+    // Reset all edits (video + audio)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -591,40 +571,28 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     ctx.stop_active_playback(&app_data);
                 }
 
-                // Reset video edits
-                app_data.set_video_rotation_index(0);
-                app_data.set_video_flip_horizontal(false);
-                app_data.set_video_flip_vertical(false);
-                app_data.set_crop_enabled(false);
-                app_data.set_crop_aspect_index(0);
-                sync_effective_dimensions_and_viewport(&app_data, true);
-                update_video_edit_indicators(&app_data);
-
-                // Reset audio edits
-                app_data.set_audio_gain_db(0.0);
-                app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
-                app_data.set_audio_normalize_enabled(false);
-                app_data.set_audio_normalize_lufs(-16.0);
-                app_data.set_audio_normalize_preset_index(0);
-                reset_audio_fades(&app_data);
-                update_audio_edit_indicators(&app_data);
+                reset_video_edits_state(&app_data);
+                reset_audio_edits_state(&app_data);
 
                 if app_data.get_selected_is_video() {
-                    request_current_preview_frame(&app_data, &ctx.preview_tx, &ctx.latest_preview_id);
+                    request_current_preview_frame(
+                        &app_data,
+                        &ctx.preview_tx,
+                        &ctx.latest_preview_id,
+                    );
                 }
             }
         });
     }
 
-    // Handle Set Audio Gain (dB)
+    // Audio gain (rounded to 0.5 dB steps)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
         ui.global::<AppLogic>().on_set_audio_gain_db(move |val| {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
-                let clamped = (val * 2.0).round() / 2.0; // round to 0.5 dB
-                let clamped = clamped.clamp(-24.0, 24.0);
+                let clamped = ((val * 2.0).round() / 2.0).clamp(-24.0, 24.0);
                 app_data.set_audio_gain_db(clamped);
                 let text = if clamped.abs() < 0.05 {
                     "0.0 dB".to_string()
@@ -639,7 +607,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Step Audio Gain (dB)
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -662,7 +629,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Toggle Audio Normalization
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -678,45 +644,38 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Set Audio Normalize Preset
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
-        ui.global::<AppLogic>().on_set_audio_normalize_preset(move |idx| {
-            if let Some(ui) = ui_handle.upgrade() {
-                let app_data = ui.global::<AppData>();
-                let lufs = match idx {
-                    0 => -16.0,
-                    1 => -14.0,
-                    2 => -23.0,
-                    3 => -12.0,
-                    _ => -16.0,
-                };
-                app_data.set_audio_normalize_preset_index(idx);
-                app_data.set_audio_normalize_lufs(lufs);
-                app_data.set_audio_normalize_enabled(true);
-                update_audio_edit_indicators(&app_data);
+        ui.global::<AppLogic>()
+            .on_set_audio_normalize_preset(move |idx| {
+                if let Some(ui) = ui_handle.upgrade() {
+                    let app_data = ui.global::<AppData>();
+                    let lufs = match idx {
+                        0 => -16.0,
+                        1 => -14.0,
+                        2 => -23.0,
+                        3 => -12.0,
+                        _ => -16.0,
+                    };
+                    app_data.set_audio_normalize_preset_index(idx);
+                    app_data.set_audio_normalize_lufs(lufs);
+                    app_data.set_audio_normalize_enabled(true);
+                    update_audio_edit_indicators(&app_data);
 
-                ctx.restart_audio_preview(&app_data);
-            }
-        });
+                    ctx.restart_audio_preview(&app_data);
+                }
+            });
     }
 
-    // Handle Reset Audio Edits
+    // Reset audio edits
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
         ui.global::<AppLogic>().on_reset_audio_edits(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let app_data = ui.global::<AppData>();
-                app_data.set_audio_gain_db(0.0);
-                app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
-                app_data.set_audio_normalize_enabled(false);
-                app_data.set_audio_normalize_lufs(-16.0);
-                app_data.set_audio_normalize_preset_index(0);
-                reset_audio_fades(&app_data);
-                update_audio_edit_indicators(&app_data);
-
+                reset_audio_edits_state(&app_data);
                 ctx.restart_audio_preview(&app_data);
             }
         });

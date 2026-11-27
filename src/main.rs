@@ -43,36 +43,38 @@ fn main() -> Result<()> {
             #[cfg(debug_assertions)]
             eprintln!("Warning: FFmpeg binaries not found: {}", _e);
             Arc::new(FFmpegBinaries {
-                ffmpeg: default_bin_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }),
-                ffprobe: default_bin_dir.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" }),
-                ffplay: Some(default_bin_dir.join(if cfg!(windows) { "ffplay.exe" } else { "ffplay" })),
+                ffmpeg: default_bin_dir.join(if cfg!(windows) {
+                    "ffmpeg.exe"
+                } else {
+                    "ffmpeg"
+                }),
+                ffprobe: default_bin_dir.join(if cfg!(windows) {
+                    "ffprobe.exe"
+                } else {
+                    "ffprobe"
+                }),
+                ffplay: Some(default_bin_dir.join(if cfg!(windows) {
+                    "ffplay.exe"
+                } else {
+                    "ffplay"
+                })),
             })
         }
     };
 
-    let ui = MainWindow::new().map_err(|e| anyhow::anyhow!("Failed to create window: {:?}", e))?;
+    let ui = MainWindow::new().map_err(|e| anyhow::anyhow!("Failed to create window: {e:?}"))?;
     let app_settings = settings::load_settings();
     handlers::settings::apply_settings_to_app_data(&ui.global::<AppData>(), &app_settings);
 
-    // Populate initial engine version and hardware acceleration badges if ffmpeg is already present
-    if binaries.ffmpeg.is_file() {
-        let (_full_ver, badge_text) = binaries.detect_version();
-        ui.global::<AppData>().set_ffmpeg_version_badge(badge_text.into());
-
-        let (hw_accel, has_gpu, gpu_name) = binaries.detect_hardware_accel();
-        kabosu_converter::ffmpeg::set_detected_hardware_accel(hw_accel);
-        ui.global::<AppData>().set_has_gpu_hardware(has_gpu);
-        ui.global::<AppData>().set_detected_gpu_name(gpu_name.into());
-    }
-
-    ui.global::<AppData>().set_app_version(env!("CARGO_PKG_VERSION").into());
-    ui.global::<AppData>().set_update_status_text("Checking for updates...".into());
+    ui.global::<AppData>()
+        .set_app_version(env!("CARGO_PKG_VERSION").into());
+    ui.global::<AppData>()
+        .set_update_status_text("Checking for updates...".into());
 
     ui.global::<AppData>()
         .set_queue(ModelRc::new(VecModel::from(Vec::<QueueFile>::new())));
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
-
     let active_player_child: Arc<Mutex<Option<AudioPlaybackSession>>> = Arc::new(Mutex::new(None));
     let active_playback_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
     let playback_session_id = Arc::new(AtomicU64::new(0));
@@ -86,39 +88,60 @@ fn main() -> Result<()> {
     let found_ytdlp = ytdlp::find_ytdlp_binary();
     #[cfg(debug_assertions)]
     if let Some(ref p) = found_ytdlp {
-        println!("yt-dlp engine found at: {:?}", p);
+        println!("yt-dlp engine found at: {p:?}");
     } else {
         eprintln!("Warning: yt-dlp binary not found in project root path");
     }
 
     let ytdlp_binary = Arc::new(Some(found_ytdlp.unwrap_or_else(|| {
-        default_bin_dir.join(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" })
+        default_bin_dir.join(if cfg!(windows) {
+            "yt-dlp.exe"
+        } else {
+            "yt-dlp"
+        })
     })));
 
-    // Populate initial yt-dlp engine version badge if already installed
-    let initial_ytdlp_version = if let Some(ref p) = *ytdlp_binary {
-        if p.is_file() {
-            let (ytdlp_ver, ytdlp_badge) = ytdlp::detect_version(p);
-            ui.global::<AppData>().set_ytdlp_version_badge(ytdlp_badge.into());
-            Some((p.clone(), ytdlp_ver))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    // Silently keep the app-managed yt-dlp binary up to date with official GitHub releases
-    if let Some((ytdlp_path, current_ver)) = initial_ytdlp_version {
+    // Probe FFmpeg/GPU/yt-dlp versions off the UI thread so the window opens immediately.
+    {
+        let ui_weak = ui.as_weak();
+        let bins_probe = binaries.clone();
+        let ytdlp_probe = ytdlp_binary.as_ref().clone();
         let managed_bin_dir = default_bin_dir.clone();
-        let is_managed = ytdlp_path
-            .canonicalize()
-            .ok()
-            .zip(managed_bin_dir.canonicalize().ok())
-            .is_some_and(|(p, dir)| p.starts_with(dir));
-        if is_managed {
-            let ui_weak = ui.as_weak();
-            std::thread::spawn(move || {
+        std::thread::spawn(move || {
+            if bins_probe.ffmpeg.is_file() {
+                let (_full_ver, badge_text) = bins_probe.detect_version();
+                let (hw_accel, has_gpu, gpu_name) = bins_probe.detect_hardware_accel();
+                kabosu_converter::ffmpeg::set_detected_hardware_accel(hw_accel);
+                let ui_cb = ui_weak.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_cb.upgrade() {
+                        let data = ui.global::<AppData>();
+                        data.set_ffmpeg_version_badge(badge_text.into());
+                        data.set_has_gpu_hardware(has_gpu);
+                        data.set_detected_gpu_name(gpu_name.into());
+                    }
+                });
+            }
+
+            let Some(ytdlp_path) = ytdlp_probe.filter(|p| p.is_file()) else {
+                return;
+            };
+            let (current_ver, ytdlp_badge) = ytdlp::detect_version(&ytdlp_path);
+            let ui_cb = ui_weak.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = ui_cb.upgrade() {
+                    ui.global::<AppData>()
+                        .set_ytdlp_version_badge(ytdlp_badge.into());
+                }
+            });
+
+            // Keep app-managed yt-dlp updated silently in the background.
+            let is_managed = ytdlp_path
+                .canonicalize()
+                .ok()
+                .zip(managed_bin_dir.canonicalize().ok())
+                .is_some_and(|(p, dir)| p.starts_with(dir));
+            if is_managed {
                 let Ok(rt) = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -132,7 +155,7 @@ fn main() -> Result<()> {
                         if let Ok(Some((_path, new_ver))) =
                             dm.update_ytdlp_if_outdated(&current_ver).await
                         {
-                            let new_badge = format!("yt-dlp {} (Local Engine)", new_ver);
+                            let new_badge = format!("yt-dlp {new_ver} (Local Engine)");
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = ui_weak.upgrade() {
                                     ui.global::<AppData>()
@@ -142,8 +165,8 @@ fn main() -> Result<()> {
                         }
                     }
                 });
-            });
-        }
+            }
+        });
     }
 
     // Download and verify any missing external binaries in the background on first launch
@@ -158,36 +181,51 @@ fn main() -> Result<()> {
                 .build();
             if let Ok(rt) = rt {
                 rt.block_on(async move {
-                    if let Ok(dm) = kabosu_converter::binaries::DependencyManager::new(kabosu_converter::settings::APP_NAME) {
+                    if let Ok(dm) = kabosu_converter::binaries::DependencyManager::new(
+                        kabosu_converter::settings::APP_NAME,
+                    ) {
                         let ui_prog = ui_weak.clone();
-                        let result = dm.ensure_dependencies(move |name, prog| {
-                            let status = match prog {
-                                kabosu_converter::binaries::DownloadProgress::Started { total_bytes } => {
-                                    match total_bytes {
-                                        Some(total) => format!("Downloading {} ({:.1} MB)...", name, total as f64 / 1_048_576.0),
+                        let result = dm
+                            .ensure_dependencies(move |name, prog| {
+                                let status = match prog {
+                                    kabosu_converter::binaries::DownloadProgress::Started {
+                                        total_bytes,
+                                    } => match total_bytes {
+                                        Some(total) => format!(
+                                            "Downloading {} ({:.1} MB)...",
+                                            name,
+                                            total as f64 / 1_048_576.0
+                                        ),
                                         None => format!("Downloading {}...", name),
+                                    },
+                                    kabosu_converter::binaries::DownloadProgress::Transferred {
+                                        total_downloaded,
+                                        ..
+                                    } => {
+                                        format!(
+                                            "Downloading {}: {:.1} MB",
+                                            name,
+                                            total_downloaded as f64 / 1_048_576.0
+                                        )
                                     }
-                                }
-                                kabosu_converter::binaries::DownloadProgress::Transferred { total_downloaded, .. } => {
-                                    format!("Downloading {}: {:.1} MB", name, total_downloaded as f64 / 1_048_576.0)
-                                }
-                                kabosu_converter::binaries::DownloadProgress::VerifyingHash => {
-                                    format!("Verifying {} SHA-256 integrity...", name)
-                                }
-                                kabosu_converter::binaries::DownloadProgress::Extracting => {
-                                    format!("Extracting {} into app-local storage...", name)
-                                }
-                                kabosu_converter::binaries::DownloadProgress::Complete => {
-                                    format!("{} installed successfully.", name)
-                                }
-                            };
-                            let ui_cb = ui_prog.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(ui) = ui_cb.upgrade() {
-                                    ui.global::<AppData>().set_status_summary(status.into());
-                                }
-                            });
-                        }).await;
+                                    kabosu_converter::binaries::DownloadProgress::VerifyingHash => {
+                                        format!("Verifying {} SHA-256 integrity...", name)
+                                    }
+                                    kabosu_converter::binaries::DownloadProgress::Extracting => {
+                                        format!("Extracting {} into app-local storage...", name)
+                                    }
+                                    kabosu_converter::binaries::DownloadProgress::Complete => {
+                                        format!("{} installed successfully.", name)
+                                    }
+                                };
+                                let ui_cb = ui_prog.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(ui) = ui_cb.upgrade() {
+                                        ui.global::<AppData>().set_status_summary(status.into());
+                                    }
+                                });
+                            })
+                            .await;
 
                         match result {
                             Ok(paths) => {
@@ -209,7 +247,9 @@ fn main() -> Result<()> {
                                         data.set_has_gpu_hardware(has_gpu);
                                         data.set_detected_gpu_name(gpu_name.into());
                                         data.set_ytdlp_version_badge(y_badge.into());
-                                        data.set_status_summary("Dependencies installed and verified.".into());
+                                        data.set_status_summary(
+                                            "Dependencies installed and verified.".into(),
+                                        );
                                     }
                                 });
                             }
@@ -351,6 +391,7 @@ fn main() -> Result<()> {
 
         let initial_hwnd = native_hwnd.unwrap_or(std::ptr::null_mut());
         if !initial_hwnd.is_null() {
+            // SAFETY: `initial_hwnd` is a valid non-null Win32 window handle from Slint/EnumWindows.
             unsafe {
                 win_drag_drop::apply_window_rounded_corners(initial_hwnd);
             }
@@ -416,7 +457,8 @@ fn main() -> Result<()> {
         );
     }
 
-    let run_res = ui.run()
+    let run_res = ui
+        .run()
         .map_err(|e| anyhow::anyhow!("Platform error: {:?}", e));
 
     let app_data = ui.global::<AppData>();

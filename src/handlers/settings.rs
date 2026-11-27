@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-use slint::{ComponentHandle, SharedString};
 use crate::context::AppContext;
 use crate::{AppData, AppLogic, MainWindow};
 use kabosu_converter::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 use kabosu_converter::settings::{self, AppSettings};
+use slint::{ComponentHandle, SharedString};
+use std::path::PathBuf;
 
 /// Builds an `AppSettings` snapshot from the current Slint `AppData` state.
 pub fn extract_settings_from_app_data(data: &AppData) -> AppSettings {
@@ -99,7 +99,9 @@ pub fn apply_settings_to_app_data(data: &AppData, settings: &AppSettings) {
         let default_dl_dir = dirs::download_dir()
             .or_else(dirs::video_dir)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        data.set_ytdlp_output_dir(SharedString::from(default_dl_dir.to_string_lossy().as_ref()));
+        data.set_ytdlp_output_dir(SharedString::from(
+            default_dl_dir.to_string_lossy().as_ref(),
+        ));
     }
 
     let func_idx = if settings.default_function_index >= 0 {
@@ -177,24 +179,26 @@ pub fn register(ui: &MainWindow, _ctx: &AppContext) {
     // Update and persist whether to open destination folder when export finishes
     {
         let ui_folder = ui.as_weak();
-        ui.global::<AppLogic>().on_set_open_folder_on_finish(move |val| {
-            if let Some(ui) = ui_folder.upgrade() {
-                let data = ui.global::<AppData>();
-                data.set_open_folder_on_finish(val);
-                save_settings_from_app_data(&data);
-            }
-        });
+        ui.global::<AppLogic>()
+            .on_set_open_folder_on_finish(move |val| {
+                if let Some(ui) = ui_folder.upgrade() {
+                    let data = ui.global::<AppData>();
+                    data.set_open_folder_on_finish(val);
+                    save_settings_from_app_data(&data);
+                }
+            });
     }
 
     // Update and persist whether to play a notification sound when export completes
     {
         let ui_sound = ui.as_weak();
-        ui.global::<AppLogic>().on_set_play_sound_on_finish(move |val| {
-            if let Some(ui) = ui_sound.upgrade() {
-                let data = ui.global::<AppData>();
-                data.set_play_sound_on_finish(val);
-                save_settings_from_app_data(&data);
-            }
-        });
+        ui.global::<AppLogic>()
+            .on_set_play_sound_on_finish(move |val| {
+                if let Some(ui) = ui_sound.upgrade() {
+                    let data = ui.global::<AppData>();
+                    data.set_play_sound_on_finish(val);
+                    save_settings_from_app_data(&data);
+                }
+            });
     }
 }

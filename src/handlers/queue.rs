@@ -5,15 +5,15 @@ use std::thread;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
-use kabosu_converter::ffmpeg::probe_file;
 use crate::context::{AppContext, TaskContext, WaveformTask};
 use crate::handlers::editor::{
-    request_current_preview_frame, reset_audio_fades, sync_effective_dimensions_and_viewport,
-    update_audio_edit_indicators, update_video_edit_indicators,
+    request_current_preview_frame, reset_audio_edits_state, reset_audio_fades,
+    reset_video_edits_state,
 };
 use crate::handlers::timeline::update_trim_indicators;
 use crate::utils::{collect_media_files_from_dir, format_bytes_fast};
 use crate::{AppData, AppLogic, MainWindow, QueueFile};
+use kabosu_converter::ffmpeg::probe_file;
 
 /// Probes a media file and returns a populated `QueueFile` entry ready for the queue.
 pub fn probe_to_queue_file(path: &std::path::Path, ffprobe_bin: &std::path::Path) -> QueueFile {
@@ -87,39 +87,29 @@ pub fn load_selected_file(app_data: &AppData, item: &QueueFile, ctx: &TaskContex
     app_data.set_player_has_media(true);
     app_data.set_active_tab(1);
 
-    // Reset trim points for newly selected file
+    // Reset trim, video, and audio edits for the newly selected file.
     app_data.set_in_point(SharedString::from(""));
     app_data.set_out_point(SharedString::from(""));
     app_data.set_in_point_seconds(-1.0);
     app_data.set_out_point_seconds(-1.0);
     update_trim_indicators(app_data);
 
-    // Initialize video dimensions and reset video editing state for newly selected file
-    let vw = if item.video_width > 0 { item.video_width } else { 1920 };
-    let vh = if item.video_height > 0 { item.video_height } else { 1080 };
+    let vw = if item.video_width > 0 {
+        item.video_width
+    } else {
+        1920
+    };
+    let vh = if item.video_height > 0 {
+        item.video_height
+    } else {
+        1080
+    };
     app_data.set_selected_video_width(vw);
     app_data.set_selected_video_height(vh);
-    app_data.set_video_rotation_index(0);
-    app_data.set_video_flip_horizontal(false);
-    app_data.set_video_flip_vertical(false);
-    app_data.set_crop_enabled(false);
-    app_data.set_crop_aspect_index(0);
-    sync_effective_dimensions_and_viewport(app_data, true);
-    update_video_edit_indicators(app_data);
+    reset_video_edits_state(app_data);
+    reset_audio_edits_state(app_data);
 
-    // Reset audio edits for newly selected file
-    app_data.set_audio_gain_db(0.0);
-    app_data.set_audio_gain_text(SharedString::from("0.0 dB"));
-    app_data.set_audio_normalize_enabled(false);
-    app_data.set_audio_normalize_lufs(-16.0);
-    app_data.set_audio_normalize_preset_index(0);
-    reset_audio_fades(app_data);
-    update_audio_edit_indicators(app_data);
-
-    // Reset timeline zoom to fit 1.0x on file load
     app_data.set_timeline_zoom(1.0);
-
-    // Request audio waveform visualization for the timeline only when audio stream is present
     app_data.set_has_waveform(false);
     if item.is_audio {
         let wf_id = ctx.latest_waveform_id.fetch_add(1, Ordering::SeqCst) + 1;
@@ -130,7 +120,6 @@ pub fn load_selected_file(app_data: &AppData, item: &QueueFile, ctx: &TaskContex
         });
     }
 
-    // Request initial preview frame if video
     if item.is_video {
         request_current_preview_frame(app_data, &ctx.preview_tx, &ctx.latest_preview_id);
     }
@@ -142,12 +131,10 @@ pub fn process_incoming_paths(
     ctx: TaskContext,
 ) {
     const MEDIA_EXTS: &[&str] = &[
-        "mp4", "mkv", "mov", "avi", "webm", "ts", "m4v", "flv", "wmv",
-        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "m4b",
+        "mp4", "mkv", "mov", "avi", "webm", "ts", "m4v", "flv", "wmv", "mp3", "wav", "flac", "aac",
+        "m4a", "ogg", "opus", "m4b",
     ];
-    const AUDIO_ONLY_EXTS: &[&str] = &[
-        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "m4b",
-    ];
+    const AUDIO_ONLY_EXTS: &[&str] = &["mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "m4b"];
 
     thread::spawn(move || {
         let mut expanded = Vec::new();
@@ -186,7 +173,11 @@ pub fn process_incoming_paths(
                 file_name: SharedString::from(file_name),
                 file_path: SharedString::from(path_str),
                 file_size_formatted: SharedString::from(format_bytes_fast(size_bytes)),
-                resolution: SharedString::from(if is_audio_only { "Audio Only" } else { "Probing..." }),
+                resolution: SharedString::from(if is_audio_only {
+                    "Audio Only"
+                } else {
+                    "Probing..."
+                }),
                 duration: SharedString::from("--:--"),
                 codecs: SharedString::from("Probing..."),
                 status: SharedString::from("Probing..."),
@@ -221,10 +212,8 @@ pub fn process_incoming_paths(
 
                 let count = list.len();
                 app_data.set_queue(ModelRc::new(VecModel::from(list)));
-                app_data.set_status_summary(SharedString::from(format!(
-                    "{} file(s) in queue",
-                    count
-                )));
+                app_data
+                    .set_status_summary(SharedString::from(format!("{} file(s) in queue", count)));
 
                 if app_data.get_selected_file_index() == -1 {
                     if let Some((first_idx, first_item)) = first_added {
@@ -253,84 +242,85 @@ pub fn process_incoming_paths(
             let ui_w = ui_weak.clone();
             let ctx_sub = ctx.clone();
 
-            thread::spawn(move || {
-                loop {
-                    let i = idx_counter.fetch_add(1, Ordering::SeqCst);
-                    if i >= queue_arc.len() {
-                        break;
+            thread::spawn(move || loop {
+                let i = idx_counter.fetch_add(1, Ordering::SeqCst);
+                if i >= queue_arc.len() {
+                    break;
+                }
+                let (ref path, ref base_item) = queue_arc[i];
+                let mut updated = base_item.clone();
+
+                match probe_file(path, &bins.ffprobe) {
+                    Ok(meta) => {
+                        let codecs = meta.codecs_summary();
+                        let is_video = meta.primary_video().is_some();
+                        let is_audio = meta.primary_audio().is_some();
+                        let (vw, vh) = meta
+                            .primary_video()
+                            .map(|v| (v.width as i32, v.height as i32))
+                            .unwrap_or((0, 0));
+                        updated.file_size_formatted =
+                            SharedString::from(meta.file_size_formatted());
+                        updated.resolution = SharedString::from(meta.resolution_str());
+                        updated.duration = SharedString::from(meta.duration_formatted);
+                        updated.codecs = SharedString::from(codecs);
+                        updated.status = SharedString::from("Ready");
+                        updated.duration_seconds = meta.duration_seconds as f32;
+                        updated.is_video = is_video;
+                        updated.is_audio = is_audio;
+                        updated.video_width = vw;
+                        updated.video_height = vh;
                     }
-                    let (ref path, ref base_item) = queue_arc[i];
-                    let mut updated = base_item.clone();
-
-                    match probe_file(path, &bins.ffprobe) {
-                        Ok(meta) => {
-                            let codecs = meta.codecs_summary();
-                            let is_video = meta.primary_video().is_some();
-                            let is_audio = meta.primary_audio().is_some();
-                            let (vw, vh) = meta
-                                .primary_video()
-                                .map(|v| (v.width as i32, v.height as i32))
-                                .unwrap_or((0, 0));
-                            updated.file_size_formatted = SharedString::from(meta.file_size_formatted());
-                            updated.resolution = SharedString::from(meta.resolution_str());
-                            updated.duration = SharedString::from(meta.duration_formatted);
-                            updated.codecs = SharedString::from(codecs);
-                            updated.status = SharedString::from("Ready");
-                            updated.duration_seconds = meta.duration_seconds as f32;
-                            updated.is_video = is_video;
-                            updated.is_audio = is_audio;
-                            updated.video_width = vw;
-                            updated.video_height = vh;
-                        }
-                        Err(_) => {
-                            updated.resolution = SharedString::from("Unknown");
-                            updated.duration = SharedString::from("00:00.000");
-                            updated.codecs = SharedString::from("Unknown");
-                            updated.status = SharedString::from("Ready");
-                        }
+                    Err(_) => {
+                        updated.resolution = SharedString::from("Unknown");
+                        updated.duration = SharedString::from("00:00.000");
+                        updated.codecs = SharedString::from("Unknown");
+                        updated.status = SharedString::from("Ready");
                     }
+                }
 
-                    let ui_w_row = ui_w.clone();
-                    let ctx_row = ctx_sub.clone();
+                let ui_w_row = ui_w.clone();
+                let ctx_row = ctx_sub.clone();
 
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_w_row.upgrade() {
-                            let app_data = ui.global::<AppData>();
-                            let model = app_data.get_queue();
-                            let row_count = model.row_count();
-                            let matched_row = (0..row_count)
-                                .find(|&r| {
-                                    model.row_data(r).is_some_and(|item| {
-                                        item.file_path == updated.file_path && item.status == "Probing..."
-                                    })
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_w_row.upgrade() {
+                        let app_data = ui.global::<AppData>();
+                        let model = app_data.get_queue();
+                        let row_count = model.row_count();
+                        let matched_row = (0..row_count)
+                            .find(|&r| {
+                                model.row_data(r).is_some_and(|item| {
+                                    item.file_path == updated.file_path
+                                        && item.status == "Probing..."
                                 })
-                                .or_else(|| {
-                                    (0..row_count).find(|&r| {
-                                        model.row_data(r).is_some_and(|item| item.file_path == updated.file_path)
-                                    })
-                                });
+                            })
+                            .or_else(|| {
+                                (0..row_count).find(|&r| {
+                                    model
+                                        .row_data(r)
+                                        .is_some_and(|item| item.file_path == updated.file_path)
+                                })
+                            });
 
-                            if let Some(r) = matched_row {
-                                updated.id = r as i32;
-                                model.set_row_data(r, updated.clone());
-                                if app_data.get_selected_file_path() == updated.file_path {
-                                    let prev_tab = app_data.get_active_tab();
-                                    load_selected_file(&app_data, &updated, &ctx_row);
-                                    if prev_tab == 0 {
-                                        app_data.set_active_tab(0);
-                                    }
+                        if let Some(r) = matched_row {
+                            updated.id = r as i32;
+                            model.set_row_data(r, updated.clone());
+                            if app_data.get_selected_file_path() == updated.file_path {
+                                let prev_tab = app_data.get_active_tab();
+                                load_selected_file(&app_data, &updated, &ctx_row);
+                                if prev_tab == 0 {
+                                    app_data.set_active_tab(0);
                                 }
                             }
                         }
-                    });
-                }
+                    }
+                });
             });
         }
     });
 }
 
 pub fn register(ui: &MainWindow, ctx: &AppContext) {
-    // Handle Add Files
     {
         let ui_handle = ui.as_weak();
         let task_ctx = ctx.task_context();
@@ -345,14 +335,17 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                     p.parent().map(|d| d.to_path_buf())
                 } else {
                     let queue: Vec<QueueFile> = app_data.get_queue().iter().collect();
-                    queue.last().and_then(|item| {
-                        let p = item.file_path.to_string();
-                        if !p.is_empty() {
-                            PathBuf::from(p).parent().map(|d| d.to_path_buf())
-                        } else {
-                            None
-                        }
-                    }).or_else(crate::dialogs::get_last_opened_dir)
+                    queue
+                        .last()
+                        .and_then(|item| {
+                            let p = item.file_path.to_string();
+                            if !p.is_empty() {
+                                PathBuf::from(p).parent().map(|d| d.to_path_buf())
+                            } else {
+                                None
+                            }
+                        })
+                        .or_else(crate::dialogs::get_last_opened_dir)
                 };
                 (hwnd, dir)
             } else {
@@ -368,7 +361,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Select File
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -388,7 +380,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Remove File
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -407,17 +398,26 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                         item.id = i as i32;
                     }
                     let count = list.len();
-                    app_data.set_queue(ModelRc::new(VecModel::from(list.clone())));
+                    let cur_sel = app_data.get_selected_file_index();
+                    let next_selected = if cur_sel == index && !list.is_empty() {
+                        let new_sel = (index as usize).min(list.len() - 1);
+                        Some((new_sel as i32, list[new_sel].clone()))
+                    } else {
+                        None
+                    };
+
+                    app_data.set_queue(ModelRc::new(VecModel::from(list)));
                     app_data.set_status_summary(SharedString::from(format!(
-                        "{} file(s) in queue",
-                        count
+                        "{count} file(s) in queue"
                     )));
 
-                    let cur_sel = app_data.get_selected_file_index();
                     if cur_sel == index {
                         ctx.stop_active_playback(&app_data);
 
-                        if list.is_empty() {
+                        if let Some((new_sel, item)) = next_selected {
+                            app_data.set_selected_file_index(new_sel);
+                            load_selected_file(&app_data, &item, &task_ctx);
+                        } else {
                             app_data.set_selected_file_index(-1);
                             app_data.set_player_has_media(false);
                             app_data.set_in_point(SharedString::from(""));
@@ -426,10 +426,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
                             app_data.set_out_point_seconds(-1.0);
                             reset_audio_fades(&app_data);
                             update_trim_indicators(&app_data);
-                        } else {
-                            let new_sel = (index as usize).min(list.len() - 1) as i32;
-                            app_data.set_selected_file_index(new_sel);
-                            load_selected_file(&app_data, &list[new_sel as usize], &task_ctx);
                         }
                     } else if cur_sel > index {
                         app_data.set_selected_file_index(cur_sel - 1);
@@ -439,7 +435,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Clear Queue
     {
         let ui_handle = ui.as_weak();
         let ctx = ctx.clone();
@@ -468,7 +463,6 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
         });
     }
 
-    // Handle Toggle Queue Panel
     {
         let ui_handle = ui.as_weak();
         ui.global::<AppLogic>().on_toggle_queue_panel(move || {
@@ -483,8 +477,8 @@ pub fn register(ui: &MainWindow, ctx: &AppContext) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use slint::ComponentHandle;
     use slint::platform::{Key, WindowEvent};
+    use slint::ComponentHandle;
 
     #[test]
     fn test_del_key_removes_selected_file_from_queue() {

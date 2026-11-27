@@ -728,39 +728,18 @@ export component DownloaderTab inherits ScrollView {
                     }
 
                     // Completion Row
-                    if AppData.ytdlp_download_finished : HorizontalLayout {
+                    if AppData.ytdlp_download_finished && AppData.ytdlp_last_downloaded_file != "" : HorizontalLayout {
                         padding-top: 4px;
-                        spacing: 12px;
 
-                        VerticalLayout {
+                        Text {
                             horizontal-stretch: 1;
-                            min-width: 0px;
-                            alignment: center;
-
-                            Text {
-                                text: AppData.ytdlp_last_downloaded_file != "" ? "Saved: " + AppData.ytdlp_last_downloaded_file : "";
-                                font-size: Theme.font_badge;
-                                font-family: Theme.font_mono;
-                                color: Theme.text_secondary;
-                                horizontal-alignment: left;
-                                vertical-alignment: center;
-                                overflow: elide;
-                            }
-                        }
-
-                        ActionButton {
-                            height: Theme.btn_height_sm;
-                            title: "Add to Queue";
-                            icon_source: @image-url("../icons/plus.svg");
-                            has_icon: true;
-                            icon_size: 12px;
-                            fill_color: Theme.accent_surface;
-                            hover_color: Theme.accent_surface_hover;
-                            text_color: Theme.accent_lime;
-                            border_col: Theme.accent_border;
-                            normal_border_width: 1px;
-                            font_size: Theme.font_badge;
-                            clicked => { AppLogic.ytdlp_send_to_queue(); }
+                            text: "Saved: " + AppData.ytdlp_last_downloaded_file;
+                            font-size: Theme.font_badge;
+                            font-family: Theme.font_mono;
+                            color: Theme.text_secondary;
+                            horizontal-alignment: left;
+                            vertical-alignment: center;
+                            overflow: elide;
                         }
                     }
                 }

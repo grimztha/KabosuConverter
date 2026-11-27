@@ -14,7 +14,11 @@ pub use crate::sanitize::{validate_stream_url, validate_youtube_url};
 /// Finds the bundled or local yt-dlp binary.
 /// Checks the app's local data directory, the current working directory, and the project root.
 pub fn find_ytdlp_binary() -> Option<PathBuf> {
-    let exe_name = if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" };
+    let exe_name = if cfg!(windows) {
+        "yt-dlp.exe"
+    } else {
+        "yt-dlp"
+    };
 
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let exe_dir = env::current_exe()
@@ -73,7 +77,10 @@ pub fn detect_version(bin: &Path) -> (String, String) {
         }
     }
 
-    ("2026.11.23".to_string(), "yt-dlp 2026.11.23 (Local Engine)".to_string())
+    (
+        "2026.11.23".to_string(),
+        "yt-dlp 2026.11.23 (Local Engine)".to_string(),
+    )
 }
 
 /// JavaScript runtimes enabled for yt-dlp's External JS Challenge Solver (EJS).
@@ -130,7 +137,10 @@ pub struct DownloadFormatOption {
 
 /// Run yt-dlp --dump-single-json to extract title, duration, author, and available stream formats.
 #[allow(clippy::vec_init_then_push)]
-pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Vec<DownloadFormatOption>)> {
+pub fn discover_media(
+    ytdlp_bin: &Path,
+    url: &str,
+) -> Result<(YtDlpMediaInfo, Vec<DownloadFormatOption>)> {
     let trimmed = url.trim();
     crate::sanitize::validate_stream_url(trimmed)?;
 
@@ -154,7 +164,8 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
 
     // 1. High-level curated smart presets
     options.push(DownloadFormatOption {
-        display_label: "[Video] Best Quality (Auto Best Video + Best Audio, Recommended)".to_string(),
+        display_label: "[Video] Best Quality (Auto Best Video + Best Audio, Recommended)"
+            .to_string(),
         format_spec: "bv*+ba/b".to_string(),
         is_audio_only: false,
         audio_ext: None,
@@ -245,12 +256,19 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
                     }
 
                     let vcodec = f.vcodec.as_deref().unwrap_or("video");
-                    let ext = match f.ext.as_deref() {
-                        Some("mp4") | Some("mkv") | Some("webm") | Some("mov") | Some("avi") => f.ext.as_deref().unwrap(),
-                        _ => "mp4",
-                    };
-                    let fps_str = f.fps.map(|fps| format!("{}fps", fps.round())).unwrap_or_default();
-                    let label = format!("[Video] Stream {}p {} ({}) — Format ID {}", h, fps_str, vcodec, f.format_id);
+                    let ext = f
+                        .ext
+                        .as_deref()
+                        .filter(|e| matches!(*e, "mp4" | "mkv" | "webm" | "mov" | "avi"))
+                        .unwrap_or("mp4");
+                    let fps_str = f
+                        .fps
+                        .map(|fps| format!("{}fps", fps.round()))
+                        .unwrap_or_default();
+                    let label = format!(
+                        "[Video] Stream {}p {} ({}) — Format ID {}",
+                        h, fps_str, vcodec, f.format_id
+                    );
                     options.push(DownloadFormatOption {
                         display_label: label,
                         format_spec: format!("{}+ba/b", f.format_id),
@@ -296,7 +314,9 @@ pub fn build_output_template(custom_filename: Option<&str>) -> String {
         let mut sanitized: String = custom
             .chars()
             .map(|c| {
-                if matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() {
+                if matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+                    || c.is_control()
+                {
                     '_'
                 } else {
                     c
@@ -430,8 +450,13 @@ pub fn start_download(
     crate::sanitize::validate_stream_url(trimmed_url)?;
 
     // Validate format specifier
-    if !format_opt.is_audio_only && !crate::sanitize::validate_ytdlp_format_spec(&format_opt.format_spec) {
-        return Err(anyhow!("Invalid yt-dlp format specification: {}", format_opt.format_spec));
+    if !format_opt.is_audio_only
+        && !crate::sanitize::validate_ytdlp_format_spec(&format_opt.format_spec)
+    {
+        return Err(anyhow!(
+            "Invalid yt-dlp format specification: {}",
+            format_opt.format_spec
+        ));
     }
 
     // Validate custom filename if provided
@@ -461,16 +486,24 @@ pub fn start_download(
     }
 
     if format_opt.is_audio_only {
-        let audio_fmt = format_opt.audio_ext.as_deref().unwrap_or("mp3");
-        cmd.arg("-f").arg("ba/b")
+        let raw_audio_fmt = format_opt.audio_ext.as_deref().unwrap_or("mp3");
+        let audio_fmt = match raw_audio_fmt {
+            "mp3" | "m4a" | "flac" | "wav" | "opus" | "aac" | "vorbis" | "alac" => raw_audio_fmt,
+            _ => return Err(anyhow!("Unsupported audio format: {raw_audio_fmt}")),
+        };
+        cmd.arg("-f")
+            .arg("ba/b")
             .arg("-x")
-            .arg("--audio-format").arg(audio_fmt);
+            .arg("--audio-format")
+            .arg(audio_fmt);
         if audio_fmt == "mp3" {
             cmd.arg("--audio-quality").arg("0");
         }
     } else {
-        cmd.arg("-f").arg(&format_opt.format_spec)
-            .arg("--merge-output-format").arg("mp4");
+        cmd.arg("-f")
+            .arg(&format_opt.format_spec)
+            .arg("--merge-output-format")
+            .arg("mp4");
     }
 
     // Explicit path and filename template
@@ -487,8 +520,14 @@ pub fn start_download(
     crate::set_no_window(&mut cmd);
 
     let mut child = cmd.spawn()?;
-    let stdout = child.stdout.take().ok_or_else(|| anyhow!("Failed to capture yt-dlp stdout"))?;
-    let stderr = child.stderr.take().ok_or_else(|| anyhow!("Failed to capture yt-dlp stderr"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("Failed to capture yt-dlp stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("Failed to capture yt-dlp stderr"))?;
 
     let child_holder_inner = child_holder.clone();
     if let Ok(mut lock) = child_holder.lock() {
@@ -508,7 +547,10 @@ pub fn start_download(
             for line in reader.lines().map_while(Result::ok) {
                 on_log_err(format!("[yt-dlp stderr] {}", line));
                 let trimmed = line.trim();
-                if trimmed.starts_with("ERROR:") || trimmed.starts_with("error:") || trimmed.contains("Forbidden") {
+                if trimmed.starts_with("ERROR:")
+                    || trimmed.starts_with("error:")
+                    || trimmed.contains("Forbidden")
+                {
                     err_lines.push(trimmed.to_string());
                 }
             }
@@ -608,11 +650,24 @@ pub fn start_download(
             for entry in entries.flatten() {
                 let p = entry.path();
                 if p.is_file() {
-                    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                    if ["mp4", "mkv", "webm", "mov", "avi", "flv", "mp3", "m4a", "flac", "wav", "aac", "opus"].contains(&ext.as_str()) {
+                    let ext = p
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if [
+                        "mp4", "mkv", "webm", "mov", "avi", "flv", "mp3", "m4a", "flac", "wav",
+                        "aac", "opus",
+                    ]
+                    .contains(&ext.as_str())
+                    {
                         if let Ok(meta) = p.metadata() {
                             if let Ok(mod_time) = meta.modified() {
-                                if newest_file.as_ref().map(|(_, t)| mod_time > *t).unwrap_or(true) {
+                                if newest_file
+                                    .as_ref()
+                                    .map(|(_, t)| mod_time > *t)
+                                    .unwrap_or(true)
+                                {
                                     newest_file = Some((p, mod_time));
                                 }
                             }
@@ -636,9 +691,7 @@ pub fn start_download(
         )));
     });
 
-    Ok(DownloadJob {
-        cancel_flag,
-    })
+    Ok(DownloadJob { cancel_flag })
 }
 
 #[cfg(test)]
@@ -647,10 +700,14 @@ mod tests {
 
     #[test]
     fn test_validate_youtube_url() {
-        assert!(validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(validate_youtube_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
         assert!(validate_youtube_url("https://youtu.be/dQw4w9WgXcQ"));
         assert!(!validate_youtube_url("https://example.com/not_youtube"));
-        assert!(!validate_youtube_url("http://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(!validate_youtube_url(
+            "http://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
     }
 
     #[test]
@@ -675,5 +732,3 @@ mod tests {
         assert_eq!(sanitize_filename_stem(""), "downloaded_media");
     }
 }
-
-

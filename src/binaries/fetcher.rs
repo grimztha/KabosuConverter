@@ -1,21 +1,29 @@
-use std::fs::File;
-use std::io::Write;
-use std::path::{Path, PathBuf};
 use futures_util::StreamExt;
 use reqwest::Client;
 use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use super::error::BinaryError;
 use super::platform::BinaryDownloadTarget;
 
 #[derive(Debug, Clone)]
 pub enum DownloadProgress {
-    Started { total_bytes: Option<u64> },
-    Transferred { chunk_size: usize, total_downloaded: u64 },
+    Started {
+        total_bytes: Option<u64>,
+    },
+    Transferred {
+        chunk_size: usize,
+        total_downloaded: u64,
+    },
     VerifyingHash,
     Extracting,
     Complete,
 }
+
+const MAX_BINARY_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_CHECKSUM_BYTES: usize = 1024 * 1024;
 
 pub struct BinaryFetcher {
     client: Client,
@@ -26,6 +34,7 @@ impl BinaryFetcher {
         let client = Client::builder()
             .user_agent(concat!("KabosuConverter/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(std::time::Duration::from_secs(15))
+            .read_timeout(std::time::Duration::from_secs(30))
             .build()?;
         Ok(Self { client })
     }
@@ -44,10 +53,14 @@ impl BinaryFetcher {
         let tmp_file_path = target_dir.join(format!("{}.download.tmp", target.asset_filename));
 
         let download_url = match target.name {
-            "yt-dlp" => std::env::var("KABOSU_YTDLP_URL").unwrap_or_else(|_| target.download_url.to_string()),
-            "ffmpeg" => std::env::var("KABOSU_FFMPEG_URL").unwrap_or_else(|_| target.download_url.to_string()),
+            "yt-dlp" => std::env::var("KABOSU_YTDLP_URL")
+                .unwrap_or_else(|_| target.download_url.to_string()),
+            "ffmpeg" => std::env::var("KABOSU_FFMPEG_URL")
+                .unwrap_or_else(|_| target.download_url.to_string()),
             _ => target.download_url.to_string(),
         };
+        crate::updater::validate_remote_url(&download_url)
+            .map_err(|e| BinaryError::Other(e.to_string()))?;
 
         let res = self.client.get(&download_url).send().await?;
         if !res.status().is_success() {
@@ -60,6 +73,12 @@ impl BinaryFetcher {
         }
 
         let total_bytes = res.content_length();
+        if total_bytes.is_some_and(|n| n > MAX_BINARY_DOWNLOAD_BYTES) {
+            return Err(BinaryError::Other(format!(
+                "Asset '{}' exceeds maximum allowed download size",
+                target.asset_filename
+            )));
+        }
         on_progress(DownloadProgress::Started { total_bytes });
 
         let mut file = File::create(&tmp_file_path)?;
@@ -77,13 +96,21 @@ impl BinaryFetcher {
                 }
             };
             let chunk_len = chunk.len();
+            total_downloaded = total_downloaded.saturating_add(chunk_len as u64);
+            if total_downloaded > MAX_BINARY_DOWNLOAD_BYTES {
+                drop(file);
+                let _ = std::fs::remove_file(&tmp_file_path);
+                return Err(BinaryError::Other(format!(
+                    "Asset '{}' exceeded maximum allowed download size",
+                    target.asset_filename
+                )));
+            }
             if let Err(e) = file.write_all(&chunk) {
                 drop(file);
                 let _ = std::fs::remove_file(&tmp_file_path);
                 return Err(e.into());
             }
             hasher.update(&chunk);
-            total_downloaded += chunk_len as u64;
 
             on_progress(DownloadProgress::Transferred {
                 chunk_size: chunk_len,
@@ -102,7 +129,7 @@ impl BinaryFetcher {
         Ok((tmp_file_path, calculated_hash))
     }
 
-    /// Fetches the remote checksum manifest, parses it, and validates the calculated hash.
+    /// Fetches the remote checksum manifest and validates `calculated_hash`.
     pub async fn verify_checksum(
         &self,
         target: &BinaryDownloadTarget,
@@ -116,14 +143,13 @@ impl BinaryFetcher {
             None
         };
 
-        let checksum_url = checksum_url_override
-            .as_deref()
-            .or(target.checksum_url);
+        let checksum_url = checksum_url_override.as_deref().or(target.checksum_url);
 
         let Some(checksum_url) = checksum_url else {
-            // No remote checksum URL specified for this target
             return Ok(calculated_hash.to_string());
         };
+        crate::updater::validate_remote_url(checksum_url)
+            .map_err(|e| BinaryError::Other(e.to_string()))?;
 
         let res = self.client.get(checksum_url).send().await?;
         if !res.status().is_success() {
@@ -133,8 +159,22 @@ impl BinaryFetcher {
                 res.status()
             )));
         }
+        if res
+            .content_length()
+            .is_some_and(|n| n > MAX_CHECKSUM_BYTES as u64)
+        {
+            return Err(BinaryError::Other(
+                "Checksum manifest exceeded size limit".to_string(),
+            ));
+        }
 
-        let manifest_text = res.text().await?;
+        let bytes = res.bytes().await?;
+        if bytes.len() > MAX_CHECKSUM_BYTES {
+            return Err(BinaryError::Other(
+                "Checksum manifest exceeded size limit".to_string(),
+            ));
+        }
+        let manifest_text = String::from_utf8_lossy(&bytes);
         let expected_hash = Self::find_hash_in_manifest(&manifest_text, target.asset_filename)
             .ok_or_else(|| BinaryError::ChecksumNotFound {
                 asset_name: target.asset_filename.to_string(),
@@ -215,7 +255,8 @@ c8993fee4f28051bc07f472fd03f51d98a9c4054488500739c22b116a4f390d1  ffmpeg-master-
 d5410167dc4e59bac2c95f3588a8e2b5abe7777dd4cfdfff0cd72bdff99fd064  ffmpeg-master-latest-win64-gpl.zip
 "#;
 
-        let hash_win64 = BinaryFetcher::find_hash_in_manifest(manifest, "ffmpeg-master-latest-win64-gpl.zip");
+        let hash_win64 =
+            BinaryFetcher::find_hash_in_manifest(manifest, "ffmpeg-master-latest-win64-gpl.zip");
         assert_eq!(
             hash_win64.as_deref(),
             Some("d5410167dc4e59bac2c95f3588a8e2b5abe7777dd4cfdfff0cd72bdff99fd064")

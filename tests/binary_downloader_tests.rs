@@ -58,7 +58,8 @@ d5410167dc4e59bac2c95f3588a8e2b5abe7777dd4cfdfff0cd72bdff99fd064  ffmpeg-master-
         Some("b7af77f686e95f7845ce8d09d21957718febb8b48b30555adb9dd2292ad7bf14")
     );
     assert_eq!(
-        BinaryFetcher::find_hash_in_manifest(manifest, "ffmpeg-master-latest-win64-gpl.zip").as_deref(),
+        BinaryFetcher::find_hash_in_manifest(manifest, "ffmpeg-master-latest-win64-gpl.zip")
+            .as_deref(),
         Some("d5410167dc4e59bac2c95f3588a8e2b5abe7777dd4cfdfff0cd72bdff99fd064")
     );
     assert!(BinaryFetcher::find_hash_in_manifest(manifest, "nonexistent.zip").is_none());
@@ -77,24 +78,44 @@ async fn test_archive_extractor_zip_and_permissions() {
     let mut zip = ZipWriter::new(file);
 
     let opts = SimpleFileOptions::default();
-    zip.start_file(format!("ffmpeg-latest/bin/{}", platform.ffmpeg_filename()), opts).unwrap();
+    zip.start_file(
+        format!("ffmpeg-latest/bin/{}", platform.ffmpeg_filename()),
+        opts,
+    )
+    .unwrap();
     zip.write_all(b"binary_payload_ffmpeg").unwrap();
 
-    zip.start_file(format!("ffmpeg-latest/bin/{}", platform.ffprobe_filename()), opts).unwrap();
+    zip.start_file(
+        format!("ffmpeg-latest/bin/{}", platform.ffprobe_filename()),
+        opts,
+    )
+    .unwrap();
     zip.write_all(b"binary_payload_ffprobe").unwrap();
 
     zip.finish().unwrap();
 
     // Perform extraction
-    BinaryExtractor::extract(&zip_file_path, &dest_bin_dir, &ArchiveFormat::Zip, &platform).unwrap();
+    BinaryExtractor::extract(
+        &zip_file_path,
+        &dest_bin_dir,
+        &ArchiveFormat::Zip,
+        &platform,
+    )
+    .unwrap();
 
     let extracted_ffmpeg = dest_bin_dir.join(platform.ffmpeg_filename());
     let extracted_ffprobe = dest_bin_dir.join(platform.ffprobe_filename());
 
     assert!(extracted_ffmpeg.is_file());
     assert!(extracted_ffprobe.is_file());
-    assert_eq!(fs::read(&extracted_ffmpeg).unwrap(), b"binary_payload_ffmpeg");
-    assert_eq!(fs::read(&extracted_ffprobe).unwrap(), b"binary_payload_ffprobe");
+    assert_eq!(
+        fs::read(&extracted_ffmpeg).unwrap(),
+        b"binary_payload_ffmpeg"
+    );
+    assert_eq!(
+        fs::read(&extracted_ffprobe).unwrap(),
+        b"binary_payload_ffprobe"
+    );
 
     // Temporary archive should be cleaned up
     assert!(!zip_file_path.exists());
@@ -102,7 +123,9 @@ async fn test_archive_extractor_zip_and_permissions() {
 
 #[tokio::test]
 async fn test_dependency_manager_discovery_and_paths() {
-    let dm = DependencyManager::new("KabosuTestApp").expect("DependencyManager::new");
+    let temp = tempdir().unwrap();
+    let dm = DependencyManager::with_app_data_dir(temp.path().to_path_buf(), false)
+        .expect("DependencyManager::with_app_data_dir");
     assert_eq!(dm.bin_dir(), dm.app_data_dir().join("bin"));
 
     // Check existing detects workspace binaries
@@ -134,12 +157,42 @@ fn test_ytdlp_platform_targets_use_standalone_binaries() {
     use kabosu_converter::binaries::platform::{TargetArch, TargetOS};
 
     let cases = [
-        (TargetOS::Windows, TargetArch::X86_64, "yt-dlp.exe", "yt-dlp.exe"),
-        (TargetOS::Windows, TargetArch::Aarch64, "yt-dlp.exe", "yt-dlp_arm64.exe"),
-        (TargetOS::MacOS, TargetArch::X86_64, "yt-dlp", "yt-dlp_macos"),
-        (TargetOS::MacOS, TargetArch::Aarch64, "yt-dlp", "yt-dlp_macos"),
-        (TargetOS::Linux, TargetArch::X86_64, "yt-dlp", "yt-dlp_linux"),
-        (TargetOS::Linux, TargetArch::Aarch64, "yt-dlp", "yt-dlp_linux_aarch64"),
+        (
+            TargetOS::Windows,
+            TargetArch::X86_64,
+            "yt-dlp.exe",
+            "yt-dlp.exe",
+        ),
+        (
+            TargetOS::Windows,
+            TargetArch::Aarch64,
+            "yt-dlp.exe",
+            "yt-dlp_arm64.exe",
+        ),
+        (
+            TargetOS::MacOS,
+            TargetArch::X86_64,
+            "yt-dlp",
+            "yt-dlp_macos",
+        ),
+        (
+            TargetOS::MacOS,
+            TargetArch::Aarch64,
+            "yt-dlp",
+            "yt-dlp_macos",
+        ),
+        (
+            TargetOS::Linux,
+            TargetArch::X86_64,
+            "yt-dlp",
+            "yt-dlp_linux",
+        ),
+        (
+            TargetOS::Linux,
+            TargetArch::Aarch64,
+            "yt-dlp",
+            "yt-dlp_linux_aarch64",
+        ),
     ];
 
     for (os, arch, expected_bin, expected_asset) in cases {

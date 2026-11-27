@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 use super::error::BinaryError;
 
@@ -82,8 +82,10 @@ mod tests {
         manifest.update(
             "yt-dlp",
             BinaryMetadata {
-                installed_at: 1729891200,
-                sha256: Some("33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555".into()),
+                installed_at: 1_729_891_200,
+                sha256: Some(
+                    "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555".into(),
+                ),
                 version: Some("2026.10.21".into()),
                 path: Some("/test/bin/yt-dlp.exe".into()),
             },
@@ -94,7 +96,7 @@ mod tests {
         let loaded = LocalBinaryManifest::load(dir.path());
         assert!(loaded.yt_dlp.is_some());
         let ytdlp = loaded.yt_dlp.unwrap();
-        assert_eq!(ytdlp.installed_at, 1729891200);
+        assert_eq!(ytdlp.installed_at, 1_729_891_200);
         assert_eq!(
             ytdlp.sha256.as_deref(),
             Some("33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555")

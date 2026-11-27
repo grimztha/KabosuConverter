@@ -48,7 +48,10 @@ const MSGFLT_ALLOW: u32 = 1;
 const GWL_EXSTYLE: i32 = -20;
 const WS_EX_ACCEPTFILES: isize = 0x00000010;
 const WM_NCHITTEST: u32 = 0x0084;
+const WM_NCDESTROY: u32 = 0x0082;
 const WM_NCMOUSEMOVE: u32 = 0x00A0;
+const MAX_DROPPED_FILES: u32 = 10_000;
+const MAX_DROPPED_PATH_CHARS: u32 = 32_768;
 const WM_NCLBUTTONDOWN: u32 = 0x00A1;
 const WM_NCLBUTTONUP: u32 = 0x00A2;
 const WM_NCLBUTTONDBLCLK: u32 = 0x00A3;
@@ -166,7 +169,10 @@ impl DropTargetCom {
             *lock = Some((now, paths.clone()));
         }
 
-        log_dd(&format!("Dispatching {} path(s) to application queue", paths.len()));
+        log_dd(&format!(
+            "Dispatching {} path(s) to application queue",
+            paths.len()
+        ));
         (self.callback)(paths);
     }
 }
@@ -231,7 +237,10 @@ unsafe extern "system" fn drag_enter(
     pt: POINT,
     pdw_effect: *mut u32,
 ) -> i32 {
-    log_dd(&format!("COM DragEnter called at ({}, {}), p_data_obj: {:p}", pt.x, pt.y, p_data_obj));
+    log_dd(&format!(
+        "COM DragEnter called at ({}, {}), p_data_obj: {:p}",
+        pt.x, pt.y, p_data_obj
+    ));
     if !pdw_effect.is_null() {
         *pdw_effect = DROPEFFECT_COPY;
     }
@@ -262,7 +271,10 @@ unsafe extern "system" fn drop(
     pt: POINT,
     pdw_effect: *mut u32,
 ) -> i32 {
-    log_dd(&format!("COM Drop called at ({}, {}), p_data_obj: {:p}", pt.x, pt.y, p_data_obj));
+    log_dd(&format!(
+        "COM Drop called at ({}, {}), p_data_obj: {:p}",
+        pt.x, pt.y, p_data_obj
+    ));
     if !pdw_effect.is_null() {
         *pdw_effect = DROPEFFECT_COPY;
     }
@@ -294,13 +306,18 @@ unsafe extern "system" fn drop(
         ) -> i32 = std::mem::transmute(*vtable_ptr.add(3));
 
         let hr = get_data_fn(p_data_obj, &fmt, &mut medium);
-        log_dd(&format!("COM GetData hr={:#x}, medium.h_global={:p}", hr, medium.h_global));
+        log_dd(&format!(
+            "COM GetData hr={:#x}, medium.h_global={:p}",
+            hr, medium.h_global
+        ));
         if hr == S_OK {
-            if !medium.h_global.is_null() {
+            if medium.tymed == TYMED_HGLOBAL && !medium.h_global.is_null() {
                 let paths = parse_hdrop(medium.h_global);
                 log_dd(&format!("COM GetData parsed {} paths", paths.len()));
                 if !paths.is_empty() {
-                    (*this).dispatch_paths(paths);
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        (*this).dispatch_paths(paths);
+                    }));
                 }
             }
             ReleaseStgMedium(&mut medium);
@@ -345,6 +362,18 @@ extern "system" {
         uIdSubclass: usize,
         dwRefData: usize,
     ) -> i32;
+    fn RemoveWindowSubclass(
+        hWnd: *mut std::ffi::c_void,
+        pfnSubclass: unsafe extern "system" fn(
+            *mut std::ffi::c_void,
+            u32,
+            usize,
+            isize,
+            usize,
+            usize,
+        ) -> isize,
+        uIdSubclass: usize,
+    ) -> i32;
     fn DefSubclassProc(
         hWnd: *mut std::ffi::c_void,
         uMsg: u32,
@@ -371,10 +400,7 @@ extern "system" {
         lParam: isize,
     ) -> i32;
     fn GetCurrentProcessId() -> u32;
-    fn GetWindowThreadProcessId(
-        hWnd: *mut std::ffi::c_void,
-        lpdwProcessId: *mut u32,
-    ) -> u32;
+    fn GetWindowThreadProcessId(hWnd: *mut std::ffi::c_void, lpdwProcessId: *mut u32) -> u32;
     fn IsWindowVisible(hWnd: *mut std::ffi::c_void) -> i32;
     fn GetWindowLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32) -> isize;
     fn SetWindowLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32, dwNewLong: isize) -> isize;
@@ -382,22 +408,13 @@ extern "system" {
     fn GetClassNameW(hWnd: *mut std::ffi::c_void, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     fn GetClientRect(hWnd: *mut std::ffi::c_void, lpRect: *mut RECT) -> i32;
     fn ScreenToClient(hWnd: *mut std::ffi::c_void, lpPoint: *mut POINT) -> i32;
-    fn DefWindowProcW(
-        hWnd: *mut std::ffi::c_void,
-        Msg: u32,
-        wParam: usize,
-        lParam: isize,
-    ) -> isize;
+    fn DefWindowProcW(hWnd: *mut std::ffi::c_void, Msg: u32, wParam: usize, lParam: isize)
+        -> isize;
     fn GetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32) -> usize;
     fn SetClassLongPtrW(hWnd: *mut std::ffi::c_void, nIndex: i32, dwNewLong: usize) -> usize;
     fn IsZoomed(hWnd: *mut std::ffi::c_void) -> i32;
     fn ShowWindow(hWnd: *mut std::ffi::c_void, nCmdShow: i32) -> i32;
-    fn PostMessageW(
-        hWnd: *mut std::ffi::c_void,
-        Msg: u32,
-        wParam: usize,
-        lParam: isize,
-    ) -> i32;
+    fn PostMessageW(hWnd: *mut std::ffi::c_void, Msg: u32, wParam: usize, lParam: isize) -> i32;
     fn ReleaseCapture() -> i32;
 }
 
@@ -475,12 +492,16 @@ pub unsafe fn parse_hdrop(hdrop: *mut std::ffi::c_void) -> Vec<PathBuf> {
     if hdrop.is_null() {
         return Vec::new();
     }
-    let count = DragQueryFileW(hdrop, 0xFFFFFFFF, std::ptr::null_mut(), 0);
-    let mut paths = Vec::with_capacity(count as usize);
+    let count = DragQueryFileW(hdrop, 0xFFFF_FFFF, std::ptr::null_mut(), 0);
+    if count == 0 || count == 0xFFFF_FFFF {
+        return Vec::new();
+    }
+    let capped = count.min(MAX_DROPPED_FILES);
+    let mut paths = Vec::with_capacity(capped as usize);
     let mut buf = Vec::with_capacity(260);
-    for i in 0..count {
+    for i in 0..capped {
         let char_len = DragQueryFileW(hdrop, i, std::ptr::null_mut(), 0);
-        if char_len > 0 {
+        if char_len > 0 && char_len < MAX_DROPPED_PATH_CHARS {
             buf.resize((char_len + 1) as usize, 0u16);
             let copied = DragQueryFileW(hdrop, i, buf.as_mut_ptr(), char_len + 1);
             if copied > 0 {
@@ -609,7 +630,29 @@ unsafe extern "system" fn drop_subclass_proc(
     msg: u32,
     wparam: usize,
     lparam: isize,
-    _id: usize,
+    id: usize,
+    ref_data: usize,
+) -> isize {
+    if msg == WM_NCDESTROY {
+        RemoveWindowSubclass(hwnd, drop_subclass_proc, id);
+        if ATTACHED_REAL_HWND.load(Ordering::SeqCst) == hwnd as usize {
+            ATTACHED_REAL_HWND.store(0, Ordering::SeqCst);
+        }
+        return DefSubclassProc(hwnd, msg, wparam, lparam);
+    }
+
+    // Never allow a Rust panic to unwind across the Win32 `extern "system"` boundary.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        handle_subclass_message(hwnd, msg, wparam, lparam, ref_data)
+    }))
+    .unwrap_or_else(|_| DefSubclassProc(hwnd, msg, wparam, lparam))
+}
+
+unsafe fn handle_subclass_message(
+    hwnd: *mut std::ffi::c_void,
+    msg: u32,
+    wparam: usize,
+    lparam: isize,
     ref_data: usize,
 ) -> isize {
     if msg == WM_DROPFILES {
@@ -638,11 +681,9 @@ unsafe extern "system" fn drop_subclass_proc(
     if msg == WM_NCHITTEST {
         let real_hwnd = ATTACHED_REAL_HWND.load(Ordering::SeqCst);
         if real_hwnd == 0 || real_hwnd == hwnd as usize {
-            let x_screen = ((lparam as i32) << 16) >> 16;
-            let y_screen = (lparam as i32) >> 16;
             let mut pt = POINT {
-                x: x_screen,
-                y: y_screen,
+                x: (lparam as i16) as i32,
+                y: ((lparam >> 16) as i16) as i32,
             };
             if ScreenToClient(hwnd, &mut pt) != 0 && is_titlebar_hit(hwnd, pt.x, pt.y) {
                 return HTCAPTION as isize;
@@ -652,11 +693,9 @@ unsafe extern "system" fn drop_subclass_proc(
     }
 
     if msg == WM_NCMOUSEMOVE {
-        let x_screen = ((lparam as i32) << 16) >> 16;
-        let y_screen = (lparam as i32) >> 16;
         let mut pt = POINT {
-            x: x_screen,
-            y: y_screen,
+            x: (lparam as i16) as i32,
+            y: ((lparam >> 16) as i16) as i32,
         };
         if ScreenToClient(hwnd, &mut pt) != 0 {
             let client_lparam =
@@ -667,9 +706,7 @@ unsafe extern "system" fn drop_subclass_proc(
     }
 
     if msg == WM_NCLBUTTONDOWN && wparam == HTCAPTION {
-        // Call DefWindowProcW directly to bypass Winit's WM_NCLBUTTONDOWN handler
-        // (which posts a dummy WM_MOUSEMOVE(0, 0) that cancels the native modal drag loop)
-        // and to avoid Slint's 8px WindowMoveArea deadzone and Winit's drag_window() bugs.
+        // Bypass Winit's handler, which posts a synthetic WM_MOUSEMOVE(0,0) that breaks native drag.
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
@@ -712,6 +749,8 @@ fn is_auxiliary_window_class(class: &str) -> bool {
 
 /// Finds the active top-level window for the current process, ignoring hidden message/IME windows.
 pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
+    // SAFETY: `EnumWindows` invokes `enum_all_windows_cb` synchronously on this thread with a
+    // valid pointer to stack-local `data`.
     unsafe {
         let my_pid = GetCurrentProcessId();
 
@@ -719,23 +758,26 @@ pub fn find_app_window() -> Option<*mut std::ffi::c_void> {
             hwnd: *mut std::ffi::c_void,
             lparam: isize,
         ) -> i32 {
-            let (target_pid, out) = &mut *(lparam as *mut (u32, Option<*mut std::ffi::c_void>));
-            let mut pid = 0u32;
-            GetWindowThreadProcessId(hwnd, &mut pid);
-            if pid == *target_pid {
-                let class = get_window_class(hwnd);
-                let title = get_window_title(hwnd);
-                let visible = IsWindowVisible(hwnd) != 0;
-                if !is_auxiliary_window_class(&class) {
-                    if title.contains("Kabosu Converter") || title.contains("Another Encoder") {
-                        *out = Some(hwnd);
-                        return 0;
-                    } else if visible && out.is_none() {
-                        *out = Some(hwnd);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let (target_pid, out) = &mut *(lparam as *mut (u32, Option<*mut std::ffi::c_void>));
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(hwnd, &mut pid);
+                if pid == *target_pid {
+                    let class = get_window_class(hwnd);
+                    let title = get_window_title(hwnd);
+                    let visible = IsWindowVisible(hwnd) != 0;
+                    if !is_auxiliary_window_class(&class) {
+                        if title.contains("Kabosu Converter") {
+                            *out = Some(hwnd);
+                            return 0;
+                        } else if visible && out.is_none() {
+                            *out = Some(hwnd);
+                        }
                     }
                 }
-            }
-            1
+                1
+            }))
+            .unwrap_or(1)
         }
 
         let mut data = (my_pid, None);
@@ -754,7 +796,7 @@ unsafe fn register_hwnd_drop_hooks(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mu
     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_ACCEPTFILES);
 
-    // Enable double-clicks on the window class so Windows generates WM_LBUTTONDBLCLK
+    // Enable CS_DBLCLKS so Windows emits WM_LBUTTONDBLCLK on the custom titlebar.
     let style = GetClassLongPtrW(hwnd, GCL_STYLE);
     if (style & CS_DBLCLKS) == 0 {
         SetClassLongPtrW(hwnd, GCL_STYLE, style | CS_DBLCLKS);
@@ -769,8 +811,10 @@ unsafe extern "system" fn enum_child_windows_cb(
     child: *mut std::ffi::c_void,
     lparam: isize,
 ) -> i32 {
-    let raw_com_ptr = lparam as *mut DropTargetCom;
-    register_hwnd_drop_hooks(child, raw_com_ptr);
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let raw_com_ptr = lparam as *mut DropTargetCom;
+        register_hwnd_drop_hooks(child, raw_com_ptr);
+    }));
     1
 }
 
@@ -791,16 +835,17 @@ pub fn get_attached_hwnd() -> Option<*mut std::ffi::c_void> {
 
 /// Queries the native OS maximized (`IsZoomed`) state of the attached application window.
 pub fn is_window_maximized_os() -> Option<bool> {
-    get_attached_hwnd()
-        .or_else(find_app_window)
-        .map(|hwnd| unsafe { IsZoomed(hwnd) != 0 })
+    get_attached_hwnd().or_else(find_app_window).map(|hwnd| {
+        // SAFETY: `hwnd` is a top-level window handle belonging to this process.
+        unsafe { IsZoomed(hwnd) != 0 }
+    })
 }
 
-/// Dispatches WM_EXITSIZEMOVE to the window to ensure Winit clears its internal `state.dragging` flag
-/// if a drag attempt was aborted or happened across a maximize/restore transition.
+/// Posts `WM_EXITSIZEMOVE` to clear Winit's internal drag flag after aborted drags or maximize transitions.
 pub fn clean_drag_state() {
     let hwnd = get_attached_hwnd().or_else(find_app_window);
     if let Some(hwnd) = hwnd {
+        // SAFETY: `hwnd` is an active window owned by this process.
         unsafe {
             ReleaseCapture();
             PostMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
@@ -808,6 +853,11 @@ pub fn clean_drag_state() {
     }
 }
 
+/// Attaches drag-and-drop hooks and titlebar subclassing to `hwnd` and its child windows.
+///
+/// # Safety
+/// `hwnd` must be a valid Win32 window handle (or null) and `raw_com_ptr` must remain valid
+/// for the lifetime of the subclassed windows.
 pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut DropTargetCom) {
     if hwnd.is_null() {
         return;
@@ -816,7 +866,7 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
     let class = get_window_class(hwnd);
     let visible = IsWindowVisible(hwnd) != 0;
 
-    if visible && (title.contains("Kabosu Converter") || title.contains("Another Encoder")) && !is_auxiliary_window_class(&class) {
+    if visible && title.contains("Kabosu Converter") && !is_auxiliary_window_class(&class) {
         ATTACHED_REAL_HWND.store(hwnd as usize, Ordering::SeqCst);
         apply_window_rounded_corners(hwnd);
     }
@@ -832,14 +882,19 @@ pub unsafe fn attach_to_hwnd(hwnd: *mut std::ffi::c_void, raw_com_ptr: *mut Drop
 
 static REGISTERED_TARGET: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// Initializes both OLE IDropTarget and Shell WM_DROPFILES on the active application window
+/// Initializes both OLE `IDropTarget` and Shell `WM_DROPFILES` on the active application window.
 pub fn setup_drop_target<F>(hwnd: *mut std::ffi::c_void, callback: F)
 where
     F: Fn(Vec<PathBuf>) + Send + Sync + 'static,
 {
+    // SAFETY: Called on the UI thread; `raw_com_ptr` is intentionally leaked for the process
+    // lifetime so Win32 COM and window subclass callbacks always hold a valid pointer.
     unsafe {
         let ole_hr = OleInitialize(std::ptr::null_mut());
-        log_dd(&format!("setup_drop_target called with hint HWND {:p}, OleInitialize hr={:#x}", hwnd, ole_hr));
+        log_dd(&format!(
+            "setup_drop_target called with hint HWND {:p}, OleInitialize hr={:#x}",
+            hwnd, ole_hr
+        ));
 
         let com_target = Box::new(DropTargetCom {
             vtbl: &DROP_TARGET_VTBL,
@@ -850,30 +905,35 @@ where
         let raw_com_ptr = Box::into_raw(com_target);
         REGISTERED_TARGET.store(raw_com_ptr as usize, Ordering::SeqCst);
 
-        // First attach to the hint HWND if non-null
         if !hwnd.is_null() {
             attach_to_hwnd(hwnd, raw_com_ptr);
         }
 
-        // Also search for any real visible app window immediately
         if let Some(real_hwnd) = find_app_window() {
             if real_hwnd != hwnd {
-                log_dd(&format!("Found distinct real app HWND {:p}, attaching as well", real_hwnd));
+                log_dd(&format!(
+                    "Found distinct real app HWND {:p}, attaching as well",
+                    real_hwnd
+                ));
                 attach_to_hwnd(real_hwnd, raw_com_ptr);
             }
         }
     }
 }
 
-/// Re-scans for any newly created top-level or child windows and attaches the drop target
+/// Re-scans for newly created top-level or child windows and attaches the drop target.
 pub fn reapply_drop_target() {
     let ptr = REGISTERED_TARGET.load(Ordering::SeqCst);
     if ptr != 0 {
+        // SAFETY: `REGISTERED_TARGET` stores the process-lifetime `DropTargetCom` pointer created in `setup_drop_target`.
         unsafe {
             let raw_com_ptr = ptr as *mut DropTargetCom;
             if let Some(real_hwnd) = find_app_window() {
                 if ATTACHED_REAL_HWND.load(Ordering::SeqCst) != real_hwnd as usize {
-                    log_dd(&format!("reapply_drop_target: Found new real app HWND {:p}, attaching", real_hwnd));
+                    log_dd(&format!(
+                        "reapply_drop_target: Found new real app HWND {:p}, attaching",
+                        real_hwnd
+                    ));
                     attach_to_hwnd(real_hwnd, raw_com_ptr);
                 }
             }
@@ -902,7 +962,10 @@ mod tests {
         });
 
         trigger_titlebar_double_click();
-        assert!(called.load(Ordering::SeqCst), "Double-click handler should be executed");
+        assert!(
+            called.load(Ordering::SeqCst),
+            "Double-click handler should be executed"
+        );
 
         set_titlebar_hit_test(|x| x < 100.0 || x > 500.0);
         {
@@ -914,4 +977,3 @@ mod tests {
         }
     }
 }
-

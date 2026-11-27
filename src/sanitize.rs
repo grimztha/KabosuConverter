@@ -5,9 +5,8 @@ use thiserror::Error;
 
 /// Device names reserved by Windows that cannot be used as file or folder stems.
 pub const WINDOWS_RESERVED_NAMES: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
 /// Upper bound on accepted file path lengths.
@@ -48,7 +47,11 @@ pub enum SanitizeError {
     DangerousFilterChar(char),
 
     #[error("Value {value} out of range [{min}, {max}]")]
-    NumericOutOfRange { value: String, min: String, max: String },
+    NumericOutOfRange {
+        value: String,
+        min: String,
+        max: String,
+    },
 
     #[error("Invalid stream URL: {0}")]
     InvalidUrl(String),
@@ -78,8 +81,8 @@ pub fn sanitize_filename_stem(name: &str) -> String {
     let mut prev_underscore = false;
 
     for ch in name.trim().chars() {
-        let forbidden = matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-            || ch.is_control();
+        let forbidden =
+            matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || ch.is_control();
         let mapped = if forbidden { '_' } else { ch };
 
         if mapped == '_' {
@@ -168,7 +171,10 @@ pub fn ensure_path_within_dir(target: &Path, allowed_dir: &Path) -> Result<PathB
     validate_path(allowed_dir)?;
 
     #[cfg(not(windows))]
-    let (target_buf, allowed_buf) = (normalize_separators(target), normalize_separators(allowed_dir));
+    let (target_buf, allowed_buf) = (
+        normalize_separators(target),
+        normalize_separators(allowed_dir),
+    );
     #[cfg(windows)]
     let (target_buf, allowed_buf) = (target.to_path_buf(), allowed_dir.to_path_buf());
 
@@ -240,7 +246,10 @@ pub fn validate_subprocess_arg(arg: &str) -> Result<(), SanitizeError> {
     if arg.contains('\0') {
         return Err(SanitizeError::ContainsNull);
     }
-    if arg.chars().any(|c| c.is_control() && c != '\t' && c != '\n') {
+    if arg
+        .chars()
+        .any(|c| c.is_control() && c != '\t' && c != '\n')
+    {
         return Err(SanitizeError::InvalidSubprocessArg(arg.to_string()));
     }
     Ok(())
@@ -251,13 +260,14 @@ fn is_valid_youtube_id(id: &str, exact_len: Option<usize>, min_len: usize) -> bo
         Some(len) => id.len() == len,
         None => id.len() >= min_len,
     };
-    len_ok && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    len_ok
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
-    query
-        .split('&')
-        .find_map(|param| param.strip_prefix(key))
+    query.split('&').find_map(|param| param.strip_prefix(key))
 }
 
 /// Returns true only when `url` matches a known HTTPS YouTube video, embed, music, or playlist URL.
@@ -297,8 +307,7 @@ pub fn validate_youtube_url(url: &str) -> bool {
         "https://youtube.com/playlist?",
     ] {
         if let Some(query) = url_lower.strip_prefix(prefix) {
-            return query_param(query, "list=")
-                .is_some_and(|id| is_valid_youtube_id(id, None, 12));
+            return query_param(query, "list=").is_some_and(|id| is_valid_youtube_id(id, None, 12));
         }
     }
 
@@ -312,10 +321,14 @@ pub fn validate_youtube_url(url: &str) -> bool {
 pub fn validate_stream_url(url: &str) -> Result<(), SanitizeError> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
-        return Err(SanitizeError::InvalidUrl("Stream URL cannot be empty".to_string()));
+        return Err(SanitizeError::InvalidUrl(
+            "Stream URL cannot be empty".to_string(),
+        ));
     }
     if trimmed.len() > 2048 {
-        return Err(SanitizeError::InvalidUrl("Stream URL is too long".to_string()));
+        return Err(SanitizeError::InvalidUrl(
+            "Stream URL is too long".to_string(),
+        ));
     }
     if trimmed.starts_with('-') {
         return Err(SanitizeError::InvalidUrl(
@@ -344,9 +357,16 @@ pub fn validate_stream_url(url: &str) -> Result<(), SanitizeError> {
         }
     }
 
-    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
+    let after_scheme = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .ok_or_else(|| {
+            SanitizeError::InvalidUrl("URL must use http:// or https:// protocol".to_string())
+        })?;
+
+    if after_scheme.is_empty() || after_scheme.starts_with('/') {
         return Err(SanitizeError::InvalidUrl(
-            "URL must use http:// or https:// protocol".to_string(),
+            "URL must include a valid host".to_string(),
         ));
     }
 
@@ -363,7 +383,22 @@ pub fn validate_ytdlp_format_spec(spec: &str) -> bool {
         c.is_ascii_alphanumeric()
             || matches!(
                 c,
-                '+' | '/' | '[' | ']' | '(' | ')' | '<' | '>' | '=' | '*' | '-' | '_' | '.' | '?' | '~' | ',' | ':'
+                '+' | '/'
+                    | '['
+                    | ']'
+                    | '('
+                    | ')'
+                    | '<'
+                    | '>'
+                    | '='
+                    | '*'
+                    | '-'
+                    | '_'
+                    | '.'
+                    | '?'
+                    | '~'
+                    | ','
+                    | ':'
             )
     })
 }
@@ -372,7 +407,9 @@ pub fn validate_ytdlp_format_spec(spec: &str) -> bool {
 pub fn validate_timecode(tc: &str) -> Result<(), SanitizeError> {
     let tc = tc.trim();
     if tc.is_empty() {
-        return Err(SanitizeError::InvalidTimecode("Timecode is empty".to_string()));
+        return Err(SanitizeError::InvalidTimecode(
+            "Timecode is empty".to_string(),
+        ));
     }
 
     let seconds = parse_timecode_to_seconds(tc)
@@ -479,10 +516,10 @@ pub fn mask_sensitive(value: &str, visible: usize) -> String {
     format!("{}...{}", first, last)
 }
 
-/// Replaces sensitive query values (tokens, signatures, keys, passwords) with `[REDACTED]` for logs.
+/// Redacts sensitive query parameter values for safe logging.
 pub fn redact_url_query(url: &str) -> String {
-    const SENSITIVE_KEYS: &[&str] = &[
-        "token", "sig", "signature", "key", "auth", "secret", "session", "pass",
+    const SENSITIVE_SUBSTRINGS: &[&str] = &[
+        "token", "sig", "key", "auth", "secret", "session", "pass", "cookie",
     ];
 
     let Some((base, query)) = url.split_once('?') else {
@@ -493,15 +530,16 @@ pub fn redact_url_query(url: &str) -> String {
         .split('&')
         .map(|param| {
             if let Some((k, _)) = param.split_once('=') {
-                if SENSITIVE_KEYS.iter().any(|&s| k.eq_ignore_ascii_case(s)) {
-                    return format!("{}=[REDACTED]", k);
+                let k_lower = k.to_ascii_lowercase();
+                if SENSITIVE_SUBSTRINGS.iter().any(|&s| k_lower.contains(s)) {
+                    return format!("{k}=[REDACTED]");
                 }
             }
             param.to_string()
         })
         .collect();
 
-    format!("{}?{}", base, sanitized_params.join("&"))
+    format!("{base}?{}", sanitized_params.join("&"))
 }
 
 #[cfg(test)]
@@ -584,42 +622,71 @@ mod tests {
 
     #[test]
     fn test_validate_youtube_url_valid() {
-        assert!(validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"));
-        assert!(validate_youtube_url("https://youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(validate_youtube_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
+        assert!(validate_youtube_url(
+            "https://youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
         assert!(validate_youtube_url("https://youtu.be/dQw4w9WgXcQ"));
-        assert!(validate_youtube_url("https://www.youtube.com/embed/dQw4w9WgXcQ"));
-        assert!(validate_youtube_url("https://music.youtube.com/watch?v=dQw4w9WgXcQ"));
-        assert!(validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"));
+        assert!(validate_youtube_url(
+            "https://www.youtube.com/embed/dQw4w9WgXcQ"
+        ));
+        assert!(validate_youtube_url(
+            "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
+        assert!(validate_youtube_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"
+        ));
     }
 
     #[test]
     fn test_validate_youtube_url_invalid() {
         assert!(!validate_youtube_url("https://example.com"));
-        assert!(!validate_youtube_url("http://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(!validate_youtube_url(
+            "http://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
         assert!(!validate_youtube_url(""));
-        assert!(!validate_youtube_url("https://www.youtube.com/watch?v=tooshort"));
-        assert!(!validate_youtube_url("https://www.youtube.com/watch?v=toolongvideoidhere"));
+        assert!(!validate_youtube_url(
+            "https://www.youtube.com/watch?v=tooshort"
+        ));
+        assert!(!validate_youtube_url(
+            "https://www.youtube.com/watch?v=toolongvideoidhere"
+        ));
         assert!(!validate_youtube_url("https://youtu.be/invalid"));
-        assert!(!validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ;rm=rf"));
+        assert!(!validate_youtube_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ;rm=rf"
+        ));
         assert!(!validate_youtube_url("https://vimeo.com/12345"));
-        assert!(!validate_youtube_url("https://dailymotion.com/video/abc123"));
+        assert!(!validate_youtube_url(
+            "https://dailymotion.com/video/abc123"
+        ));
     }
 
     #[test]
     fn test_validate_stream_url() {
         assert!(validate_stream_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ").is_ok());
-        assert!(validate_stream_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s&list=PL1234567890ab").is_ok());
+        assert!(validate_stream_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s&list=PL1234567890ab"
+        )
+        .is_ok());
         assert!(validate_stream_url("https://example.com/stream.m3u8").is_ok());
         assert!(validate_stream_url("-flag").is_err());
         assert!(validate_stream_url("https://example.com/video; rm -rf /").is_err());
         assert!(validate_stream_url("ftp://example.com").is_err());
+        assert!(validate_stream_url("https://").is_err());
+        assert!(validate_stream_url("http:///path").is_err());
     }
 
     #[test]
     fn test_validate_ytdlp_format_spec() {
         assert!(validate_ytdlp_format_spec("bv*+ba/b"));
-        assert!(validate_ytdlp_format_spec("bv*[height<=1080]+ba/b[height<=1080]"));
-        assert!(validate_ytdlp_format_spec("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"));
+        assert!(validate_ytdlp_format_spec(
+            "bv*[height<=1080]+ba/b[height<=1080]"
+        ));
+        assert!(validate_ytdlp_format_spec(
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
+        ));
         assert!(validate_ytdlp_format_spec("137+140"));
         assert!(!validate_ytdlp_format_spec("bv; rm -rf /"));
         assert!(!validate_ytdlp_format_spec("bv&calc.exe"));
@@ -646,8 +713,11 @@ mod tests {
 
     #[test]
     fn test_redact_url_query() {
-        let url = "https://example.com/video?token=supersecret123&v=1080p";
+        let url = "https://example.com/video?token=supersecret123&access_token=abc&api_key=xyz&client_secret=s3cr3t&v=1080p";
         let redacted = redact_url_query(url);
-        assert_eq!(redacted, "https://example.com/video?token=[REDACTED]&v=1080p");
+        assert_eq!(
+            redacted,
+            "https://example.com/video?token=[REDACTED]&access_token=[REDACTED]&api_key=[REDACTED]&client_secret=[REDACTED]&v=1080p"
+        );
     }
 }

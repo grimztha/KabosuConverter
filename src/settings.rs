@@ -1,8 +1,8 @@
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 use crate::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 
@@ -70,14 +70,14 @@ impl Default for AppSettings {
             default_fps_index: 0,           // original source
             default_deinterlace_index: 0,   // none
             default_faststart: true,
-            default_container_index: 0,     // .mp4
+            default_container_index: 0, // .mp4
 
             default_audio_codec: AudioCodecChoice::AAC,
-            default_audio_codec_index: 0,   // AAC
+            default_audio_codec_index: 0, // AAC
             default_audio_bitrate_kbps: 192,
-            default_audio_bitrate_index: 2, // 192 kbps
+            default_audio_bitrate_index: 2,     // 192 kbps
             default_audio_sample_rate_index: 0, // keep source
-            default_normalize_index: 0,     // disabled
+            default_normalize_index: 0,         // disabled
 
             open_folder_on_finish: true,
             play_sound_on_finish: false,
@@ -92,8 +92,45 @@ impl Default for AppSettings {
     }
 }
 
-/// Returns `true` when the app is running in portable/standalone mode.
-/// This is enabled if `portable`, `.standalone`, or `settings.json` sits next to the executable.
+impl AppSettings {
+    /// Clamps numeric bounds and drops invalid saved paths after loading from disk.
+    pub fn sanitized(mut self) -> Self {
+        let clean_dir = |opt: Option<String>| -> Option<String> {
+            opt.map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && crate::sanitize::validate_path(s).is_ok())
+        };
+        self.default_output_dir = clean_dir(self.default_output_dir);
+        self.default_ytdlp_output_dir = clean_dir(self.default_ytdlp_output_dir);
+
+        self.default_function_index = self.default_function_index.clamp(0, 12);
+        self.default_hw_accel_index = self.default_hw_accel_index.clamp(0, 5);
+        self.default_rate_control_index = self.default_rate_control_index.clamp(0, 2);
+        self.default_crf = self.default_crf.min(51);
+        self.default_video_bitrate_index = self.default_video_bitrate_index.clamp(0, 5);
+        self.default_preset_index = self.default_preset_index.clamp(0, 5);
+        self.default_resolution_index = self.default_resolution_index.clamp(0, 5);
+        self.default_fps_index = self.default_fps_index.clamp(0, 8);
+        self.default_deinterlace_index = self.default_deinterlace_index.clamp(0, 2);
+        self.default_container_index = self.default_container_index.clamp(0, 8);
+
+        self.default_audio_codec_index = self.default_audio_codec_index.clamp(0, 7);
+        self.default_audio_bitrate_kbps = self.default_audio_bitrate_kbps.clamp(32, 1024);
+        self.default_audio_bitrate_index = self.default_audio_bitrate_index.clamp(0, 5);
+        self.default_audio_sample_rate_index = self.default_audio_sample_rate_index.clamp(0, 3);
+        self.default_normalize_index = self.default_normalize_index.clamp(0, 4);
+
+        self.player_volume = if self.player_volume.is_finite() {
+            self.player_volume.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        self.crop_nudge_step = self.crop_nudge_step.clamp(1, 500);
+        self.ytdlp_selected_format_index = self.ytdlp_selected_format_index.max(0);
+        self
+    }
+}
+
+/// Returns true if running in portable mode (marker file or `settings.json` next to the exe).
 pub fn is_standalone_mode() -> bool {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
@@ -154,8 +191,7 @@ pub fn get_settings_path() -> Result<PathBuf> {
 /// Maximum allowed size for settings file (256 KB) to prevent memory or stack exhaustion.
 pub const MAX_SETTINGS_FILE_SIZE: u64 = 256 * 1024;
 
-/// Loads saved settings from disk, or returns defaults if the file is missing or unreadable.
-/// Enforces file size boundaries and streams reading with a size limiter to prevent JSON bombs.
+/// Loads settings from disk with a 256 KB cap, falling back to defaults on error.
 pub fn load_settings() -> AppSettings {
     if let Ok(path) = get_settings_path() {
         let bak_path = path.with_extension("json.bak");
@@ -173,8 +209,8 @@ pub fn load_settings() -> AppSettings {
                     use std::io::Read;
                     let limited_reader = file.take(MAX_SETTINGS_FILE_SIZE);
                     let buf_reader = std::io::BufReader::new(limited_reader);
-                    if let Ok(settings) = serde_json::from_reader(buf_reader) {
-                        return settings;
+                    if let Ok(settings) = serde_json::from_reader::<_, AppSettings>(buf_reader) {
+                        return settings.sanitized();
                     }
                 } else {
                     eprintln!(
@@ -215,7 +251,10 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
                 // Restore backup if atomic rename failed
                 let _ = fs::rename(&bak_path, &path);
                 let _ = fs::remove_file(&tmp_path);
-                return Err(anyhow::anyhow!("Failed to atomically replace settings: {}", e));
+                return Err(anyhow::anyhow!(
+                    "Failed to atomically replace settings: {}",
+                    e
+                ));
             }
             let _ = fs::remove_file(&bak_path);
         } else {
@@ -236,7 +275,8 @@ mod tests {
     #[test]
     fn test_partial_json_deserialization_uses_defaults() {
         let partial_json = r#"{"default_crf": 18, "open_folder_on_finish": false}"#;
-        let parsed: AppSettings = serde_json::from_str(partial_json).expect("Partial JSON must deserialize cleanly");
+        let parsed: AppSettings =
+            serde_json::from_str(partial_json).expect("Partial JSON must deserialize cleanly");
         assert_eq!(parsed.default_crf, 18);
         assert!(!parsed.open_folder_on_finish);
         assert_eq!(parsed.default_audio_bitrate_kbps, 192);
@@ -287,7 +327,10 @@ mod tests {
         let reloaded: AppSettings = serde_json::from_str(&json).expect("Must deserialize cleanly");
 
         assert_eq!(reloaded.default_output_dir.as_deref(), Some("D:/Exports"));
-        assert_eq!(reloaded.default_ytdlp_output_dir.as_deref(), Some("D:/Downloads"));
+        assert_eq!(
+            reloaded.default_ytdlp_output_dir.as_deref(),
+            Some("D:/Downloads")
+        );
         assert_eq!(reloaded.default_video_codec, VideoCodec::H265);
         assert_eq!(reloaded.default_function_index, 1);
         assert_eq!(reloaded.default_hw_accel, HwAccel::Nvenc);
@@ -337,5 +380,27 @@ mod tests {
 
         assert!(!reloaded.open_folder_on_finish);
         assert!(reloaded.play_sound_on_finish);
+    }
+
+    #[test]
+    fn test_settings_sanitized_clamps_invalid_values() {
+        let dirty = AppSettings {
+            default_output_dir: Some("C:/CON/bad".to_string()),
+            default_ytdlp_output_dir: Some("   ".to_string()),
+            default_function_index: 99,
+            default_crf: 999,
+            player_volume: f32::NAN,
+            crop_nudge_step: -10,
+            ytdlp_selected_format_index: -5,
+            ..AppSettings::default()
+        };
+        let clean = dirty.sanitized();
+        assert!(clean.default_output_dir.is_none());
+        assert!(clean.default_ytdlp_output_dir.is_none());
+        assert_eq!(clean.default_function_index, 12);
+        assert_eq!(clean.default_crf, 51);
+        assert_eq!(clean.player_volume, 1.0);
+        assert_eq!(clean.crop_nudge_step, 1);
+        assert_eq!(clean.ytdlp_selected_format_index, 0);
     }
 }

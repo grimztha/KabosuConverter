@@ -15,17 +15,41 @@ pub const GITHUB_API_BASE: &str = "https://api.github.com";
 
 const USER_AGENT: &str = concat!("KabosuConverter/", env!("CARGO_PKG_VERSION"));
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const METADATA_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RELEASE_API_BYTES: usize = 2 * 1024 * 1024;
+const MAX_CHECKSUM_BYTES: usize = 1024 * 1024;
+const MAX_UPDATE_ASSET_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Ensures remote URLs use HTTPS with a valid host (loopback HTTP allowed only in test/debug builds).
+pub fn validate_remote_url(url: &str) -> Result<()> {
+    let trimmed = url.trim();
+    if trimmed.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(anyhow!("Refusing malformed URL: {}", trimmed));
+    }
+    if let Some(rest) = trimmed.strip_prefix("https://") {
+        if !rest.is_empty() && !rest.starts_with('/') {
+            return Ok(());
+        }
+        return Err(anyhow!("Refusing URL without host: {}", trimmed));
+    }
+    #[cfg(any(test, debug_assertions))]
+    if trimmed.starts_with("http://127.0.0.1") || trimmed.starts_with("http://localhost") {
+        return Ok(());
+    }
+    Err(anyhow!("Refusing non-HTTPS URL: {}", trimmed))
+}
 
 pub fn github_api_base() -> String {
     std::env::var("KABOSU_GITHUB_API_BASE").unwrap_or_else(|_| GITHUB_API_BASE.to_string())
 }
 
-/// Builds an HTTP client configured with our user-agent and connection timeout.
+/// Builds an HTTP client with our user-agent and connect/read timeouts.
 pub fn build_http_client(request_timeout: Option<Duration>) -> Result<Client> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
-        .connect_timeout(CONNECT_TIMEOUT);
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT);
     if let Some(timeout) = request_timeout {
         builder = builder.timeout(timeout);
     }
@@ -62,7 +86,10 @@ pub fn sanitize_asset_filename(name: &str) -> Result<&str> {
         || trimmed.chars().any(char::is_control)
         || crate::sanitize::is_windows_reserved_name(trimmed)
     {
-        return Err(anyhow!("Refusing unsafe release asset filename: {:?}", name));
+        return Err(anyhow!(
+            "Refusing unsafe release asset filename: {:?}",
+            name
+        ));
     }
     Ok(trimmed)
 }
@@ -70,7 +97,9 @@ pub fn sanitize_asset_filename(name: &str) -> Result<&str> {
 /// Queries the GitHub Releases API for the latest published release.
 pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
     let client = build_http_client(Some(METADATA_TIMEOUT))?;
-    let url = format!("{}/repos/{}/releases/latest", github_api_base(), repo);
+    let base = github_api_base();
+    validate_remote_url(&base)?;
+    let url = format!("{base}/repos/{repo}/releases/latest");
     let res = client
         .get(&url)
         .header("Accept", "application/vnd.github.v3+json")
@@ -80,8 +109,16 @@ pub async fn check_latest_release(repo: &str) -> Result<GithubRelease> {
     if !res.status().is_success() {
         return Err(anyhow!("GitHub API returned HTTP {}", res.status()));
     }
+    if let Some(len) = res.content_length() {
+        if len > MAX_RELEASE_API_BYTES as u64 {
+            return Err(anyhow!("GitHub API response exceeded size limit"));
+        }
+    }
 
     let bytes = res.bytes().await?;
+    if bytes.len() > MAX_RELEASE_API_BYTES {
+        return Err(anyhow!("GitHub API response exceeded size limit"));
+    }
     let release: GithubRelease = serde_json::from_slice(&bytes)?;
     Ok(release)
 }
@@ -114,7 +151,11 @@ pub fn find_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
                 let n = a.name.to_lowercase();
                 n.contains("windows") && n.ends_with(".zip")
             })
-            .or_else(|| assets.iter().find(|a| a.name.to_lowercase().ends_with(".zip")))
+            .or_else(|| {
+                assets
+                    .iter()
+                    .find(|a| a.name.to_lowercase().ends_with(".zip"))
+            })
     }
     #[cfg(target_os = "macos")]
     {
@@ -183,8 +224,7 @@ pub async fn fetch_release_checksum(
 
     for asset in assets {
         let name_lower = asset.name.to_lowercase();
-        let is_target_checksum =
-            name_lower == expected_sha256 || name_lower == expected_sha256sum;
+        let is_target_checksum = name_lower == expected_sha256 || name_lower == expected_sha256sum;
         let is_manifest = matches!(
             name_lower.as_str(),
             "sha256sums" | "checksums.sha256" | "checksums.txt"
@@ -194,19 +234,34 @@ pub async fn fetch_release_checksum(
             continue;
         }
 
+        if validate_remote_url(&asset.browser_download_url).is_err() {
+            continue;
+        }
         let Ok(res) = client.get(&asset.browser_download_url).send().await else {
             continue;
         };
         if !res.status().is_success() {
             continue;
         }
-        let Ok(text) = res.text().await else {
+        if res
+            .content_length()
+            .is_some_and(|l| l > MAX_CHECKSUM_BYTES as u64)
+        {
+            continue;
+        }
+        let Ok(bytes) = res.bytes().await else {
+            continue;
+        };
+        if bytes.len() > MAX_CHECKSUM_BYTES {
+            continue;
+        }
+        let Ok(text) = std::str::from_utf8(&bytes) else {
             continue;
         };
 
         if is_manifest {
             if let Some(hash) =
-                crate::binaries::BinaryFetcher::find_hash_in_manifest(&text, target_asset_name)
+                crate::binaries::BinaryFetcher::find_hash_in_manifest(text, target_asset_name)
             {
                 return Some(hash);
             }
@@ -221,7 +276,7 @@ pub async fn fetch_release_checksum(
     None
 }
 
-/// Streams a release asset to `dest_path`, verifying its SHA-256 digest if `expected_hash` is provided.
+/// Streams a release asset to `dest_path`, computing and verifying SHA-256 on the fly.
 pub async fn download_release_asset<F>(
     url: &str,
     dest_path: &Path,
@@ -231,13 +286,16 @@ pub async fn download_release_asset<F>(
 where
     F: Fn(f32, u64, u64) + Send + Sync + 'static,
 {
+    validate_remote_url(url)?;
     let client = build_http_client(None)?;
 
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let tmp_path = dest_path.with_extension("download.tmp");
+    let mut tmp_os = dest_path.as_os_str().to_os_string();
+    tmp_os.push(".download.tmp");
+    let tmp_path = std::path::PathBuf::from(tmp_os);
 
     let res = client.get(url).send().await?;
     if !res.status().is_success() {
@@ -245,10 +303,14 @@ where
     }
 
     let total_bytes = res.content_length().unwrap_or(0);
+    if total_bytes > MAX_UPDATE_ASSET_BYTES {
+        return Err(anyhow!("Update package exceeds maximum allowed size"));
+    }
     on_progress(0.0, 0, total_bytes);
 
     let mut file = File::create(&tmp_path)?;
     let mut stream = res.bytes_stream();
+    let mut hasher = Sha256::new();
     let mut downloaded: u64 = 0;
 
     while let Some(chunk_res) = stream.next().await {
@@ -257,15 +319,21 @@ where
             Err(e) => {
                 drop(file);
                 let _ = std::fs::remove_file(&tmp_path);
-                return Err(anyhow!("Download stream failed: {}", e));
+                return Err(anyhow!("Download stream failed: {e}"));
             }
         };
+        downloaded = downloaded.saturating_add(chunk.len() as u64);
+        if downloaded > MAX_UPDATE_ASSET_BYTES {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(anyhow!("Update package exceeded maximum allowed size"));
+        }
         if let Err(e) = file.write_all(&chunk) {
             drop(file);
             let _ = std::fs::remove_file(&tmp_path);
-            return Err(anyhow!("Failed writing update file: {}", e));
+            return Err(anyhow!("Failed writing update file: {e}"));
         }
-        downloaded += chunk.len() as u64;
+        hasher.update(&chunk);
 
         let ratio = if total_bytes > 0 {
             (downloaded as f32 / total_bytes as f32).clamp(0.0, 1.0)
@@ -278,22 +346,15 @@ where
     if let Err(e) = file.flush() {
         drop(file);
         let _ = std::fs::remove_file(&tmp_path);
-        return Err(anyhow!("Failed flushing file: {}", e));
+        return Err(anyhow!("Failed flushing file: {e}"));
     }
     drop(file);
 
-    // Always propagate verification errors instead of silently accepting an unverified file.
     if let Some(hash) = expected_hash {
-        match verify_sha256(&tmp_path, hash) {
-            Ok(true) => {}
-            Ok(false) => {
-                let _ = std::fs::remove_file(&tmp_path);
-                return Err(anyhow!("SHA-256 hash verification failed"));
-            }
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp_path);
-                return Err(anyhow!("Could not verify SHA-256 hash: {}", e));
-            }
+        let actual = hex::encode(hasher.finalize());
+        if !actual.eq_ignore_ascii_case(hash.trim()) {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(anyhow!("SHA-256 hash verification failed"));
         }
     }
 
@@ -302,7 +363,7 @@ where
     }
     if let Err(e) = std::fs::rename(&tmp_path, dest_path) {
         let _ = std::fs::remove_file(&tmp_path);
-        return Err(anyhow!("Failed renaming update to target path: {}", e));
+        return Err(anyhow!("Failed renaming update to target path: {e}"));
     }
 
     on_progress(1.0, downloaded, total_bytes.max(downloaded));
@@ -350,8 +411,20 @@ mod tests {
 
     #[test]
     fn test_verify_sha256_missing_file_returns_err() {
-        let res = verify_sha256(Path::new("nonexistent_file_for_sha_test.bin"), "0".repeat(64).as_str());
+        let res = verify_sha256(
+            Path::new("nonexistent_file_for_sha_test.bin"),
+            "0".repeat(64).as_str(),
+        );
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_validate_remote_url_enforces_https() {
+        assert!(validate_remote_url("https://github.com/Kabosu/release.zip").is_ok());
+        assert!(validate_remote_url("http://127.0.0.1:8080/test.zip").is_ok());
+        assert!(validate_remote_url("http://example.com/evil.zip").is_err());
+        assert!(validate_remote_url("file:///etc/passwd").is_err());
+        assert!(validate_remote_url("https://").is_err());
     }
 
     #[test]
@@ -377,7 +450,10 @@ mod tests {
         let found = find_platform_asset(&assets);
         assert!(found.is_some());
         #[cfg(target_os = "windows")]
-        assert_eq!(found.unwrap().name, "kabosu-converter-v0.15.0-x86_64-windows.zip");
+        assert_eq!(
+            found.unwrap().name,
+            "kabosu-converter-v0.15.0-x86_64-windows.zip"
+        );
         #[cfg(target_os = "macos")]
         assert!(found.unwrap().name.contains("darwin") || found.unwrap().name.contains("apple"));
         #[cfg(all(unix, not(target_os = "macos")))]

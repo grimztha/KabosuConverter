@@ -30,11 +30,18 @@ pub struct DependencyManager {
 }
 
 impl DependencyManager {
-    /// Sets up the binary manager for `app_name`.
-    /// Uses `<exe_dir>/bin` in portable mode, or the OS local app data `bin` folder otherwise.
+    /// Sets up the binary manager for `app_name` using portable or local app data storage.
     pub fn new(app_name: &str) -> Result<Self, BinaryError> {
-        let platform = PlatformInfo::current()?;
         let (app_data_dir, is_standalone) = Self::determine_app_data_dir(app_name);
+        Self::with_app_data_dir(app_data_dir, is_standalone)
+    }
+
+    /// Sets up the binary manager rooted at an explicit `app_data_dir`.
+    pub fn with_app_data_dir(
+        app_data_dir: PathBuf,
+        is_standalone: bool,
+    ) -> Result<Self, BinaryError> {
+        let platform = PlatformInfo::current()?;
         let bin_dir = app_data_dir.join("bin");
 
         std::fs::create_dir_all(&bin_dir)?;
@@ -62,12 +69,20 @@ impl DependencyManager {
     /// Checks if `ffmpeg`, `ffprobe`, and `yt-dlp` already exist locally and run cleanly.
     /// Does not make any network requests.
     pub async fn check_existing(&self) -> Result<Option<BinaryPaths>, BinaryError> {
-        let ffmpeg = self.resolve_binary(self.platform.ffmpeg_filename(), "-version").await;
-        let ffprobe = self.resolve_binary(self.platform.ffprobe_filename(), "-version").await;
-        let ytdlp = self.resolve_binary(self.platform.ytdlp_filename(), "--version").await;
+        let ffmpeg = self
+            .resolve_binary(self.platform.ffmpeg_filename(), "-version")
+            .await;
+        let ffprobe = self
+            .resolve_binary(self.platform.ffprobe_filename(), "-version")
+            .await;
+        let ytdlp = self
+            .resolve_binary(self.platform.ytdlp_filename(), "--version")
+            .await;
 
         if let (Some(ffmpeg), Some(ffprobe), Some(yt_dlp)) = (ffmpeg, ffprobe, ytdlp) {
-            let ffplay = self.resolve_binary(self.platform.ffplay_filename(), "-version").await;
+            let ffplay = self
+                .resolve_binary(self.platform.ffplay_filename(), "-version")
+                .await;
             return Ok(Some(BinaryPaths {
                 yt_dlp,
                 ffmpeg,
@@ -134,12 +149,18 @@ impl DependencyManager {
         let mut manifest = manifest::LocalBinaryManifest::load(&self.bin_dir);
 
         // Locate or download the FFmpeg suite
-        let ffmpeg_existing = self.resolve_binary(self.platform.ffmpeg_filename(), "-version").await;
-        let ffprobe_existing = self.resolve_binary(self.platform.ffprobe_filename(), "-version").await;
+        let ffmpeg_existing = self
+            .resolve_binary(self.platform.ffmpeg_filename(), "-version")
+            .await;
+        let ffprobe_existing = self
+            .resolve_binary(self.platform.ffprobe_filename(), "-version")
+            .await;
 
         let (ffmpeg_path, ffprobe_path, ffplay_path) = match (ffmpeg_existing, ffprobe_existing) {
             (Some(f), Some(p)) => {
-                let play = self.resolve_binary(self.platform.ffplay_filename(), "-version").await;
+                let play = self
+                    .resolve_binary(self.platform.ffplay_filename(), "-version")
+                    .await;
                 (f, p, play)
             }
             _ => {
@@ -173,7 +194,10 @@ impl DependencyManager {
         };
 
         // Locate or download yt-dlp
-        let ytdlp_path = match self.resolve_binary(self.platform.ytdlp_filename(), "--version").await {
+        let ytdlp_path = match self
+            .resolve_binary(self.platform.ytdlp_filename(), "--version")
+            .await
+        {
             Some(p) => p,
             None => {
                 let target = self.platform.ytdlp_target();
@@ -217,7 +241,9 @@ impl DependencyManager {
     ) -> Result<Option<(PathBuf, String)>, BinaryError> {
         let release = crate::updater::check_latest_release("yt-dlp/yt-dlp")
             .await
-            .map_err(|e| BinaryError::Other(format!("Failed to check latest yt-dlp release: {}", e)))?;
+            .map_err(|e| {
+                BinaryError::Other(format!("Failed to check latest yt-dlp release: {}", e))
+            })?;
 
         if !crate::updater::is_newer_version(current_version, &release.tag_name) {
             return Ok(None);
@@ -251,7 +277,11 @@ impl DependencyManager {
     /// Searches for `filename` in the app-local `bin` folder first, then in the project/exe root.
     pub async fn resolve_binary(&self, filename: &str, test_arg: &str) -> Option<PathBuf> {
         let local_path = self.bin_dir.join(filename);
-        if local_path.is_file() && Self::verify_binary_executable(&local_path, test_arg).await.is_ok() {
+        if local_path.is_file()
+            && Self::verify_binary_executable(&local_path, test_arg)
+                .await
+                .is_ok()
+        {
             return Some(local_path.canonicalize().unwrap_or(local_path));
         }
 
@@ -270,7 +300,11 @@ impl DependencyManager {
 
         for dir in &candidate_dirs {
             let candidate = dir.join(filename);
-            if candidate.is_file() && Self::verify_binary_executable(&candidate, test_arg).await.is_ok() {
+            if candidate.is_file()
+                && Self::verify_binary_executable(&candidate, test_arg)
+                    .await
+                    .is_ok()
+            {
                 return Some(candidate.canonicalize().unwrap_or(candidate));
             }
         }
@@ -354,15 +388,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_dependency_manager_init() {
-        let dm = DependencyManager::new("KabosuTest").expect("Init DependencyManager");
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dm = DependencyManager::with_app_data_dir(tmp.path().to_path_buf(), false)
+            .expect("Init DependencyManager");
         assert!(dm.bin_dir().exists());
     }
 
     #[tokio::test]
     async fn test_check_existing_finds_project_binaries() {
-        let dm = DependencyManager::new("Kabosu").expect("Init DependencyManager");
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dm = DependencyManager::with_app_data_dir(tmp.path().to_path_buf(), false)
+            .expect("Init DependencyManager");
         let existing = dm.check_existing().await.expect("check_existing");
-        // Binaries exist in current project root
         if let Some(paths) = existing {
             assert!(paths.ffmpeg.is_file());
             assert!(paths.ffprobe.is_file());
@@ -377,7 +414,11 @@ mod tests {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(ffmpeg_name);
         if path.is_file() {
             let output = DependencyManager::verify_binary_executable(&path, "-version").await;
-            assert!(output.is_ok(), "verify_binary_executable failed: {:?}", output.err());
+            assert!(
+                output.is_ok(),
+                "verify_binary_executable failed: {:?}",
+                output.err()
+            );
             let out_str = output.unwrap();
             assert!(out_str.contains("ffmpeg version"));
         }

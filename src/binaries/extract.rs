@@ -24,7 +24,11 @@ impl BinaryExtractor {
     }
 
     /// Writes a bounded stream into `bin_dir/<out_name>` via a temporary file.
-    fn write_extracted_stream<R: Read>(reader: R, bin_dir: &Path, out_name: &str) -> Result<(), BinaryError> {
+    fn write_extracted_stream<R: Read>(
+        reader: R,
+        bin_dir: &Path,
+        out_name: &str,
+    ) -> Result<(), BinaryError> {
         let out_path = bin_dir.join(out_name);
         let tmp_out_path = bin_dir.join(format!("{}.extract.tmp", out_name));
 
@@ -56,13 +60,17 @@ impl BinaryExtractor {
         extracted_ffmpeg: &mut bool,
         extracted_ffprobe: &mut bool,
     ) -> Option<&'a str> {
-        if normalized_path.ends_with(&format!("/{}", ffmpeg_name)) || normalized_path == ffmpeg_name {
+        if normalized_path.split('/').any(|part| part == "..") {
+            return None;
+        }
+        let file_name = normalized_path.rsplit('/').next()?;
+        if file_name == ffmpeg_name {
             *extracted_ffmpeg = true;
             Some(ffmpeg_name)
-        } else if normalized_path.ends_with(&format!("/{}", ffprobe_name)) || normalized_path == ffprobe_name {
+        } else if file_name == ffprobe_name {
             *extracted_ffprobe = true;
             Some(ffprobe_name)
-        } else if normalized_path.ends_with(&format!("/{}", ffplay_name)) || normalized_path == ffplay_name {
+        } else if file_name == ffplay_name {
             Some(ffplay_name)
         } else {
             None
@@ -117,7 +125,7 @@ impl BinaryExtractor {
 
         for i in 0..archive.len() {
             let file = archive.by_index(i)?;
-            if file.is_dir() {
+            if file.is_dir() || file.is_symlink() {
                 continue;
             }
             let raw_name = file.name()?.replace('\\', "/");
@@ -263,10 +271,18 @@ mod tests {
         let mut zip = ZipWriter::new(file);
 
         let options = SimpleFileOptions::default();
-        zip.start_file(format!("ffmpeg-build/bin/{}", platform.ffmpeg_filename()), options).unwrap();
+        zip.start_file(
+            format!("ffmpeg-build/bin/{}", platform.ffmpeg_filename()),
+            options,
+        )
+        .unwrap();
         zip.write_all(b"mock ffmpeg binary").unwrap();
 
-        zip.start_file(format!("ffmpeg-build/bin/{}", platform.ffprobe_filename()), options).unwrap();
+        zip.start_file(
+            format!("ffmpeg-build/bin/{}", platform.ffprobe_filename()),
+            options,
+        )
+        .unwrap();
         zip.write_all(b"mock ffprobe binary").unwrap();
 
         zip.finish().unwrap();
@@ -286,10 +302,35 @@ mod tests {
         let tmp_file = dir.path().join("yt-dlp.download.tmp");
         fs::write(&tmp_file, b"mock yt-dlp executable").unwrap();
 
-        BinaryExtractor::extract(&tmp_file, &dest_dir, &ArchiveFormat::RawExecutable, &platform).unwrap();
+        BinaryExtractor::extract(
+            &tmp_file,
+            &dest_dir,
+            &ArchiveFormat::RawExecutable,
+            &platform,
+        )
+        .unwrap();
 
         let installed = dest_dir.join(platform.ytdlp_filename());
         assert!(installed.is_file());
-        assert_eq!(fs::read_to_string(installed).unwrap(), "mock yt-dlp executable");
+        assert_eq!(
+            fs::read_to_string(installed).unwrap(),
+            "mock yt-dlp executable"
+        );
+    }
+
+    #[test]
+    fn test_match_ffmpeg_entry_rejects_parent_traversal() {
+        let mut has_ffmpeg = false;
+        let mut has_ffprobe = false;
+        let matched = BinaryExtractor::match_ffmpeg_entry(
+            "../evil/ffmpeg.exe",
+            "ffmpeg.exe",
+            "ffprobe.exe",
+            "ffplay.exe",
+            &mut has_ffmpeg,
+            &mut has_ffprobe,
+        );
+        assert!(matched.is_none());
+        assert!(!has_ffmpeg);
     }
 }

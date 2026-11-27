@@ -1,6 +1,26 @@
 use std::path::{Path, PathBuf};
 
-/// Retrieve text from the system clipboard on Windows, or return None.
+const MAX_COLLECTED_FILES: usize = 5_000;
+
+/// Appends `line` to a bounded log buffer, trimming oldest lines on a UTF-8 boundary when full.
+pub fn append_log_line(buf: &mut String, line: &str, max_bytes: usize, keep_bytes: usize) {
+    if !buf.is_empty() && !buf.ends_with('\n') {
+        buf.push('\n');
+    }
+    buf.push_str(line);
+    if buf.len() > max_bytes {
+        let mut start = buf.len().saturating_sub(keep_bytes);
+        while start < buf.len() && !buf.is_char_boundary(start) {
+            start += 1;
+        }
+        if let Some(nl) = buf[start..].find('\n') {
+            start += nl + 1;
+        }
+        *buf = buf[start..].to_string();
+    }
+}
+
+/// Reads plain text from the Windows clipboard, or returns `None` if unavailable.
 pub fn get_clipboard_string() -> Option<String> {
     #[cfg(windows)]
     {
@@ -18,6 +38,8 @@ pub fn get_clipboard_string() -> Option<String> {
         }
         const CF_UNICODETEXT: u32 = 13;
 
+        // SAFETY: Win32 clipboard APIs are called with checked non-null handles, bounded by
+        // `GlobalSize`, and paired with `GlobalUnlock` + `CloseClipboard`.
         unsafe {
             if OpenClipboard(std::ptr::null_mut()) != 0 {
                 let h_mem = GetClipboardData(CF_UNICODETEXT);
@@ -60,13 +82,21 @@ pub fn format_bytes_fast(bytes: u64) -> String {
     }
 }
 
-/// Recursively collects media files from a directory up to depth 4, skipping symlinks.
-pub fn collect_media_files_from_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>, exts: &[&str]) {
-    if depth > 4 {
+/// Collects media files recursively up to depth 4 (capped at 5,000 files), skipping symlinks.
+pub fn collect_media_files_from_dir(
+    dir: &Path,
+    depth: usize,
+    out: &mut Vec<PathBuf>,
+    exts: &[&str],
+) {
+    if depth > 4 || out.len() >= MAX_COLLECTED_FILES {
         return;
     }
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
+            if out.len() >= MAX_COLLECTED_FILES {
+                return;
+            }
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
@@ -129,9 +159,7 @@ pub fn open_folder_in_explorer(folder: &Path) {
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("open")
-            .arg(&clean_dir)
-            .spawn();
+        let _ = std::process::Command::new("open").arg(&clean_dir).spawn();
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
@@ -143,15 +171,22 @@ pub fn open_folder_in_explorer(folder: &Path) {
 
 /// Opens a file's folder in the OS file manager and selects the file if supported.
 pub fn reveal_in_explorer(file_path: &Path) {
+    if kabosu_converter::sanitize::validate_path(file_path).is_err() {
+        return;
+    }
     let clean = normalize_path_for_explorer(file_path);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         if clean.exists() && clean.is_file() {
-            let path_str = clean.to_string_lossy().replace('"', "");
-            // Explorer expects `/select,"PATH"` without quoting the `/select` switch itself.
+            let path_str: String = clean
+                .to_string_lossy()
+                .chars()
+                .filter(|&c| c != '"' && !c.is_control())
+                .collect();
+            // Explorer expects `/select,"PATH"` without quoting `/select`.
             let spawned = std::process::Command::new("explorer")
-                .raw_arg(format!("/select,\"{}\"", path_str))
+                .raw_arg(format!("/select,\"{path_str}\""))
                 .spawn();
             if spawned.is_ok() {
                 return;
@@ -180,7 +215,7 @@ pub fn reveal_in_explorer(file_path: &Path) {
     open_folder_in_explorer(&target_dir);
 }
 
-/// Plays a short system chime when an export or download task finishes.
+/// Plays a short system chime when an export or download finishes.
 pub fn play_notification_sound() {
     #[cfg(windows)]
     {
@@ -188,9 +223,10 @@ pub fn play_notification_sound() {
         extern "system" {
             fn MessageBeep(uType: u32) -> i32;
         }
+        // SAFETY: `MessageBeep` is thread-safe and takes a plain constant icon flag.
         unsafe {
-            // 0x00000040 = MB_ICONASTERISK (Windows notification chime)
-            MessageBeep(0x00000040);
+            // MB_ICONASTERISK
+            MessageBeep(0x0000_0040);
         }
     }
     #[cfg(target_os = "macos")]
@@ -207,13 +243,13 @@ pub fn play_notification_sound() {
     }
 }
 
-/// Opens an HTTP or HTTPS URL in the default system browser.
+/// Opens an HTTP or HTTPS URL in the default browser.
 pub fn open_url(url: &str) {
     let trimmed = url.trim();
     if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
         return;
     }
-    if trimmed.chars().any(|c| c.is_control() || c.is_ascii_whitespace()) {
+    if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
         return;
     }
     #[cfg(windows)]
@@ -232,6 +268,7 @@ pub fn open_url(url: &str) {
         const SW_SHOWNORMAL: i32 = 1;
         let op: Vec<u16> = "open\0".encode_utf16().collect();
         let target: Vec<u16> = trimmed.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: Both `op` and `target` are valid NUL-terminated UTF-16 buffers for the call.
         unsafe {
             ShellExecuteW(
                 std::ptr::null_mut(),

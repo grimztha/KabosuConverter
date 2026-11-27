@@ -5,17 +5,16 @@ pub mod settings;
 pub mod updater;
 pub mod ytdlp;
 
-/// Windows creation flag that prevents a console window from flashing when spawning CLI tools.
+/// Prevents a console window from flashing when spawning CLI tools on Windows.
 #[cfg(windows)]
-pub const CREATE_NO_WINDOW: u32 = 0x08000000;
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Suppresses the console window on Windows for spawned background processes.
+/// Suppresses the console window for spawned child processes on Windows.
 #[cfg(windows)]
 pub fn set_no_window(cmd: &mut std::process::Command) {
     use std::os::windows::process::CommandExt;
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
-/// No-op on non-Windows platforms.
 #[cfg(not(windows))]
 pub fn set_no_window(_cmd: &mut std::process::Command) {}

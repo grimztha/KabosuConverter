@@ -10,12 +10,18 @@ fn main() {
         let mut res = winres::WindowsResource::new();
         res.set_icon("assets/icon.ico");
         res.set("ProductName", "Kabosu Converter");
-        res.set("FileDescription", "Kabosu Converter — Professional Media Transcoder");
+        res.set(
+            "FileDescription",
+            "Kabosu Converter — Professional Media Transcoder",
+        );
         res.set("ProductVersion", version);
         res.set("FileVersion", version);
-        res.set("LegalCopyright", "Copyright (c) Kabosu Converter Contributors");
+        res.set(
+            "LegalCopyright",
+            "Copyright (c) Kabosu Converter Contributors",
+        );
         if let Err(e) = res.compile() {
-            eprintln!("Warning: Failed to compile windows resource: {}", e);
+            eprintln!("Warning: Failed to compile windows resource: {e}");
         }
     }
 }

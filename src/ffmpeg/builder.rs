@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
-use serde::{Deserialize, Serialize};
 
 static DETECTED_HW: AtomicU8 = AtomicU8::new(1); // Default: HwAccel::Cpu (1)
 
@@ -361,7 +361,12 @@ impl CropAspectRatio {
             h = (h & !1).max(2);
             let x = ((max_w.saturating_sub(w)) / 2) & !1;
             let y = ((max_h.saturating_sub(h)) / 2) & !1;
-            CropRect { x, y, width: w, height: h }
+            CropRect {
+                x,
+                y,
+                width: w,
+                height: h,
+            }
         } else {
             CropRect {
                 x: 0,
@@ -383,7 +388,12 @@ pub struct CropRect {
 
 impl CropRect {
     pub fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Ensures even dimensions and bounds within `(max_w, max_h)`.
@@ -394,7 +404,12 @@ impl CropRect {
         let h = (self.height & !1).clamp(2, max_h);
         let x = (self.x & !1).min(max_w.saturating_sub(w));
         let y = (self.y & !1).min(max_h.saturating_sub(h));
-        Self { x, y, width: w, height: h }
+        Self {
+            x,
+            y,
+            width: w,
+            height: h,
+        }
     }
 
     /// Moves the crop rectangle by `(dx, dy)` pixels while clamping inside `(max_w, max_h)`.
@@ -405,8 +420,8 @@ impl CropRect {
         let h = (self.height & !1).clamp(2, max_h);
         let max_x = max_w.saturating_sub(w) as i32;
         let max_y = max_h.saturating_sub(h) as i32;
-        let new_x = (self.x as i32 + dx).clamp(0, max_x) as u32;
-        let new_y = (self.y as i32 + dy).clamp(0, max_y) as u32;
+        let new_x = (self.x as i32).saturating_add(dx).clamp(0, max_x) as u32;
+        let new_y = (self.y as i32).saturating_add(dy).clamp(0, max_y) as u32;
         Self {
             x: new_x & !1,
             y: new_y & !1,
@@ -484,8 +499,18 @@ impl CropHandleDragSession {
     ) -> CropRect {
         let eff_w_i = (eff_w.max(32) & !1) as i32;
         let eff_h_i = (eff_h.max(32) & !1) as i32;
-        let delta_px = ((norm_x - self.start_norm_x) * eff_w_i as f32).round() as i32;
-        let delta_py = ((norm_y - self.start_norm_y) * eff_h_i as f32).round() as i32;
+        let nx = if norm_x.is_finite() {
+            norm_x
+        } else {
+            self.start_norm_x
+        };
+        let ny = if norm_y.is_finite() {
+            norm_y
+        } else {
+            self.start_norm_y
+        };
+        let delta_px = ((nx - self.start_norm_x) * eff_w_i as f32).round() as i32;
+        let delta_py = ((ny - self.start_norm_y) * eff_h_i as f32).round() as i32;
 
         let (new_x, new_y, new_w, new_h) = if let Some((num, den)) = aspect.ratio() {
             let num_i = num as i64;
@@ -499,7 +524,10 @@ impl CropHandleDragSession {
                     h = max_h;
                     w = (h as i64 * num_i / den_i) as i32;
                 }
-                ((w & !1).clamp(16, max_w & !1), (h & !1).clamp(16, max_h & !1))
+                (
+                    (w & !1).clamp(16, max_w & !1),
+                    (h & !1).clamp(16, max_h & !1),
+                )
             };
 
             // Fits height-driven resize inside (max_w, max_h) while keeping even dimensions.
@@ -510,24 +538,40 @@ impl CropHandleDragSession {
                     w = max_w;
                     h = (w as i64 * den_i / num_i) as i32;
                 }
-                ((w & !1).clamp(16, max_w & !1), (h & !1).clamp(16, max_h & !1))
+                (
+                    (w & !1).clamp(16, max_w & !1),
+                    (h & !1).clamp(16, max_h & !1),
+                )
             };
 
             match self.handle_id {
                 0 => {
-                    let (w, h) = fit_from_w(self.start_w - delta_px, self.fixed_right, self.fixed_bottom);
+                    let (w, h) =
+                        fit_from_w(self.start_w - delta_px, self.fixed_right, self.fixed_bottom);
                     (self.fixed_right - w, self.fixed_bottom - h, w, h)
                 }
                 1 => {
-                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, self.fixed_bottom);
+                    let (w, h) = fit_from_w(
+                        self.start_w + delta_px,
+                        eff_w_i - self.start_x,
+                        self.fixed_bottom,
+                    );
                     (self.start_x, self.fixed_bottom - h, w, h)
                 }
                 2 => {
-                    let (w, h) = fit_from_w(self.start_w - delta_px, self.fixed_right, eff_h_i - self.start_y);
+                    let (w, h) = fit_from_w(
+                        self.start_w - delta_px,
+                        self.fixed_right,
+                        eff_h_i - self.start_y,
+                    );
                     (self.fixed_right - w, self.start_y, w, h)
                 }
                 3 => {
-                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, eff_h_i - self.start_y);
+                    let (w, h) = fit_from_w(
+                        self.start_w + delta_px,
+                        eff_w_i - self.start_x,
+                        eff_h_i - self.start_y,
+                    );
                     (self.start_x, self.start_y, w, h)
                 }
                 4 => {
@@ -537,7 +581,8 @@ impl CropHandleDragSession {
                     (x, self.fixed_bottom - h, w, h)
                 }
                 5 => {
-                    let (w, h) = fit_from_h(self.start_h + delta_py, eff_w_i, eff_h_i - self.start_y);
+                    let (w, h) =
+                        fit_from_h(self.start_h + delta_py, eff_w_i, eff_h_i - self.start_y);
                     let center_x = self.start_x + self.start_w / 2;
                     let x = (center_x - w / 2).clamp(0, eff_w_i - w) & !1;
                     (x, self.start_y, w, h)
@@ -549,7 +594,8 @@ impl CropHandleDragSession {
                     (self.fixed_right - w, y, w, h)
                 }
                 _ => {
-                    let (w, h) = fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, eff_h_i);
+                    let (w, h) =
+                        fit_from_w(self.start_w + delta_px, eff_w_i - self.start_x, eff_h_i);
                     let center_y = self.start_y + self.start_h / 2;
                     let y = (center_y - h / 2).clamp(0, eff_h_i - h) & !1;
                     (self.start_x, y, w, h)
@@ -561,38 +607,74 @@ impl CropHandleDragSession {
                 0 => {
                     let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
                     let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
-                    (new_x, new_y, self.fixed_right - new_x, self.fixed_bottom - new_y)
+                    (
+                        new_x,
+                        new_y,
+                        self.fixed_right - new_x,
+                        self.fixed_bottom - new_y,
+                    )
                 }
                 1 => {
-                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    let new_right =
+                        (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
                     let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
-                    (self.start_x, new_y, new_right - self.start_x, self.fixed_bottom - new_y)
+                    (
+                        self.start_x,
+                        new_y,
+                        new_right - self.start_x,
+                        self.fixed_bottom - new_y,
+                    )
                 }
                 2 => {
                     let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
-                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
-                    (new_x, self.start_y, self.fixed_right - new_x, new_bottom - self.start_y)
+                    let new_bottom =
+                        (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (
+                        new_x,
+                        self.start_y,
+                        self.fixed_right - new_x,
+                        new_bottom - self.start_y,
+                    )
                 }
                 3 => {
-                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
-                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
-                    (self.start_x, self.start_y, new_right - self.start_x, new_bottom - self.start_y)
+                    let new_right =
+                        (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    let new_bottom =
+                        (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (
+                        self.start_x,
+                        self.start_y,
+                        new_right - self.start_x,
+                        new_bottom - self.start_y,
+                    )
                 }
                 4 => {
                     let new_y = (self.start_y + delta_py).clamp(0, self.fixed_bottom - 16) & !1;
                     (self.start_x, new_y, self.start_w, self.fixed_bottom - new_y)
                 }
                 5 => {
-                    let new_bottom = (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
-                    (self.start_x, self.start_y, self.start_w, new_bottom - self.start_y)
+                    let new_bottom =
+                        (self.fixed_bottom + delta_py).clamp(self.start_y + 16, eff_h_i) & !1;
+                    (
+                        self.start_x,
+                        self.start_y,
+                        self.start_w,
+                        new_bottom - self.start_y,
+                    )
                 }
                 6 => {
                     let new_x = (self.start_x + delta_px).clamp(0, self.fixed_right - 16) & !1;
                     (new_x, self.start_y, self.fixed_right - new_x, self.start_h)
                 }
                 _ => {
-                    let new_right = (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
-                    (self.start_x, self.start_y, new_right - self.start_x, self.start_h)
+                    let new_right =
+                        (self.fixed_right + delta_px).clamp(self.start_x + 16, eff_w_i) & !1;
+                    (
+                        self.start_x,
+                        self.start_y,
+                        new_right - self.start_x,
+                        self.start_h,
+                    )
                 }
             }
         };
@@ -640,8 +722,18 @@ impl CropBoxDragSession {
     pub fn compute_rect(&self, norm_x: f32, norm_y: f32, eff_w: u32, eff_h: u32) -> CropRect {
         let eff_w_i = (eff_w.max(32) & !1) as i32;
         let eff_h_i = (eff_h.max(32) & !1) as i32;
-        let delta_px = ((norm_x - self.start_norm_x) * eff_w_i as f32).round() as i32;
-        let delta_py = ((norm_y - self.start_norm_y) * eff_h_i as f32).round() as i32;
+        let nx = if norm_x.is_finite() {
+            norm_x
+        } else {
+            self.start_norm_x
+        };
+        let ny = if norm_y.is_finite() {
+            norm_y
+        } else {
+            self.start_norm_y
+        };
+        let delta_px = ((nx - self.start_norm_x) * eff_w_i as f32).round() as i32;
+        let delta_py = ((ny - self.start_norm_y) * eff_h_i as f32).round() as i32;
 
         let max_x = (eff_w.saturating_sub(self.width) & !1) as i32;
         let max_y = (eff_h.saturating_sub(self.height) & !1) as i32;
@@ -764,6 +856,13 @@ impl FFmpegCommandBuilder {
         crate::sanitize::validate_path(&config.output_path)
             .map_err(|e| anyhow::anyhow!("Invalid output path: {}", e))?;
 
+        if config.input_path.trim_start().starts_with('-') {
+            anyhow::bail!("Invalid input path: cannot start with '-'");
+        }
+        if config.output_path.trim_start().starts_with('-') {
+            anyhow::bail!("Invalid output path: cannot start with '-'");
+        }
+
         if let Some(ref in_pt) = config.in_point {
             crate::sanitize::validate_timecode(in_pt)
                 .map_err(|e| anyhow::anyhow!("Invalid in-point timecode: {}", e))?;
@@ -820,7 +919,12 @@ impl FFmpegCommandBuilder {
         Self::push_pair(args, "-pix_fmt", "yuv420p");
     }
 
-    fn push_qsv_args(config: &EncodeJobConfig, args: &mut Vec<String>, with_preset: bool, hvc1_tag: bool) {
+    fn push_qsv_args(
+        config: &EncodeJobConfig,
+        args: &mut Vec<String>,
+        with_preset: bool,
+        hvc1_tag: bool,
+    ) {
         if with_preset {
             Self::push_pair(args, "-preset", "medium");
         }
@@ -835,7 +939,12 @@ impl FFmpegCommandBuilder {
         Self::push_pair(args, "-pix_fmt", "nv12");
     }
 
-    fn push_amf_args(config: &EncodeJobConfig, args: &mut Vec<String>, with_quality: bool, hvc1_tag: bool) {
+    fn push_amf_args(
+        config: &EncodeJobConfig,
+        args: &mut Vec<String>,
+        with_quality: bool,
+        hvc1_tag: bool,
+    ) {
         if with_quality {
             Self::push_pair(args, "-quality", "balanced");
         }
@@ -971,7 +1080,9 @@ impl FFmpegCommandBuilder {
         ));
 
         // Scaling
-        let target_dims = config.custom_resolution.or_else(|| config.resolution.dimensions());
+        let target_dims = config
+            .custom_resolution
+            .or_else(|| config.resolution.dimensions());
         if let Some((w, h)) = target_dims {
             // Keep aspect ratio within bounds and ensure even dimensions for encoder
             vf_filters.push(format!(
@@ -986,11 +1097,12 @@ impl FFmpegCommandBuilder {
         }
 
         // Video filters require re-encoding; promote Copy to H264 if any filters are active.
-        let effective_video_codec = if !vf_filters.is_empty() && config.video_codec == VideoCodec::Copy {
-            VideoCodec::H264
-        } else {
-            config.video_codec
-        };
+        let effective_video_codec =
+            if !vf_filters.is_empty() && config.video_codec == VideoCodec::Copy {
+                VideoCodec::H264
+            } else {
+                config.video_codec
+            };
 
         if effective_video_codec == VideoCodec::Copy {
             vf_filters.clear();
@@ -1000,10 +1112,12 @@ impl FFmpegCommandBuilder {
             Self::push_pair(args, "-vf", vf_filters.join(","));
         }
 
-        let preset = if config.preset.is_empty() {
-            "medium"
-        } else {
-            config.preset.as_str()
+        let preset = match config.preset.as_str() {
+            "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium" | "slow"
+            | "slower" | "veryslow" | "p1" | "p2" | "p3" | "p4" | "p5" | "p6" | "p7" => {
+                config.preset.as_str()
+            }
+            _ => "medium",
         };
 
         match effective_video_codec {
@@ -1021,16 +1135,42 @@ impl FFmpegCommandBuilder {
                     "libx264" => {
                         Self::push_pair(args, "-preset", preset);
                         match config.rate_control {
-                            RateControlMode::CRF => Self::push_pair(args, "-crf", config.crf.to_string()),
+                            RateControlMode::CRF => {
+                                Self::push_pair(args, "-crf", config.crf.to_string())
+                            }
                             RateControlMode::CBR => {
-                                Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
-                                Self::push_pair(args, "-maxrate", format!("{}k", config.video_bitrate_kbps));
-                                Self::push_pair(args, "-bufsize", format!("{}k", config.video_bitrate_kbps * 2));
+                                Self::push_pair(
+                                    args,
+                                    "-b:v",
+                                    format!("{}k", config.video_bitrate_kbps),
+                                );
+                                Self::push_pair(
+                                    args,
+                                    "-maxrate",
+                                    format!("{}k", config.video_bitrate_kbps),
+                                );
+                                Self::push_pair(
+                                    args,
+                                    "-bufsize",
+                                    format!("{}k", config.video_bitrate_kbps.saturating_mul(2)),
+                                );
                             }
                             RateControlMode::VBR => {
-                                Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
-                                Self::push_pair(args, "-maxrate", format!("{}k", config.max_bitrate_kbps));
-                                Self::push_pair(args, "-bufsize", format!("{}k", config.max_bitrate_kbps * 2));
+                                Self::push_pair(
+                                    args,
+                                    "-b:v",
+                                    format!("{}k", config.video_bitrate_kbps),
+                                );
+                                Self::push_pair(
+                                    args,
+                                    "-maxrate",
+                                    format!("{}k", config.max_bitrate_kbps),
+                                );
+                                Self::push_pair(
+                                    args,
+                                    "-bufsize",
+                                    format!("{}k", config.max_bitrate_kbps.saturating_mul(2)),
+                                );
                             }
                         }
                         Self::push_pair(args, "-pix_fmt", "yuv420p");
@@ -1058,7 +1198,11 @@ impl FFmpegCommandBuilder {
                         if config.rate_control == RateControlMode::CRF {
                             Self::push_pair(args, "-crf", config.crf.to_string());
                         } else {
-                            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+                            Self::push_pair(
+                                args,
+                                "-b:v",
+                                format!("{}k", config.video_bitrate_kbps),
+                            );
                         }
                         // Tag HEVC as hvc1 for Apple/QuickTime compatibility.
                         Self::push_pair(args, "-tag:v", "hvc1");
@@ -1085,7 +1229,11 @@ impl FFmpegCommandBuilder {
                         if config.rate_control == RateControlMode::CRF {
                             Self::push_pair(args, "-crf", config.crf.to_string());
                         } else {
-                            Self::push_pair(args, "-b:v", format!("{}k", config.video_bitrate_kbps));
+                            Self::push_pair(
+                                args,
+                                "-b:v",
+                                format!("{}k", config.video_bitrate_kbps),
+                            );
                         }
                         Self::push_pair(args, "-pix_fmt", "yuv420p10le");
                     }
@@ -1108,7 +1256,11 @@ impl FFmpegCommandBuilder {
                     _ => "prores_ks",
                 };
                 Self::push_pair(args, "-c:v", encoder);
-                Self::push_pair(args, "-profile:v", (config.prores_profile as u8).to_string());
+                Self::push_pair(
+                    args,
+                    "-profile:v",
+                    (config.prores_profile as u8).to_string(),
+                );
                 let pix_fmt = if matches!(
                     config.prores_profile,
                     ProResProfile::FourFourFourFour | ProResProfile::FourFourFourFourXQ
@@ -1140,13 +1292,27 @@ impl FFmpegCommandBuilder {
     }
 
     /// Appends `-af` filters when gain, loudness normalization, or audio fades are active; returns true if added.
-    fn append_audio_filters(config: &EncodeJobConfig, fallback_lufs: Option<f32>, args: &mut Vec<String>) -> bool {
+    fn append_audio_filters(
+        config: &EncodeJobConfig,
+        fallback_lufs: Option<f32>,
+        args: &mut Vec<String>,
+    ) -> bool {
         let mut af_filters: Vec<String> = Vec::new();
-        if let Some(gain) = config.audio_gain_db.filter(|g| g.is_finite() && g.abs() > 0.05) {
+        if let Some(gain) = config
+            .audio_gain_db
+            .filter(|g| g.is_finite() && g.abs() > 0.05)
+        {
             af_filters.push(format!("volume={:.1}dB", gain.clamp(-60.0, 60.0)));
         }
-        if let Some(lufs) = config.normalize_lufs.or(fallback_lufs).filter(|v| v.is_finite()) {
-            af_filters.push(format!("loudnorm=I={:.1}:TP=-1.0:LRA=7.0", lufs.clamp(-70.0, -5.0)));
+        if let Some(lufs) = config
+            .normalize_lufs
+            .or(fallback_lufs)
+            .filter(|v| v.is_finite())
+        {
+            af_filters.push(format!(
+                "loudnorm=I={:.1}:TP=-1.0:LRA=7.0",
+                lufs.clamp(-70.0, -5.0)
+            ));
         }
 
         // Determine clip output duration (0-based timestamps after input -ss/-to) for fade clamping and fade-out start.
@@ -1166,7 +1332,10 @@ impl FFmpegCommandBuilder {
                 (out_s > in_s).then_some(out_s - in_s)
             });
 
-        if let Some(fade_in) = config.audio_fade_in_sec.filter(|v| v.is_finite() && *v > 0.01) {
+        if let Some(fade_in) = config
+            .audio_fade_in_sec
+            .filter(|v| v.is_finite() && *v > 0.01)
+        {
             let d = match clip_duration {
                 Some(dur) => (fade_in as f64).min(dur),
                 None => fade_in as f64,
@@ -1176,7 +1345,10 @@ impl FFmpegCommandBuilder {
             }
         }
 
-        if let Some(fade_out) = config.audio_fade_out_sec.filter(|v| v.is_finite() && *v > 0.01) {
+        if let Some(fade_out) = config
+            .audio_fade_out_sec
+            .filter(|v| v.is_finite() && *v > 0.01)
+        {
             if let Some(dur) = clip_duration.filter(|d| *d > 0.01) {
                 let d = (fade_out as f64).min(dur);
                 let st = (dur - d).max(0.0);
@@ -1199,7 +1371,12 @@ impl FFmpegCommandBuilder {
 
         let effective_codec = if has_af && config.audio_codec == AudioCodecChoice::Copy {
             AudioCodecChoice::AAC
-        } else if is_mp4_like && matches!(config.audio_codec, AudioCodecChoice::MP3 | AudioCodecChoice::Opus) {
+        } else if is_mp4_like
+            && matches!(
+                config.audio_codec,
+                AudioCodecChoice::MP3 | AudioCodecChoice::Opus
+            )
+        {
             // MP3/Opus in MP4/MOV play silently on iOS, Android, and messenger apps; use AAC instead.
             AudioCodecChoice::AAC
         } else {
@@ -1225,7 +1402,11 @@ impl FFmpegCommandBuilder {
             AudioCodecChoice::WavPCM24 => Self::push_pair(args, "-c:a", "pcm_s24le"),
             AudioCodecChoice::AC3 => {
                 Self::push_pair(args, "-c:a", "ac3");
-                Self::push_pair(args, "-b:a", format!("{}k", config.audio_bitrate_kbps.max(192)));
+                Self::push_pair(
+                    args,
+                    "-b:a",
+                    format!("{}k", config.audio_bitrate_kbps.max(192)),
+                );
             }
         }
 
@@ -1356,5 +1537,33 @@ mod tests {
             ..Default::default()
         };
         assert!(FFmpegCommandBuilder::try_build(&config, Path::new("ffmpeg")).is_err());
+    }
+
+    #[test]
+    fn test_try_build_rejects_flag_prefixed_paths_and_sanitizes_preset() {
+        let bad_in = EncodeJobConfig {
+            input_path: "-f lavfi".to_string(),
+            output_path: "out.mp4".to_string(),
+            ..Default::default()
+        };
+        assert!(FFmpegCommandBuilder::try_build(&bad_in, Path::new("ffmpeg")).is_err());
+
+        let bad_out = EncodeJobConfig {
+            input_path: "in.mp4".to_string(),
+            output_path: "-y".to_string(),
+            ..Default::default()
+        };
+        assert!(FFmpegCommandBuilder::try_build(&bad_out, Path::new("ffmpeg")).is_err());
+
+        let weird_preset = EncodeJobConfig {
+            input_path: "in.mp4".to_string(),
+            output_path: "out.mp4".to_string(),
+            hw_accel: HwAccel::Cpu,
+            preset: "not_a_real_preset".to_string(),
+            ..Default::default()
+        };
+        let cmd = FFmpegCommandBuilder::try_build(&weird_preset, Path::new("ffmpeg")).unwrap();
+        let p_idx = cmd.iter().position(|a| a == "-preset").unwrap();
+        assert_eq!(cmd[p_idx + 1], "medium");
     }
 }

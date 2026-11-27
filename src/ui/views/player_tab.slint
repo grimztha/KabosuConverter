@@ -198,77 +198,6 @@ export component PlayerTab inherits VerticalLayout {
                         }
                     }
                 }
-
-                // Volume Meter Toggle Pill
-                meter_toggle_btn := Rectangle {
-                    horizontal-stretch: 0;
-                    width: 72px;
-                    height: Theme.btn_height_sm;
-                    border-radius: Theme.radius_sm;
-                    background: AppData.show_volume_meter ? Theme.accent_surface : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.btn_neutral_bg);
-                    border-width: 1px;
-                    border-color: AppData.show_volume_meter ? Theme.accent_border : Theme.btn_neutral_border;
-
-                    animate background { duration: 120ms; easing: ease-out; }
-                    animate border-color { duration: 120ms; easing: ease-out; }
-
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 6px;
-                        alignment: center;
-
-                        // Mini VU Bars Graphic
-                        VerticalLayout {
-                            alignment: center;
-                            vu_icon_box := Rectangle {
-                                width: 11px;
-                                height: 13px;
-
-                                Rectangle {
-                                    x: 0px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 6px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? Theme.meter_green : Theme.text_muted;
-                                }
-                                Rectangle {
-                                    x: 4px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 9.5px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? Theme.meter_yellow : Theme.text_muted;
-                                }
-                                Rectangle {
-                                    x: 8px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 13px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? Theme.meter_red : Theme.text_muted;
-                                }
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "Meter";
-                                font-size: Theme.font_badge;
-                                font-weight: 600;
-                                color: AppData.show_volume_meter ? Theme.accent_lime : Theme.text_secondary;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    meter_btn_ta := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { AppLogic.toggle_volume_meter(); }
-                    }
-                }
             }
 
             // Media Screen Area (Dynamic height: stretches to fill available space, reduced by 1/3 when audio queue is selected)
@@ -398,20 +327,21 @@ export component PlayerTab inherits VerticalLayout {
             VerticalLayout {
                 spacing: 8px;
 
-                // Clean Unclipped Utility Bar: Timecode (left) · Volume & Zoom (right)
+                // Clean Unclipped Utility Bar: Timecode (left) · Zoom, Volume & Meter (right)
                 HorizontalLayout {
-                    spacing: 8px;
+                    spacing: 6px;
 
                     // Playhead / Duration Readout Pill
                     Rectangle {
+                        horizontal-stretch: 0;
                         height: Theme.btn_height_sm;
                         border-radius: Theme.radius_sm;
                         background: Theme.input_bg;
                         border-width: 1px;
                         border-color: Theme.card_secondary_border;
                         HorizontalLayout {
-                            padding-left: 9px;
-                            padding-right: 9px;
+                            padding-left: 8px;
+                            padding-right: 8px;
                             spacing: 5px;
                             alignment: center;
                             Text { text: AppData.player_time_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.accent_lime; vertical-alignment: center; }
@@ -422,17 +352,9 @@ export component PlayerTab inherits VerticalLayout {
 
                     Rectangle { horizontal-stretch: 1; }
 
-                    // Volume Control Bar Pill
-                    VolumeBar {
-                        volume: AppData.player_volume;
-                        is_muted: AppData.player_is_muted;
-                        volume_changed(val) => { AppLogic.player_volume_changed(val); }
-                        volume_settled(val) => { AppLogic.player_volume_settled(val); }
-                        toggle_mute() => { AppLogic.player_toggle_mute(); }
-                    }
-
-                    // Timeline Zoom Controls Pill
+                    // 1. Compact Timeline Zoom Controls Pill
                     Rectangle {
+                        horizontal-stretch: 0;
                         height: Theme.btn_height_sm;
                         border-radius: Theme.radius_sm;
                         background: Theme.input_bg;
@@ -448,10 +370,11 @@ export component PlayerTab inherits VerticalLayout {
 
                             Text { text: "Zoom"; font-size: Theme.font_badge; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
 
-                            Rectangle { width: 3px; }
+                            Rectangle { width: 2px; horizontal-stretch: 0; }
 
                             Rectangle {
-                                width: 20px;
+                                horizontal-stretch: 0;
+                                width: 18px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzm_ta.has-hover ? Theme.control_hover : transparent;
@@ -460,7 +383,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
-                                width: 25px;
+                                horizontal-stretch: 0;
+                                width: 22px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: AppData.timeline_zoom <= 1.05 ? Theme.accent_surface : (vz1_ta.has-hover ? Theme.control_hover : transparent);
@@ -471,7 +395,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
-                                width: 25px;
+                                horizontal-stretch: 0;
+                                width: 22px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_surface : (vz2_ta.has-hover ? Theme.control_hover : transparent);
@@ -482,7 +407,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
-                                width: 25px;
+                                horizontal-stretch: 0;
+                                width: 22px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_surface : (vz4_ta.has-hover ? Theme.control_hover : transparent);
@@ -493,7 +419,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
-                                width: 25px;
+                                horizontal-stretch: 0;
+                                width: 22px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_surface : (vz8_ta.has-hover ? Theme.control_hover : transparent);
@@ -504,7 +431,8 @@ export component PlayerTab inherits VerticalLayout {
                             }
 
                             Rectangle {
-                                width: 20px;
+                                horizontal-stretch: 0;
+                                width: 18px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzp_ta.has-hover ? Theme.control_hover : transparent;
@@ -514,7 +442,8 @@ export component PlayerTab inherits VerticalLayout {
 
                             // Center-on-playhead target icon (drawn vector ring + dot, font-independent)
                             Rectangle {
-                                width: 22px;
+                                horizontal-stretch: 0;
+                                width: 20px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzc_ta.has-hover ? Theme.control_hover : transparent;
@@ -543,6 +472,86 @@ export component PlayerTab inherits VerticalLayout {
                                     clicked => { AppData.center_timeline_trigger += 1; }
                                 }
                             }
+                        }
+                    }
+
+                    // 2. Compact Volume Control Bar Pill
+                    VolumeBar {
+                        volume: AppData.player_volume;
+                        is_muted: AppData.player_is_muted;
+                        volume_changed(val) => { AppLogic.player_volume_changed(val); }
+                        volume_settled(val) => { AppLogic.player_volume_settled(val); }
+                        toggle_mute() => { AppLogic.player_toggle_mute(); }
+                    }
+
+                    // 3. Volume Meter Toggle Pill (after Volume)
+                    meter_toggle_btn := Rectangle {
+                        horizontal-stretch: 0;
+                        width: 70px;
+                        height: Theme.btn_height_sm;
+                        border-radius: Theme.radius_sm;
+                        background: AppData.show_volume_meter ? Theme.accent_surface : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.btn_neutral_bg);
+                        border-width: 1px;
+                        border-color: AppData.show_volume_meter ? Theme.accent_border : Theme.btn_neutral_border;
+
+                        animate background { duration: 120ms; easing: ease-out; }
+                        animate border-color { duration: 120ms; easing: ease-out; }
+
+                        HorizontalLayout {
+                            padding-left: 7px;
+                            padding-right: 7px;
+                            spacing: 5px;
+                            alignment: center;
+
+                            // Mini VU Bars Graphic
+                            VerticalLayout {
+                                alignment: center;
+                                vu_icon_box := Rectangle {
+                                    width: 11px;
+                                    height: 13px;
+
+                                    Rectangle {
+                                        x: 0px;
+                                        y: parent.height - self.height;
+                                        width: 2.5px;
+                                        height: 6px;
+                                        border-radius: 1px;
+                                        background: AppData.show_volume_meter ? Theme.meter_green : Theme.text_muted;
+                                    }
+                                    Rectangle {
+                                        x: 4px;
+                                        y: parent.height - self.height;
+                                        width: 2.5px;
+                                        height: 9.5px;
+                                        border-radius: 1px;
+                                        background: AppData.show_volume_meter ? Theme.meter_yellow : Theme.text_muted;
+                                    }
+                                    Rectangle {
+                                        x: 8px;
+                                        y: parent.height - self.height;
+                                        width: 2.5px;
+                                        height: 13px;
+                                        border-radius: 1px;
+                                        background: AppData.show_volume_meter ? Theme.meter_red : Theme.text_muted;
+                                    }
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Meter";
+                                    font-size: Theme.font_badge;
+                                    font-weight: 600;
+                                    color: AppData.show_volume_meter ? Theme.accent_lime : Theme.text_secondary;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        meter_btn_ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { AppLogic.toggle_volume_meter(); }
                         }
                     }
                 }

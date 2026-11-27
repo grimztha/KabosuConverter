@@ -7,6 +7,7 @@ export component VolumeBar inherits Rectangle {
     callback volume_settled(float);
     callback toggle_mute();
 
+    horizontal-stretch: 0;
     height: Theme.btn_height_sm;
     border-radius: Theme.radius_sm;
     background: Theme.input_bg;
@@ -14,16 +15,16 @@ export component VolumeBar inherits Rectangle {
     border-color: Theme.card_secondary_border;
 
     HorizontalLayout {
-        padding-top: 4px;
-        padding-bottom: 4px;
-        padding-left: 7px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        padding-left: 6px;
         padding-right: 7px;
-        spacing: 6px;
+        spacing: 5px;
         alignment: center;
 
         // Mute / Unmute Button with Speaker Icon
         mute_box := Rectangle {
-            width: 20px;
+            width: 18px;
             height: 20px;
             border-radius: 4px;
             background: mute_ta.has-hover ? Theme.control_hover : transparent;
@@ -47,7 +48,7 @@ export component VolumeBar inherits Rectangle {
 
         // Interactive Volume Slider Bar Track
         slider_track := Rectangle {
-            width: 54px;
+            width: 50px;
             height: 20px;
 
             // Background Track

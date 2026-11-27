@@ -1,18 +1,59 @@
-# Rust / Cargo build artifacts
+# Rust / Cargo build, coverage & profiling artifacts
 /target/
 **/*.rs.bk
 *.pdb
+*.profraw
+*.profdata
+lcov.info
+coverage/
+flamegraph.svg
+Cargo.toml.orig
 
-# Executables & Dynamic Libraries
-# (ffmpeg.exe, ffplay.exe, ffprobe.exe, yt-dlp.exe exceed GitHub file size limits and are managed locally)
+# Local executables, dynamic libraries & managed tool binaries
+# (FFmpeg suite and yt-dlp exceed GitHub limits and are managed locally)
+/bin/
+/ffmpeg
+/ffprobe
+/ffplay
+/yt-dlp
 *.exe
 *.dll
 *.so
 *.dylib
+*.app/
+*.dmg
+*.msi
+*.AppImage
 
-# Local User Settings & Runtime Configuration
+# Release staging, archives & checksums
+stage-*/
+dist/
+release_notes.md
+kabosu-converter-*.zip
+kabosu-converter-*.tar.gz
+*.sha256
+
+# Local user settings & runtime state
 settings.json
 settings.json.bak
+settings.json.tmp
+manifest.json
+portable
+.standalone
+
+# Local media / test outputs (avoid committing sample or transcoded media)
+*_encoded.*
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.opus
+*.srt
 
 # Log files & diagnostics
 *.log
@@ -20,9 +61,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Temporary & Cache files
+# Temporary & cache files
 *.tmp
 *.temp
+*.download.tmp
+*.extract.tmp
 *~
 *.swp
 *.swo
@@ -38,20 +81,25 @@ $RECYCLE.BIN/
 # Editor & IDE configs
 .vscode/
 .idea/
+.history/
 *.sublime-project
 *.sublime-workspace
 
-# Local Agent & Configuration Roots
+# Local agent & workspace tooling
 .agents/
 .gemini/
 .claude/
 .antigravity/
+.cursor/
+.codex/
+.windsurf/
+.aider*
 scratch/
 tasks/
 WALKTHROUGH.md
 ui.slint
 
-# Backups and patches
+# Backups & patches
 *.bak
 *.patch
 *.diff
@@ -66,6 +114,3 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
-
-# Local IDE / editor history
-.history/

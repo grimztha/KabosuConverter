@@ -31,6 +31,81 @@ component SettingIconTile inherits VerticalLayout {
     }
 }
 
+component SettingsSection inherits VerticalLayout {
+    in property <string> heading;
+    spacing: 8px;
+
+    Text {
+        text: root.heading;
+        font-size: Theme.font_body;
+        font-weight: 700;
+        color: Theme.text_heading;
+    }
+
+    Rectangle {
+        border-radius: Theme.radius_lg;
+        background: Theme.card_bg;
+        border-width: 1px;
+        border-color: Theme.card_border;
+
+        VerticalLayout {
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 2px;
+            @children
+        }
+    }
+}
+
+component SettingsRow inherits HorizontalLayout {
+    in property <image> icon_source;
+    in property <color> icon_tint: Theme.text_secondary;
+    in property <color> icon_tile_bg: Theme.card_secondary_bg;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <length> v_pad: 11px;
+    in property <length> text_spacing: 2px;
+    in property <bool> elide_subtitle: false;
+
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: root.v_pad;
+    padding-bottom: root.v_pad;
+    spacing: 14px;
+
+    SettingIconTile {
+        icon_source: root.icon_source;
+        tint: root.icon_tint;
+        tile_bg: root.icon_tile_bg;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        horizontal-stretch: 1;
+        min-width: 0px;
+        spacing: root.text_spacing;
+
+        Text {
+            text: root.title;
+            font-size: Theme.font_body;
+            font-weight: 600;
+            color: Theme.text_primary;
+        }
+
+        Text {
+            text: root.subtitle;
+            font-size: Theme.font_badge;
+            color: Theme.text_muted;
+            overflow: root.elide_subtitle ? elide : clip;
+        }
+    }
+
+    VerticalLayout {
+        alignment: center;
+        @children
+    }
+}
+
 export component TranscoderTab inherits ScrollView {
     VerticalLayout {
         padding-left: 24px;
@@ -40,7 +115,6 @@ export component TranscoderTab inherits ScrollView {
         spacing: 20px;
         alignment: start;
 
-        // Page Header
         HorizontalLayout {
             padding-left: 2px;
             Text {
@@ -51,1350 +125,770 @@ export component TranscoderTab inherits ScrollView {
             }
         }
 
-        // ==========================================
-        // SECTION 1: GENERAL
-        // ==========================================
-        VerticalLayout {
-            spacing: 8px;
+        SettingsSection {
+            heading: "General";
 
-            Text {
-                text: "General";
-                font-size: Theme.font_body;
-                font-weight: 700;
-                color: Theme.text_heading;
+            SettingsRow {
+                icon_source: @image-url("../icons/folder-open.svg");
+                title: "Open folder on finish";
+                subtitle: "Reveal exported files in File Explorer automatically when tasks complete";
+
+                HorizontalLayout {
+                    alignment: end;
+                    ToggleSwitch {
+                        checked <=> AppData.open_folder_on_finish;
+                        toggled(v) => { AppLogic.set_open_folder_on_finish(v); }
+                    }
+                }
             }
 
-            Rectangle {
-                border-radius: Theme.radius_lg;
-                background: Theme.card_bg;
-                border-width: 1px;
-                border-color: Theme.card_border;
+            SettingsRow {
+                icon_source: @image-url("../icons/volume-2.svg");
+                title: "Play sound on finish";
+                subtitle: "Play an audible chime when batch encoding completes";
 
-                VerticalLayout {
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    spacing: 2px;
+                HorizontalLayout {
+                    alignment: end;
+                    ToggleSwitch {
+                        checked <=> AppData.play_sound_on_finish;
+                        toggled(v) => { AppLogic.set_play_sound_on_finish(v); }
+                    }
+                }
+            }
 
-                    // Row: Open Folder on Finish
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
+            SettingsRow {
+                icon_source: @image-url("../icons/folder.svg");
+                title: "Default destination folder";
+                subtitle: AppData.output_directory == "Same as source" ? "Save exported files alongside source media by default" : AppData.output_directory;
+                elide_subtitle: true;
 
-                        SettingIconTile { icon_source: @image-url("../icons/folder-open.svg"); }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Open folder on finish";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Reveal exported files in File Explorer automatically when tasks complete";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ToggleSwitch {
-                                    checked <=> AppData.open_folder_on_finish;
-                                    toggled(v) => { AppLogic.set_open_folder_on_finish(v); }
-                                }
-                            }
-                        }
+                    ActionButton {
+                        width: 112px;
+                        height: Theme.btn_height_md;
+                        title: "Change...";
+                        icon_source: @image-url("../icons/folder.svg");
+                        has_icon: true;
+                        icon_size: 12px;
+                        font_size: Theme.font_badge;
+                        fill_color: Theme.btn_neutral_bg;
+                        hover_color: Theme.btn_neutral_hover;
+                        text_color: Theme.btn_neutral_text;
+                        border_col: Theme.btn_neutral_border;
+                        hover_border_col: Theme.input_hover_border;
+                        normal_border_width: 1px;
+                        clicked => { AppLogic.select_output_dir(); }
                     }
 
-                    // Row: Play Sound on Finish
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/volume-2.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Play sound on finish";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Play an audible chime when batch encoding completes";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ToggleSwitch {
-                                    checked <=> AppData.play_sound_on_finish;
-                                    toggled(v) => { AppLogic.set_play_sound_on_finish(v); }
-                                }
-                            }
-                        }
-                    }
-
-                    // Row: Default Destination Folder
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/folder.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            min-width: 0px;
-                            spacing: 2px;
-                            Text {
-                                text: "Default destination folder";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: AppData.output_directory == "Same as source" ? "Save exported files alongside source media by default" : AppData.output_directory;
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                                overflow: elide;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                spacing: 8px;
-
-                                ActionButton {
-                                    width: 112px;
-                                    height: Theme.btn_height_md;
-                                    title: "Change...";
-                                    icon_source: @image-url("../icons/folder.svg");
-                                    has_icon: true;
-                                    icon_size: 12px;
-                                    font_size: Theme.font_badge;
-                                    fill_color: Theme.btn_neutral_bg;
-                                    hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.btn_neutral_text;
-                                    border_col: Theme.btn_neutral_border;
-                                    hover_border_col: Theme.input_hover_border;
-                                    normal_border_width: 1px;
-                                    clicked => { AppLogic.select_output_dir(); }
-                                }
-
-                                ActionButton {
-                                    width: 82px;
-                                    height: Theme.btn_height_md;
-                                    title: "Open";
-                                    icon_source: @image-url("../icons/folder-open.svg");
-                                    has_icon: true;
-                                    icon_size: 12px;
-                                    font_size: Theme.font_badge;
-                                    fill_color: Theme.btn_neutral_bg;
-                                    hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.text_secondary;
-                                    border_col: Theme.btn_neutral_border;
-                                    hover_border_col: Theme.input_hover_border;
-                                    normal_border_width: 1px;
-                                    clicked => { AppLogic.open_output_dir(); }
-                                }
-                            }
-                        }
+                    ActionButton {
+                        width: 82px;
+                        height: Theme.btn_height_md;
+                        title: "Open";
+                        icon_source: @image-url("../icons/folder-open.svg");
+                        has_icon: true;
+                        icon_size: 12px;
+                        font_size: Theme.font_badge;
+                        fill_color: Theme.btn_neutral_bg;
+                        hover_color: Theme.btn_neutral_hover;
+                        text_color: Theme.text_secondary;
+                        border_col: Theme.btn_neutral_border;
+                        hover_border_col: Theme.input_hover_border;
+                        normal_border_width: 1px;
+                        clicked => { AppLogic.open_output_dir(); }
                     }
                 }
             }
         }
 
-        // ==========================================
-        // SECTION 2: VIDEO & TRANSCODING
-        // ==========================================
-        VerticalLayout {
-            spacing: 8px;
+        SettingsSection {
+            heading: "Video & Transcoding";
 
-            Text {
-                text: "Video & Transcoding";
-                font-size: Theme.font_body;
-                font-weight: 700;
-                color: Theme.text_heading;
-            }
+            SettingsRow {
+                icon_source: @image-url("../icons/video.svg");
+                icon_tint: Theme.accent_lime;
+                icon_tile_bg: Theme.accent_surface;
+                title: "Primary video codec";
+                subtitle: "Default video encoding workflow and compression codec";
 
-            Rectangle {
-                border-radius: Theme.radius_lg;
-                background: Theme.card_bg;
-                border-width: 1px;
-                border-color: Theme.card_border;
-
-                VerticalLayout {
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    spacing: 2px;
-
-                    // Row: Primary Video Codec
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/video.svg"); tint: Theme.accent_lime; tile_bg: Theme.accent_surface; }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Primary video codec";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Default video encoding workflow and compression codec";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "H.264 (AVC) — Universal Web",
-                                    "H.265 (HEVC) — High Efficiency",
-                                    "AV1 — Next-Gen Open Video",
-                                    "Apple ProRes — Editing Intermediate",
-                                    "Avid DNxHD / DNxHR — Broadcast NLE",
-                                    "VP9 — Open Web Codec",
-                                    "Rewrap / Remux (No Re-encode)",
-                                    "Lossless Cut (Instant Trim)",
-                                    "Extract Video Track Only",
-                                    "Extract Audio Track Only",
-                                    "Audio Normalization (EBU R128)",
-                                    "Audio Conversion (AAC/MP3/FLAC)",
-                                    "Extract Subtitle Stream (.srt)"
-                                ];
-                                current-index <=> AppData.function_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Hardware Acceleration
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/zap.svg"); tint: Theme.accent_green; tile_bg: Theme.emerald_surface; }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Hardware acceleration";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Accelerate encoding pipelines using dedicated GPU silicon";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "Auto Detect (Recommended)",
-                                    "NVIDIA NVENC (CUDA)",
-                                    "Intel QuickSync (QSV)",
-                                    "AMD AMF",
-                                    "Apple VideoToolbox",
-                                    "CPU Software Only"
-                                ];
-                                current-index <=> AppData.hw_accel_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Rate Control Mode
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Rate control mode";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Constant Quality (CRF) for fidelity vs Target Bitrate for fixed file size";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
-                                current-index <=> AppData.rate_control_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Quality Target Tuning (CRF or Bitrate)
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: AppData.rate_control_index == 0 ? "Target CRF quality" : "Target video bitrate";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: AppData.rate_control_index == 0 ?
-                                    "0 = lossless, 18 = high fidelity, 23 = balanced, 28 = compact" :
-                                    "Average stream bandwidth allocated for encoding";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                if AppData.rate_control_index == 0 : HorizontalLayout {
-                                    width: 248px;
-                                    spacing: 10px;
-                                    alignment: end;
-
-                                    VerticalLayout {
-                                        width: 180px;
-                                        alignment: center;
-                                        RangeSlider {
-                                            width: 180px;
-                                            maximum: 51.0;
-                                            value <=> AppData.crf_value;
-                                            released(_) => { AppLogic.save_settings(); }
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: 58px;
-                                        height: Theme.btn_height_sm;
-                                        border-radius: Theme.radius_sm;
-                                        background: Theme.accent_surface;
-                                        border-width: 1px;
-                                        border-color: Theme.accent_border;
-                                        HorizontalLayout {
-                                            alignment: center;
-                                            Text {
-                                                text: "CRF " + Math.round(AppData.crf_value);
-                                                font-size: Theme.font_badge;
-                                                font-weight: 700;
-                                                font-family: Theme.font_mono;
-                                                color: Theme.accent_lime;
-                                                vertical-alignment: center;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if AppData.rate_control_index == 1 : SelectBox {
-                                    width: 248px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "12000 kbps (4K/High)",
-                                        "8000 kbps (1080p60)",
-                                        "6000 kbps (1080p30)",
-                                        "4000 kbps (720p)",
-                                        "2500 kbps (Web)",
-                                        "1500 kbps (Mobile)"
-                                    ];
-                                    current-index <=> AppData.video_bitrate_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
-                            }
-                        }
-                    }
-
-                    // Row: Encoder Preset & Speed
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/clock.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Encoder preset & speed";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Trade-off between compression speed and file density (medium recommended)";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
-                                current-index <=> AppData.preset_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Resolution Scaling
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/film.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Resolution scaling";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Conform or downscale output frame dimensions";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "Original Source",
-                                    "4K UHD (3840x2160)",
-                                    "1440p QHD (2560x1440)",
-                                    "1080p Full HD (1920x1080)",
-                                    "720p HD (1280x720)",
-                                    "480p SD (854x480)"
-                                ];
-                                current-index <=> AppData.resolution_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Framerate Conform
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/monitor.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Framerate conform";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Output cadence and target frames per second";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "Original Source",
-                                    "23.976 fps (Cinema)",
-                                    "24.0 fps (Film)",
-                                    "25.0 fps (PAL)",
-                                    "29.97 fps (NTSC)",
-                                    "30.0 fps (Standard)",
-                                    "50.0 fps (PAL High)",
-                                    "59.94 fps (NTSC High)",
-                                    "60.0 fps (Smooth)"
-                                ];
-                                current-index <=> AppData.fps_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Deinterlacing Filter
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/layers.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Deinterlacing filter";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Eliminate comb artifacts from interlaced television and camera footage";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "None (Keep Progressive)",
-                                    "YADIF (Deinterlace)",
-                                    "BBDenoise + Deinterlace"
-                                ];
-                                current-index <=> AppData.deinterlace_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Web FastStart Optimization
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/globe.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Web FastStart optimization";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Moves the MP4 moov atom to the beginning of the file for instant streaming";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ToggleSwitch {
-                                    checked <=> AppData.faststart;
-                                    toggled(v) => { AppLogic.set_faststart(v); }
-                                }
-                            }
-                        }
-                    }
-
-                    // Row: Output Container Format
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/film.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Output container format";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Default container wrapper (.mp4, .mkv, .mov, .webm, .avi, .ts)";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    ".mp4 (Standard MPEG-4)",
-                                    ".mkv (Matroska Multi-Track)",
-                                    ".mov (Apple QuickTime)",
-                                    ".webm (HTML5 WebM)",
-                                    ".avi (Legacy Windows)",
-                                    ".ts (MPEG-TS Transport)"
-                                ];
-                                current-index <=> AppData.container_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "H.264 (AVC) — Universal Web",
+                        "H.265 (HEVC) — High Efficiency",
+                        "AV1 — Next-Gen Open Video",
+                        "Apple ProRes — Editing Intermediate",
+                        "Avid DNxHD / DNxHR — Broadcast NLE",
+                        "VP9 — Open Web Codec",
+                        "Rewrap / Remux (No Re-encode)",
+                        "Lossless Cut (Instant Trim)",
+                        "Extract Video Track Only",
+                        "Extract Audio Track Only",
+                        "Audio Normalization (EBU R128)",
+                        "Audio Conversion (AAC/MP3/FLAC)",
+                        "Extract Subtitle Stream (.srt)"
+                    ];
+                    current-index <=> AppData.function_index;
+                    selected(_) => { AppLogic.save_settings(); }
                 }
             }
-        }
 
-        // ==========================================
-        // SECTION 3: AUDIO & BROADCAST LOUDNESS
-        // ==========================================
-        VerticalLayout {
-            spacing: 8px;
+            SettingsRow {
+                icon_source: @image-url("../icons/zap.svg");
+                icon_tint: Theme.accent_green;
+                icon_tile_bg: Theme.emerald_surface;
+                title: "Hardware acceleration";
+                subtitle: "Accelerate encoding pipelines using dedicated GPU silicon";
 
-            Text {
-                text: "Audio & Broadcast Loudness";
-                font-size: Theme.font_body;
-                font-weight: 700;
-                color: Theme.text_heading;
-            }
-
-            Rectangle {
-                border-radius: Theme.radius_lg;
-                background: Theme.card_bg;
-                border-width: 1px;
-                border-color: Theme.card_border;
-
-                VerticalLayout {
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    spacing: 2px;
-
-                    // Row: Default Audio Codec
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/audio.svg"); tint: Theme.accent_purple; tile_bg: Theme.purple_surface; }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Default audio codec";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Compression format for exported audio tracks (AAC is universal for MP4)";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "AAC (Universal MP4 Standard)",
-                                    "MP3 (Audio Files & Legacy AVI)",
-                                    "Opus (Low Latency / High Fidelity)",
-                                    "FLAC (Lossless Studio)",
-                                    "WAV (Linear PCM Uncompressed)",
-                                    "Passthrough Copy (Original Stream)"
-                                ];
-                                current-index <=> AppData.audio_codec_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Target Audio Bitrate
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Audio encoding bitrate";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Target bitrate allocated per channel for lossy audio formats";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "320 kbps (Maximum Fidelity)",
-                                    "256 kbps (Studio Quality)",
-                                    "192 kbps (Standard Quality)",
-                                    "128 kbps (Compact Web)",
-                                    "96 kbps (Speech Optimized)"
-                                ];
-                                current-index <=> AppData.audio_bitrate_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Sample Rate
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/wave.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Sample rate frequency";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Audio clock frequency conform (48 kHz is cinema/video standard)";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "Keep Source Frequency",
-                                    "48.0 kHz (Cinema & Video)",
-                                    "44.1 kHz (CD Audio Standard)",
-                                    "96.0 kHz (Hi-Res Studio)"
-                                ];
-                                current-index <=> AppData.audio_sample_rate_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
-
-                    // Row: Broadcast Loudness Normalization
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/volume-2.svg"); }
-
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Broadcast loudness normalization";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Conform loudness levels to broadcast and streaming standards (EBU R128 / LUFS)";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            SelectBox {
-                                width: 248px;
-                                height: Theme.btn_height_md;
-                                model: [
-                                    "Disabled (Preserve Dynamic Range)",
-                                    "EBU R128 TV Broadcast (-23 LUFS)",
-                                    "YouTube & Web Video (-14 LUFS)",
-                                    "Podcasts & Speech (-16 LUFS)",
-                                    "Apple Music Standard (-16 LUFS)"
-                                ];
-                                current-index <=> AppData.normalize_index;
-                                selected(_) => { AppLogic.save_settings(); }
-                            }
-                        }
-                    }
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "Auto Detect (Recommended)",
+                        "NVIDIA NVENC (CUDA)",
+                        "Intel QuickSync (QSV)",
+                        "AMD AMF",
+                        "Apple VideoToolbox",
+                        "CPU Software Only"
+                    ];
+                    current-index <=> AppData.hw_accel_index;
+                    selected(_) => { AppLogic.save_settings(); }
                 }
             }
-        }
 
-        // ==========================================
-        // SECTION 4: ABOUT & ENGINE RUNTIME
-        // ==========================================
-        VerticalLayout {
-            spacing: 8px;
+            SettingsRow {
+                icon_source: @image-url("../icons/sliders.svg");
+                title: "Rate control mode";
+                subtitle: "Constant Quality (CRF) for fidelity vs Target Bitrate for fixed file size";
 
-            Text {
-                text: "About & Runtime";
-                font-size: Theme.font_body;
-                font-weight: 700;
-                color: Theme.text_heading;
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
+                    current-index <=> AppData.rate_control_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
             }
 
-            Rectangle {
-                border-radius: Theme.radius_lg;
-                background: Theme.card_bg;
-                border-width: 1px;
-                border-color: Theme.card_border;
+            SettingsRow {
+                icon_source: @image-url("../icons/sliders.svg");
+                title: AppData.rate_control_index == 0 ? "Target CRF quality" : "Target video bitrate";
+                subtitle: AppData.rate_control_index == 0 ?
+                    "0 = lossless, 18 = high fidelity, 23 = balanced, 28 = compact" :
+                    "Average stream bandwidth allocated for encoding";
 
-                VerticalLayout {
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    spacing: 2px;
+                HorizontalLayout {
+                    alignment: end;
 
-                    // Row: About Kabosu Converter
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 11px;
-                        padding-bottom: 11px;
-                        spacing: 14px;
+                    if AppData.rate_control_index == 0 : HorizontalLayout {
+                        width: 248px;
+                        spacing: 10px;
+                        alignment: end;
 
                         VerticalLayout {
+                            width: 180px;
                             alignment: center;
-                            width: 32px;
-                            Rectangle {
-                                width: 30px;
-                                height: 30px;
-                                border-radius: 7px;
-                                background: Theme.card_secondary_bg;
-                                border-width: 1px;
-                                border-color: Theme.card_border;
-                                Image {
-                                    x: (parent.width - self.width) / 2;
-                                    y: (parent.height - self.height) / 2;
-                                    source: @image-url("../icons/brand-logo.png");
-                                    width: 20px;
-                                    height: 20px;
-                                }
+                            RangeSlider {
+                                width: 180px;
+                                maximum: 51.0;
+                                value <=> AppData.crf_value;
+                                released(_) => { AppLogic.save_settings(); }
                             }
                         }
 
-                        VerticalLayout {
-                            alignment: center;
-                            horizontal-stretch: 1;
-                            spacing: 2px;
-                            Text {
-                                text: "Kabosu Converter";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: AppData.update_status == 3 ?
-                                    ("New version " + AppData.update_latest_version + " available. See update action below.") :
-                                    "High-performance media transcoder and universal video downloader";
-                                font-size: Theme.font_badge;
-                                color: AppData.update_status == 3 ? Theme.accent_green : Theme.text_muted;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
+                        Rectangle {
+                            width: 58px;
+                            height: Theme.btn_height_sm;
+                            border-radius: Theme.radius_sm;
+                            background: Theme.accent_surface;
+                            border-width: 1px;
+                            border-color: Theme.accent_border;
                             HorizontalLayout {
-                                alignment: end;
-                                spacing: 8px;
-
+                                alignment: center;
                                 Text {
-                                    text: "v" + AppData.app_version;
+                                    text: "CRF " + Math.round(AppData.crf_value);
                                     font-size: Theme.font_badge;
+                                    font-weight: 700;
                                     font-family: Theme.font_mono;
-                                    font-weight: 600;
-                                    color: Theme.text_secondary;
+                                    color: Theme.accent_lime;
                                     vertical-alignment: center;
                                 }
-
-                                // Interactive Update Check / Status Pill
-                                Rectangle {
-                                    height: 24px;
-                                    border-radius: Theme.radius_sm;
-                                    background: update_ta.has-hover ?
-                                        (AppData.update_status == 3 ? Theme.emerald_surface_hover : Theme.control_hover) :
-                                        (AppData.update_status == 3 ? Theme.emerald_surface : Theme.control_bg);
-                                    border-width: 1px;
-                                    border-color: AppData.update_status == 3 ? Theme.emerald_border : Theme.control_border;
-
-                                    animate background { duration: 120ms; }
-
-                                    HorizontalLayout {
-                                        padding-left: 8px;
-                                        padding-right: 8px;
-                                        spacing: 5px;
-                                        alignment: center;
-
-                                        if AppData.update_status == 1 : VerticalLayout {
-                                            alignment: center;
-                                            Rectangle {
-                                                width: 6px;
-                                                height: 6px;
-                                                border-radius: 3px;
-                                                background: Theme.accent_amber;
-                                            }
-                                        }
-                                        if AppData.update_status == 2 : VerticalLayout {
-                                            alignment: center;
-                                            Rectangle {
-                                                width: 6px;
-                                                height: 6px;
-                                                border-radius: 3px;
-                                                background: Theme.accent_green;
-                                            }
-                                        }
-                                        if AppData.update_status == 3 : VerticalLayout {
-                                            alignment: center;
-                                            Image {
-                                                source: @image-url("../icons/download.svg");
-                                                width: 11px;
-                                                height: 11px;
-                                                colorize: Theme.accent_green;
-                                            }
-                                        }
-
-                                        Text {
-                                            text: AppData.update_status_text;
-                                            font-size: Theme.font_badge;
-                                            font-weight: 600;
-                                            color: AppData.update_status == 3 ? Theme.accent_green :
-                                                   (AppData.update_status == 1 ? Theme.accent_amber :
-                                                   (AppData.update_status == 5 ? Theme.accent_green :
-                                                   (AppData.update_status == 6 ? Theme.accent_red_text :
-                                                   (update_ta.has-hover ? Theme.text_primary : Theme.text_secondary))));
-                                            vertical-alignment: center;
-                                        }
-                                    }
-
-                                    update_ta := TouchArea {
-                                        mouse-cursor: (AppData.update_status == 1 || AppData.update_status == 4) ? wait : pointer;
-                                        clicked => {
-                                            if AppData.update_status == 3 {
-                                                AppLogic.download_update();
-                                            } else if AppData.update_status == 5 {
-                                                AppLogic.open_downloaded_update();
-                                            } else if AppData.update_status != 1 && AppData.update_status != 4 {
-                                                AppLogic.check_for_updates();
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
 
-                    // Update Available Banner (Status 3)
-                    if AppData.update_status == 3 : HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 4px;
-                        padding-bottom: 6px;
+                    if AppData.rate_control_index == 1 : SelectBox {
+                        width: 248px;
+                        height: Theme.btn_height_md;
+                        model: [
+                            "12000 kbps (4K/High)",
+                            "8000 kbps (1080p60)",
+                            "6000 kbps (1080p30)",
+                            "4000 kbps (720p)",
+                            "2500 kbps (Web)",
+                            "1500 kbps (Mobile)"
+                        ];
+                        current-index <=> AppData.video_bitrate_index;
+                        selected(_) => { AppLogic.save_settings(); }
+                    }
+                }
+            }
 
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            border-radius: Theme.radius_md;
-                            background: Theme.emerald_surface;
-                            border-width: 1px;
-                            border-color: Theme.emerald_border;
+            SettingsRow {
+                icon_source: @image-url("../icons/clock.svg");
+                title: "Encoder preset & speed";
+                subtitle: "Trade-off between compression speed and file density (medium recommended)";
 
-                            HorizontalLayout {
-                                padding: 12px;
-                                spacing: 12px;
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
+                    current-index <=> AppData.preset_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
 
-                                VerticalLayout {
-                                    alignment: center;
-                                    horizontal-stretch: 1;
-                                    spacing: 2px;
+            SettingsRow {
+                icon_source: @image-url("../icons/film.svg");
+                title: "Resolution scaling";
+                subtitle: "Conform or downscale output frame dimensions";
 
-                                    Text {
-                                        text: "Update Available: " + AppData.update_latest_version;
-                                        font-size: Theme.font_body;
-                                        font-weight: 700;
-                                        color: Theme.accent_green;
-                                    }
-                                    Text {
-                                        text: "A new release of Kabosu Converter is ready to download (installed: v" + AppData.app_version + ").";
-                                        font-size: Theme.font_badge;
-                                        color: Theme.text_secondary;
-                                    }
-                                }
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "Original Source",
+                        "4K UHD (3840x2160)",
+                        "1440p QHD (2560x1440)",
+                        "1080p Full HD (1920x1080)",
+                        "720p HD (1280x720)",
+                        "480p SD (854x480)"
+                    ];
+                    current-index <=> AppData.resolution_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
 
-                                VerticalLayout {
-                                    alignment: center;
-                                    ActionButton {
-                                        width: 148px;
-                                        height: Theme.btn_height_md;
-                                        title: "Download Update";
-                                        icon_source: @image-url("../icons/download.svg");
-                                        has_icon: true;
-                                        fill_color: Theme.accent_primary;
-                                        hover_color: Theme.accent_primary_hover;
-                                        text_color: Theme.text_on_accent;
-                                        font_size: Theme.font_caption;
-                                        clicked => { AppLogic.download_update(); }
-                                    }
-                                }
-                            }
+            SettingsRow {
+                icon_source: @image-url("../icons/monitor.svg");
+                title: "Framerate conform";
+                subtitle: "Output cadence and target frames per second";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "Original Source",
+                        "23.976 fps (Cinema)",
+                        "24.0 fps (Film)",
+                        "25.0 fps (PAL)",
+                        "29.97 fps (NTSC)",
+                        "30.0 fps (Standard)",
+                        "50.0 fps (PAL High)",
+                        "59.94 fps (NTSC High)",
+                        "60.0 fps (Smooth)"
+                    ];
+                    current-index <=> AppData.fps_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/layers.svg");
+                title: "Deinterlacing filter";
+                subtitle: "Eliminate comb artifacts from interlaced television and camera footage";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "None (Keep Progressive)",
+                        "YADIF (Deinterlace)",
+                        "BBDenoise + Deinterlace"
+                    ];
+                    current-index <=> AppData.deinterlace_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/globe.svg");
+                title: "Web FastStart optimization";
+                subtitle: "Moves the MP4 moov atom to the beginning of the file for instant streaming";
+
+                HorizontalLayout {
+                    alignment: end;
+                    ToggleSwitch {
+                        checked <=> AppData.faststart;
+                        toggled(v) => { AppLogic.set_faststart(v); }
+                    }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/film.svg");
+                title: "Output container format";
+                subtitle: "Default container wrapper (.mp4, .mkv, .mov, .webm, .avi, .ts)";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        ".mp4 (Standard MPEG-4)",
+                        ".mkv (Matroska Multi-Track)",
+                        ".mov (Apple QuickTime)",
+                        ".webm (HTML5 WebM)",
+                        ".avi (Legacy Windows)",
+                        ".ts (MPEG-TS Transport)"
+                    ];
+                    current-index <=> AppData.container_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+        }
+
+        SettingsSection {
+            heading: "Audio & Broadcast Loudness";
+
+            SettingsRow {
+                icon_source: @image-url("../icons/audio.svg");
+                icon_tint: Theme.accent_purple;
+                icon_tile_bg: Theme.purple_surface;
+                title: "Default audio codec";
+                subtitle: "Compression format for exported audio tracks (AAC is universal for MP4)";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "AAC (Universal MP4 Standard)",
+                        "MP3 (Audio Files & Legacy AVI)",
+                        "Opus (Low Latency / High Fidelity)",
+                        "FLAC (Lossless Studio)",
+                        "WAV (Linear PCM Uncompressed)",
+                        "Passthrough Copy (Original Stream)"
+                    ];
+                    current-index <=> AppData.audio_codec_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/sliders.svg");
+                title: "Audio encoding bitrate";
+                subtitle: "Target bitrate allocated per channel for lossy audio formats";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "320 kbps (Maximum Fidelity)",
+                        "256 kbps (Studio Quality)",
+                        "192 kbps (Standard Quality)",
+                        "128 kbps (Compact Web)",
+                        "96 kbps (Speech Optimized)"
+                    ];
+                    current-index <=> AppData.audio_bitrate_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/wave.svg");
+                title: "Sample rate frequency";
+                subtitle: "Audio clock frequency conform (48 kHz is cinema/video standard)";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "Keep Source Frequency",
+                        "48.0 kHz (Cinema & Video)",
+                        "44.1 kHz (CD Audio Standard)",
+                        "96.0 kHz (Hi-Res Studio)"
+                    ];
+                    current-index <=> AppData.audio_sample_rate_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/volume-2.svg");
+                title: "Broadcast loudness normalization";
+                subtitle: "Conform loudness levels to broadcast and streaming standards (EBU R128 / LUFS)";
+
+                SelectBox {
+                    width: 248px;
+                    height: Theme.btn_height_md;
+                    model: [
+                        "Disabled (Preserve Dynamic Range)",
+                        "EBU R128 TV Broadcast (-23 LUFS)",
+                        "YouTube & Web Video (-14 LUFS)",
+                        "Podcasts & Speech (-16 LUFS)",
+                        "Apple Music Standard (-16 LUFS)"
+                    ];
+                    current-index <=> AppData.normalize_index;
+                    selected(_) => { AppLogic.save_settings(); }
+                }
+            }
+        }
+
+        SettingsSection {
+            heading: "About & Runtime";
+
+            // About Kabosu Converter
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 11px;
+                padding-bottom: 11px;
+                spacing: 14px;
+
+                VerticalLayout {
+                    alignment: center;
+                    width: 32px;
+                    Rectangle {
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 7px;
+                        background: Theme.card_secondary_bg;
+                        border-width: 1px;
+                        border-color: Theme.card_border;
+                        Image {
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            source: @image-url("../icons/brand-logo.png");
+                            width: 20px;
+                            height: 20px;
                         }
                     }
+                }
 
-                    // Update Downloading Banner (Status 4)
-                    if AppData.update_status == 4 : HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 4px;
-                        padding-bottom: 6px;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Text {
+                        text: "Kabosu Converter";
+                        font-size: Theme.font_body;
+                        font-weight: 600;
+                        color: Theme.text_primary;
+                    }
+                    Text {
+                        text: AppData.update_status == 3 ?
+                            ("New version " + AppData.update_latest_version + " available. See update action below.") :
+                            "High-performance media transcoder and universal video downloader";
+                        font-size: Theme.font_badge;
+                        color: AppData.update_status == 3 ? Theme.accent_green : Theme.text_muted;
+                    }
+                }
 
+                VerticalLayout {
+                    alignment: center;
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+
+                        Text {
+                            text: "v" + AppData.app_version;
+                            font-size: Theme.font_badge;
+                            font-family: Theme.font_mono;
+                            font-weight: 600;
+                            color: Theme.text_secondary;
+                            vertical-alignment: center;
+                        }
+
+                        // Update check / status pill
                         Rectangle {
-                            horizontal-stretch: 1;
-                            border-radius: Theme.radius_md;
-                            background: Theme.amber_surface;
+                            height: 24px;
+                            border-radius: Theme.radius_sm;
+                            background: update_ta.has-hover ?
+                                (AppData.update_status == 3 ? Theme.emerald_surface_hover : Theme.control_hover) :
+                                (AppData.update_status == 3 ? Theme.emerald_surface : Theme.control_bg);
                             border-width: 1px;
-                            border-color: Theme.amber_border;
+                            border-color: AppData.update_status == 3 ? Theme.emerald_border : Theme.control_border;
+
+                            animate background { duration: 120ms; }
 
                             HorizontalLayout {
-                                padding: 12px;
-                                spacing: 12px;
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
 
-                                VerticalLayout {
+                                if AppData.update_status == 1 : VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 6px;
+                                        height: 6px;
+                                        border-radius: 3px;
+                                        background: Theme.accent_amber;
+                                    }
+                                }
+                                if AppData.update_status == 2 : VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 6px;
+                                        height: 6px;
+                                        border-radius: 3px;
+                                        background: Theme.accent_green;
+                                    }
+                                }
+                                if AppData.update_status == 3 : VerticalLayout {
                                     alignment: center;
                                     Image {
                                         source: @image-url("../icons/download.svg");
-                                        width: 16px;
-                                        height: 16px;
-                                        colorize: Theme.accent_amber;
+                                        width: 11px;
+                                        height: 11px;
+                                        colorize: Theme.accent_green;
                                     }
                                 }
 
-                                VerticalLayout {
-                                    alignment: center;
-                                    horizontal-stretch: 1;
-                                    spacing: 6px;
+                                Text {
+                                    text: AppData.update_status_text;
+                                    font-size: Theme.font_badge;
+                                    font-weight: 600;
+                                    color: AppData.update_status == 3 ? Theme.accent_green :
+                                           (AppData.update_status == 1 ? Theme.accent_amber :
+                                           (AppData.update_status == 5 ? Theme.accent_green :
+                                           (AppData.update_status == 6 ? Theme.accent_red_text :
+                                           (update_ta.has-hover ? Theme.text_primary : Theme.text_secondary))));
+                                    vertical-alignment: center;
+                                }
+                            }
 
-                                    Text {
-                                        text: "Downloading Update: " + AppData.update_status_text;
-                                        font-size: Theme.font_caption;
-                                        font-weight: 600;
-                                        color: Theme.accent_amber;
-                                    }
-
-                                    Rectangle {
-                                        height: 5px;
-                                        border-radius: 2.5px;
-                                        background: Theme.slider_track;
-                                        clip: true;
-
-                                        Rectangle {
-                                            x: 0px;
-                                            width: parent.width * AppData.update_download_progress.clamp(0.0, 1.0);
-                                            height: 100%;
-                                            border-radius: 2.5px;
-                                            background: Theme.accent_amber;
-                                        }
+                            update_ta := TouchArea {
+                                mouse-cursor: (AppData.update_status == 1 || AppData.update_status == 4) ? wait : pointer;
+                                clicked => {
+                                    if AppData.update_status == 3 {
+                                        AppLogic.download_update();
+                                    } else if AppData.update_status == 5 {
+                                        AppLogic.open_downloaded_update();
+                                    } else if AppData.update_status != 1 && AppData.update_status != 4 {
+                                        AppLogic.check_for_updates();
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
 
-                    // Update Ready Banner (Status 5)
-                    if AppData.update_status == 5 : HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 4px;
-                        padding-bottom: 6px;
+            // Update available banner
+            if AppData.update_status == 3 : HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 4px;
+                padding-bottom: 6px;
 
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            border-radius: Theme.radius_md;
-                            background: Theme.emerald_surface;
-                            border-width: 1px;
-                            border-color: Theme.emerald_border;
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-radius: Theme.radius_md;
+                    background: Theme.emerald_surface;
+                    border-width: 1px;
+                    border-color: Theme.emerald_border;
 
-                            HorizontalLayout {
-                                padding: 12px;
-                                spacing: 12px;
-
-                                VerticalLayout {
-                                    alignment: center;
-                                    horizontal-stretch: 1;
-                                    spacing: 2px;
-
-                                    Text {
-                                        text: "Update Ready to Install";
-                                        font-size: Theme.font_body;
-                                        font-weight: 700;
-                                        color: Theme.accent_green;
-                                    }
-                                    Text {
-                                        text: "Release package downloaded. Open it to complete installation.";
-                                        font-size: Theme.font_badge;
-                                        color: Theme.text_secondary;
-                                    }
-                                }
-
-                                VerticalLayout {
-                                    alignment: center;
-                                    ActionButton {
-                                        width: 126px;
-                                        height: Theme.btn_height_md;
-                                        title: "Open Update";
-                                        fill_color: Theme.accent_primary;
-                                        hover_color: Theme.accent_primary_hover;
-                                        text_color: Theme.text_on_accent;
-                                        font_size: Theme.font_caption;
-                                        clicked => { AppLogic.open_downloaded_update(); }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Row: FFmpeg Core Engine
                     HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/zap.svg"); }
+                        padding: 12px;
+                        spacing: 12px;
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
-                            spacing: 1px;
-                            Text {
-                                text: "FFmpeg Multimedia Engine";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "NVENC, QSV, AMF, ProRes, AV1, and multi-track audio pipeline";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
+                            spacing: 2px;
 
-                        VerticalLayout {
-                            alignment: center;
                             Text {
-                                text: AppData.ffmpeg_version_badge;
+                                text: "Update Available: " + AppData.update_latest_version;
+                                font-size: Theme.font_body;
+                                font-weight: 700;
+                                color: Theme.accent_green;
+                            }
+                            Text {
+                                text: "A new release of Kabosu Converter is ready to download (installed: v" + AppData.app_version + ").";
                                 font-size: Theme.font_badge;
-                                font-family: Theme.font_mono;
-                                font-weight: 500;
                                 color: Theme.text_secondary;
                             }
                         }
+
+                        VerticalLayout {
+                            alignment: center;
+                            ActionButton {
+                                width: 148px;
+                                height: Theme.btn_height_md;
+                                title: "Download Update";
+                                icon_source: @image-url("../icons/download.svg");
+                                has_icon: true;
+                                fill_color: Theme.accent_primary;
+                                hover_color: Theme.accent_primary_hover;
+                                text_color: Theme.text_on_accent;
+                                font_size: Theme.font_caption;
+                                clicked => { AppLogic.download_update(); }
+                            }
+                        }
                     }
+                }
+            }
 
-                    // Row: yt-dlp Stream Extractor
+            // Update downloading banner
+            if AppData.update_status == 4 : HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 4px;
+                padding-bottom: 6px;
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-radius: Theme.radius_md;
+                    background: Theme.amber_surface;
+                    border-width: 1px;
+                    border-color: Theme.amber_border;
+
                     HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        spacing: 14px;
+                        padding: 12px;
+                        spacing: 12px;
 
-                        SettingIconTile { icon_source: @image-url("../icons/download.svg"); }
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: @image-url("../icons/download.svg");
+                                width: 16px;
+                                height: 16px;
+                                colorize: Theme.accent_amber;
+                            }
+                        }
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
-                            spacing: 1px;
-                            Text {
-                                text: "yt-dlp Stream Extractor";
-                                font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                            }
-                            Text {
-                                text: "Media and livestream ingestion across 1,000+ platforms";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                            }
-                        }
+                            spacing: 6px;
 
-                        VerticalLayout {
-                            alignment: center;
                             Text {
-                                text: AppData.ytdlp_version_badge;
-                                font-size: Theme.font_badge;
-                                font-family: Theme.font_mono;
-                                font-weight: 500;
-                                color: Theme.text_secondary;
+                                text: "Downloading Update: " + AppData.update_status_text;
+                                font-size: Theme.font_caption;
+                                font-weight: 600;
+                                color: Theme.accent_amber;
+                            }
+
+                            Rectangle {
+                                height: 5px;
+                                border-radius: 2.5px;
+                                background: Theme.slider_track;
+                                clip: true;
+
+                                Rectangle {
+                                    x: 0px;
+                                    width: parent.width * AppData.update_download_progress.clamp(0.0, 1.0);
+                                    height: 100%;
+                                    border-radius: 2.5px;
+                                    background: Theme.accent_amber;
+                                }
                             }
                         }
                     }
+                }
+            }
 
-                    // Row: Slint UI & Rust Core Runtime
+            // Update ready banner
+            if AppData.update_status == 5 : HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 4px;
+                padding-bottom: 6px;
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-radius: Theme.radius_md;
+                    background: Theme.emerald_surface;
+                    border-width: 1px;
+                    border-color: Theme.emerald_border;
+
                     HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        spacing: 14px;
-
-                        SettingIconTile { icon_source: @image-url("../icons/layers.svg"); }
+                        padding: 12px;
+                        spacing: 12px;
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
-                            spacing: 1px;
+                            spacing: 2px;
+
                             Text {
-                                text: "Native Application Runtime";
+                                text: "Update Ready to Install";
                                 font-size: Theme.font_body;
-                                font-weight: 600;
-                                color: Theme.text_primary;
+                                font-weight: 700;
+                                color: Theme.accent_green;
                             }
                             Text {
-                                text: "Slint 1.18 Native GUI Toolkit · Rust 2021 · Tokio Async Runtime";
+                                text: "Release package downloaded. Open it to complete installation.";
                                 font-size: Theme.font_badge;
-                                color: Theme.text_muted;
+                                color: Theme.text_secondary;
                             }
                         }
 
                         VerticalLayout {
                             alignment: center;
-                            Text {
-                                text: "Slint 1.18 · Rust 2021";
-                                font-size: Theme.font_badge;
-                                font-family: Theme.font_mono;
-                                font-weight: 500;
-                                color: Theme.text_secondary;
+                            ActionButton {
+                                width: 126px;
+                                height: Theme.btn_height_md;
+                                title: "Open Update";
+                                fill_color: Theme.accent_primary;
+                                hover_color: Theme.accent_primary_hover;
+                                text_color: Theme.text_on_accent;
+                                font_size: Theme.font_caption;
+                                clicked => { AppLogic.open_downloaded_update(); }
                             }
                         }
                     }
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/zap.svg");
+                title: "FFmpeg Multimedia Engine";
+                subtitle: "NVENC, QSV, AMF, ProRes, AV1, and multi-track audio pipeline";
+                v_pad: 10px;
+                text_spacing: 1px;
+
+                Text {
+                    text: AppData.ffmpeg_version_badge;
+                    font-size: Theme.font_badge;
+                    font-family: Theme.font_mono;
+                    font-weight: 500;
+                    color: Theme.text_secondary;
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/download.svg");
+                title: "yt-dlp Stream Extractor";
+                subtitle: "Media and livestream ingestion across 1,000+ platforms";
+                v_pad: 10px;
+                text_spacing: 1px;
+
+                Text {
+                    text: AppData.ytdlp_version_badge;
+                    font-size: Theme.font_badge;
+                    font-family: Theme.font_mono;
+                    font-weight: 500;
+                    color: Theme.text_secondary;
+                }
+            }
+
+            SettingsRow {
+                icon_source: @image-url("../icons/layers.svg");
+                title: "Native Application Runtime";
+                subtitle: "Slint 1.18 Native GUI Toolkit · Rust 2021 · Tokio Async Runtime";
+                v_pad: 10px;
+                text_spacing: 1px;
+
+                Text {
+                    text: "Slint 1.18 · Rust 2021";
+                    font-size: Theme.font_badge;
+                    font-family: Theme.font_mono;
+                    font-weight: 500;
+                    color: Theme.text_secondary;
                 }
             }
         }

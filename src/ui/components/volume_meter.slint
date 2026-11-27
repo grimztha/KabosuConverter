@@ -27,6 +27,84 @@ component MeterScaleTick inherits HorizontalLayout {
     }
 }
 
+component MeterChannelBar inherits Rectangle {
+    in property <float> norm: 0.0;
+    in property <float> peak_norm: 0.0;
+
+    width: 5px;
+    height: 100%;
+    border-radius: 2px;
+    clip: true;
+
+    VerticalLayout {
+        width: 100%;
+        height: 100%;
+
+        // Red zone: 0 dB to -6 dB (top 10%)
+        Rectangle {
+            height: 10%;
+            background: Theme.meter_red_dim;
+
+            if root.norm > 0.90 : Rectangle {
+                x: 0px;
+                width: 100%;
+                property <float> fill: min(1.0, max(0.0, (root.norm - 0.90) / 0.10));
+                y: parent.height * (1.0 - fill);
+                height: parent.height * fill;
+                background: Theme.meter_red;
+            }
+        }
+
+        // Amber zone: -6 dB to -18 dB (middle 20%)
+        Rectangle {
+            height: 20%;
+            background: Theme.meter_yellow_dim;
+
+            if root.norm > 0.70 : Rectangle {
+                x: 0px;
+                width: 100%;
+                property <float> fill: min(1.0, max(0.0, (root.norm - 0.70) / 0.20));
+                y: parent.height * (1.0 - fill);
+                height: parent.height * fill;
+                background: Theme.meter_yellow;
+            }
+        }
+
+        // Green zone: -18 dB to -60 dB (bottom 70%)
+        Rectangle {
+            height: 70%;
+            background: Theme.meter_green_dim;
+
+            if root.norm > 0.001 : Rectangle {
+                x: 0px;
+                width: 100%;
+                property <float> fill: min(1.0, max(0.0, root.norm / 0.70));
+                y: parent.height * (1.0 - fill);
+                height: parent.height * fill;
+                background: Theme.meter_green;
+            }
+        }
+    }
+
+    // Current-level hairline
+    if root.norm > 0.01 : Rectangle {
+        x: 0px;
+        y: max(0px, parent.height * (1.0 - root.norm) - 1px);
+        width: 100%;
+        height: 1px;
+        background: Theme.app_bg;
+    }
+
+    // Peak-hold marker
+    if root.peak_norm > 0.01 : Rectangle {
+        x: 0px;
+        y: max(0px, parent.height * (1.0 - root.peak_norm) - 1px);
+        width: 100%;
+        height: 2px;
+        background: root.peak_norm > 0.90 ? Theme.meter_red : (root.peak_norm > 0.70 ? Theme.meter_yellow : Theme.meter_green);
+    }
+}
+
 export component VolumeMeter inherits Rectangle {
     in property <float> level_l_db: -60.0;
     in property <float> level_r_db: -60.0;
@@ -41,7 +119,7 @@ export component VolumeMeter inherits Rectangle {
     border-color: Theme.meter_border;
     clip: true;
 
-    // Normalized scale [0.0, 1.0] corresponding to [-60 dB, 0 dB]
+    // Normalized [0.0, 1.0] range for [-60 dB, 0 dB]
     property <float> norm_l: max(0.0, min(1.0, (level_l_db + 60.0) / 60.0));
     property <float> norm_r: max(0.0, min(1.0, (level_r_db + 60.0) / 60.0));
     property <float> p_norm_l: max(0.0, min(1.0, (peak_l_db + 60.0) / 60.0));
@@ -54,166 +132,22 @@ export component VolumeMeter inherits Rectangle {
         padding-bottom: 8px;
         spacing: 5px;
 
-        // Bars Container (Left & Right Stereo Channels)
         bars_container := Rectangle {
             width: 13px;
 
-            // Channel 1 / Left (L)
-            bar_l := Rectangle {
+            bar_l := MeterChannelBar {
                 x: 0px;
-                width: 5px;
-                height: 100%;
-                border-radius: 2px;
-                clip: true;
-
-                VerticalLayout {
-                    width: 100%;
-                    height: 100%;
-
-                    // 1. Red Zone: 0 dB to -6 dB (top 10%)
-                    Rectangle {
-                        height: 10%;
-                        background: Theme.meter_red_dim;
-
-                        if root.norm_l > 0.90 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.90) / 0.10));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_red;
-                        }
-                    }
-
-                    // 2. Yuzu Gold Zone: -6 dB to -18 dB (middle 20%)
-                    Rectangle {
-                        height: 20%;
-                        background: Theme.meter_yellow_dim;
-
-                        if root.norm_l > 0.70 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, (root.norm_l - 0.70) / 0.20));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_yellow;
-                        }
-                    }
-
-                    // 3. Jade Green Zone: -18 dB to -60 dB (bottom 70%)
-                    Rectangle {
-                        height: 70%;
-                        background: Theme.meter_green_dim;
-
-                        if root.norm_l > 0.001 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, root.norm_l / 0.70));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_green;
-                        }
-                    }
-                }
-
-                // Current-level hairline
-                if root.norm_l > 0.01 : Rectangle {
-                    x: 0px;
-                    y: max(0px, parent.height * (1.0 - root.norm_l) - 1px);
-                    width: 100%;
-                    height: 1px;
-                    background: Theme.app_bg;
-                }
-
-                // Peak hold marker
-                if root.p_norm_l > 0.01 : Rectangle {
-                    x: 0px;
-                    y: max(0px, parent.height * (1.0 - root.p_norm_l) - 1px);
-                    width: 100%;
-                    height: 2px;
-                    background: root.p_norm_l > 0.90 ? Theme.meter_red : (root.p_norm_l > 0.70 ? Theme.meter_yellow : Theme.meter_green);
-                }
+                norm: root.norm_l;
+                peak_norm: root.p_norm_l;
             }
 
-            // Channel 2 / Right (R)
-            bar_r := Rectangle {
+            bar_r := MeterChannelBar {
                 x: 8px;
-                width: 5px;
-                height: 100%;
-                border-radius: 2px;
-                clip: true;
-
-                VerticalLayout {
-                    width: 100%;
-                    height: 100%;
-
-                    // 1. Red Zone: 0 dB to -6 dB (top 10%)
-                    Rectangle {
-                        height: 10%;
-                        background: Theme.meter_red_dim;
-
-                        if root.norm_r > 0.90 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.90) / 0.10));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_red;
-                        }
-                    }
-
-                    // 2. Yuzu Gold Zone: -6 dB to -18 dB (middle 20%)
-                    Rectangle {
-                        height: 20%;
-                        background: Theme.meter_yellow_dim;
-
-                        if root.norm_r > 0.70 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, (root.norm_r - 0.70) / 0.20));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_yellow;
-                        }
-                    }
-
-                    // 3. Jade Green Zone: -18 dB to -60 dB (bottom 70%)
-                    Rectangle {
-                        height: 70%;
-                        background: Theme.meter_green_dim;
-
-                        if root.norm_r > 0.001 : Rectangle {
-                            x: 0px;
-                            width: 100%;
-                            property <float> fill: min(1.0, max(0.0, root.norm_r / 0.70));
-                            y: parent.height * (1.0 - fill);
-                            height: parent.height * fill;
-                            background: Theme.meter_green;
-                        }
-                    }
-                }
-
-                // Current-level hairline
-                if root.norm_r > 0.01 : Rectangle {
-                    x: 0px;
-                    y: max(0px, parent.height * (1.0 - root.norm_r) - 1px);
-                    width: 100%;
-                    height: 1px;
-                    background: Theme.app_bg;
-                }
-
-                // Peak hold marker
-                if root.p_norm_r > 0.01 : Rectangle {
-                    x: 0px;
-                    y: max(0px, parent.height * (1.0 - root.p_norm_r) - 1px);
-                    width: 100%;
-                    height: 2px;
-                    background: root.p_norm_r > 0.90 ? Theme.meter_red : (root.p_norm_r > 0.70 ? Theme.meter_yellow : Theme.meter_green);
-                }
+                norm: root.norm_r;
+                peak_norm: root.p_norm_r;
             }
         }
 
-        // Studio dB Scale Labels Column (crisp tick + full unclipped numeric markings)
         scale_column := VerticalLayout {
             horizontal-stretch: 1;
             alignment: space-between;

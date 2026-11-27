@@ -1,6 +1,47 @@
 import { AppLogic } from "../globals.slint";
 import { Theme } from "../theme.slint";
 
+component CropResizeHandle inherits Rectangle {
+    in property <int> handle_id;
+    in property <length> overlay_abs_x;
+    in property <length> overlay_abs_y;
+    in property <length> overlay_width;
+    in property <length> overlay_height;
+    in property <MouseCursor> cursor: default;
+    in property <color> idle_bg: Theme.accent_lime;
+    callback focus_requested();
+
+    border-radius: 3px;
+    background: ta.has-hover || ta.pressed ? Theme.accent_amber : root.idle_bg;
+
+    ta := TouchArea {
+        mouse-cursor: root.cursor;
+        pointer-event(ev) => {
+            if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                root.focus_requested();
+                if root.overlay_width > 0px && root.overlay_height > 0px {
+                    AppLogic.crop_handle_drag_start(
+                        root.handle_id,
+                        ((self.absolute-position.x + self.mouse-x - root.overlay_abs_x) / root.overlay_width).clamp(0.0, 1.0),
+                        ((self.absolute-position.y + self.mouse-y - root.overlay_abs_y) / root.overlay_height).clamp(0.0, 1.0)
+                    );
+                }
+            } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
+                AppLogic.crop_handle_drag_end();
+            }
+        }
+        moved => {
+            if self.pressed && root.overlay_width > 0px && root.overlay_height > 0px {
+                AppLogic.crop_handle_drag(
+                    root.handle_id,
+                    ((self.absolute-position.x + self.mouse-x - root.overlay_abs_x) / root.overlay_width).clamp(0.0, 1.0),
+                    ((self.absolute-position.y + self.mouse-y - root.overlay_abs_y) / root.overlay_height).clamp(0.0, 1.0)
+                );
+            }
+        }
+    }
+}
+
 export component CropOverlayView inherits Rectangle {
     in property <float> norm_x: 0.0;
     in property <float> norm_y: 0.0;
@@ -17,7 +58,7 @@ export component CropOverlayView inherits Rectangle {
     property <length> box_w: max(16px, root.width * root.norm_w.clamp(0.02, 1.0));
     property <length> box_h: max(16px, root.height * root.norm_h.clamp(0.02, 1.0));
 
-    // Top dark mask outside crop area
+    // Dimmed regions outside the crop frame
     Rectangle {
         x: 0px;
         y: 0px;
@@ -25,8 +66,6 @@ export component CropOverlayView inherits Rectangle {
         height: max(0px, root.box_y);
         background: Theme.overlay_mask;
     }
-
-    // Bottom dark mask outside crop area
     Rectangle {
         x: 0px;
         y: root.box_y + root.box_h;
@@ -34,8 +73,6 @@ export component CropOverlayView inherits Rectangle {
         height: max(0px, root.height - (root.box_y + root.box_h));
         background: Theme.overlay_mask;
     }
-
-    // Left dark mask outside crop area
     Rectangle {
         x: 0px;
         y: root.box_y;
@@ -43,8 +80,6 @@ export component CropOverlayView inherits Rectangle {
         height: root.box_h;
         background: Theme.overlay_mask;
     }
-
-    // Right dark mask outside crop area
     Rectangle {
         x: root.box_x + root.box_w;
         y: root.box_y;
@@ -53,7 +88,7 @@ export component CropOverlayView inherits Rectangle {
         background: Theme.overlay_mask;
     }
 
-    // Crop Box Frame
+    // Active crop frame
     crop_box := Rectangle {
         x: root.box_x;
         y: root.box_y;
@@ -63,7 +98,7 @@ export component CropOverlayView inherits Rectangle {
         border-color: Theme.accent_lime;
         background: Theme.accent_lime.with-alpha(0.03);
 
-        // Rule of thirds vertical lines
+        // Rule-of-thirds grid
         Rectangle {
             x: parent.width / 3;
             y: 0px;
@@ -78,8 +113,6 @@ export component CropOverlayView inherits Rectangle {
             height: parent.height;
             background: Theme.text_primary.with-alpha(0.22);
         }
-
-        // Rule of thirds horizontal lines
         Rectangle {
             x: 0px;
             y: parent.height / 3;
@@ -95,7 +128,7 @@ export component CropOverlayView inherits Rectangle {
             background: Theme.text_primary.with-alpha(0.22);
         }
 
-        // Center Crosshair
+        // Center crosshair
         Rectangle {
             x: (parent.width - 12px) / 2;
             y: (parent.height - 1px) / 2;
@@ -111,7 +144,7 @@ export component CropOverlayView inherits Rectangle {
             background: Theme.accent_lime.with-alpha(0.65);
         }
 
-        // Live Dimensions & Coordinates Readout Pill inside Crop Box
+        // Live dimensions badge
         if parent.width > 95px && parent.height > 32px : Rectangle {
             x: 8px;
             y: 8px;
@@ -133,7 +166,7 @@ export component CropOverlayView inherits Rectangle {
             }
         }
 
-        // Interior Drag TouchArea to move the crop box around
+        // Interior drag to reposition the crop box
         move_ta := TouchArea {
             mouse-cursor: move;
             pointer-event(ev) => {
@@ -160,300 +193,123 @@ export component CropOverlayView inherits Rectangle {
         }
     }
 
-    // 8 Resize Handles (0=TL, 1=TR, 2=BL, 3=BR, 4=Top, 5=Bottom, 6=Left, 7=Right)
-    // Top-Left Corner (0)
-    Rectangle {
+    // Corner handles: 0=TL, 1=TR, 2=BL, 3=BR
+    CropResizeHandle {
+        handle_id: 0;
         x: root.box_x - 6px;
         y: root.box_y - 6px;
         width: 12px;
         height: 12px;
-        border-radius: 3px;
-        background: tl_ta.has-hover || tl_ta.pressed ? Theme.accent_amber : Theme.text_primary;
+        idle_bg: Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
-        tl_ta := TouchArea {
-            mouse-cursor: nwse-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            0,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        0,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: nwse-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Top-Right Corner (1)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 1;
         x: root.box_x + root.box_w - 6px;
         y: root.box_y - 6px;
         width: 12px;
         height: 12px;
-        border-radius: 3px;
-        background: tr_ta.has-hover || tr_ta.pressed ? Theme.accent_amber : Theme.text_primary;
+        idle_bg: Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
-        tr_ta := TouchArea {
-            mouse-cursor: nesw-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            1,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        1,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: nesw-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Bottom-Left Corner (2)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 2;
         x: root.box_x - 6px;
         y: root.box_y + root.box_h - 6px;
         width: 12px;
         height: 12px;
-        border-radius: 3px;
-        background: bl_ta.has-hover || bl_ta.pressed ? Theme.accent_amber : Theme.text_primary;
+        idle_bg: Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
-        bl_ta := TouchArea {
-            mouse-cursor: nesw-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            2,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        2,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: nesw-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Bottom-Right Corner (3)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 3;
         x: root.box_x + root.box_w - 6px;
         y: root.box_y + root.box_h - 6px;
         width: 12px;
         height: 12px;
-        border-radius: 3px;
-        background: br_ta.has-hover || br_ta.pressed ? Theme.accent_amber : Theme.text_primary;
+        idle_bg: Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
-        br_ta := TouchArea {
-            mouse-cursor: nwse-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            3,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        3,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: nwse-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
 
-    // Top Edge (4)
-    Rectangle {
+    // Edge handles: 4=Top, 5=Bottom, 6=Left, 7=Right
+    CropResizeHandle {
+        handle_id: 4;
         x: root.box_x + (root.box_w - 24px) / 2;
         y: root.box_y - 3.5px;
         width: 24px;
         height: 7px;
-        border-radius: 3px;
-        background: t_ta.has-hover || t_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
-        t_ta := TouchArea {
-            mouse-cursor: ns-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            4,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        4,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: ns-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Bottom Edge (5)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 5;
         x: root.box_x + (root.box_w - 24px) / 2;
         y: root.box_y + root.box_h - 3.5px;
         width: 24px;
         height: 7px;
-        border-radius: 3px;
-        background: b_ta.has-hover || b_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
-        b_ta := TouchArea {
-            mouse-cursor: ns-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            5,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        5,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: ns-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Left Edge (6)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 6;
         x: root.box_x - 3.5px;
         y: root.box_y + (root.box_h - 24px) / 2;
         width: 7px;
         height: 24px;
-        border-radius: 3px;
-        background: l_ta.has-hover || l_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
-        l_ta := TouchArea {
-            mouse-cursor: ew-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            6,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        6,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: ew-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
-
-    // Right Edge (7)
-    Rectangle {
+    CropResizeHandle {
+        handle_id: 7;
         x: root.box_x + root.box_w - 3.5px;
         y: root.box_y + (root.box_h - 24px) / 2;
         width: 7px;
         height: 24px;
-        border-radius: 3px;
-        background: r_ta.has-hover || r_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
-        r_ta := TouchArea {
-            mouse-cursor: ew-resize;
-            pointer-event(ev) => {
-                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
-                    root.focus_requested();
-                    if root.width > 0px && root.height > 0px {
-                        AppLogic.crop_handle_drag_start(
-                            7,
-                            ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                            ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                        );
-                    }
-                } else if ev.kind == PointerEventKind.up || ev.kind == PointerEventKind.cancel {
-                    AppLogic.crop_handle_drag_end();
-                }
-            }
-            moved => {
-                if self.pressed && root.width > 0px && root.height > 0px {
-                    AppLogic.crop_handle_drag(
-                        7,
-                        ((self.absolute-position.x + self.mouse-x - root.absolute-position.x) / root.width).clamp(0.0, 1.0),
-                        ((self.absolute-position.y + self.mouse-y - root.absolute-position.y) / root.height).clamp(0.0, 1.0)
-                    );
-                }
-            }
-        }
+        cursor: ew-resize;
+        overlay_abs_x: root.absolute-position.x;
+        overlay_abs_y: root.absolute-position.y;
+        overlay_width: root.width;
+        overlay_height: root.height;
+        focus_requested => { root.focus_requested(); }
     }
 }

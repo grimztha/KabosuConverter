@@ -15,6 +15,67 @@ import { TranscoderTab } from "views/transcoder_tab.slint";
 import { EditPanel } from "views/edit_panel.slint";
 import { QueuePanel } from "views/queue_panel.slint";
 
+component WorkspaceTabButton inherits Rectangle {
+    in property <string> label;
+    in property <image> icon_source;
+    in property <bool> active: false;
+    in property <bool> show_dot: false;
+    in property <color> dot_color: Theme.accent_green;
+    callback clicked();
+
+    border-radius: Theme.radius_sm;
+    background: root.active ? Theme.tab_active_bg : (ta.has-hover ? Theme.tab_inactive_hover : transparent);
+    border-width: 1px;
+    border-color: root.active ? Theme.tab_active_border : transparent;
+
+    animate background { duration: 140ms; easing: ease-out; }
+    animate border-color { duration: 140ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: 11px;
+        padding-right: 11px;
+        spacing: 6px;
+        alignment: center;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon_source;
+                width: 13px;
+                height: 13px;
+                colorize: root.active ? Theme.tab_active_text : (ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.label;
+                font-size: Theme.font_caption;
+                font-weight: root.active ? 600 : 500;
+                color: root.active ? Theme.tab_active_text : (ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
+            }
+        }
+
+        if root.show_dot : VerticalLayout {
+            width: 6px;
+            horizontal-stretch: 0;
+            alignment: center;
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.dot_color;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Kabosu Converter — Professional Media Transcoder";
     icon: @image-url("icons/app-icon.png");
@@ -167,170 +228,31 @@ export component MainWindow inherits Window {
                                     padding: 3px;
                                     spacing: 3px;
 
-                                    // Tab 0: Downloader
-                                    t0 := Rectangle {
-                                        border-radius: Theme.radius_sm;
-                                        background: AppData.active_tab == 0 ? Theme.tab_active_bg : (t0_ta.has-hover ? Theme.tab_inactive_hover : transparent);
-                                        border-width: 1px;
-                                        border-color: AppData.active_tab == 0 ? Theme.tab_active_border : transparent;
-
-                                        animate background { duration: 140ms; easing: ease-out; }
-                                        animate border-color { duration: 140ms; easing: ease-out; }
-
-                                        HorizontalLayout {
-                                            padding-left: 11px;
-                                            padding-right: 11px;
-                                            spacing: 6px;
-                                            alignment: center;
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Image {
-                                                    source: @image-url("icons/download.svg");
-                                                    width: 13px;
-                                                    height: 13px;
-                                                    colorize: AppData.active_tab == 0 ? Theme.tab_active_text : (t0_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Text {
-                                                    text: "Downloader";
-                                                    font-size: Theme.font_caption;
-                                                    font-weight: AppData.active_tab == 0 ? 600 : 500;
-                                                    color: AppData.active_tab == 0 ? Theme.tab_active_text : (t0_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            if AppData.ytdlp_is_downloading : VerticalLayout {
-                                                width: 6px;
-                                                horizontal-stretch: 0;
-                                                alignment: center;
-                                                Rectangle {
-                                                    width: 6px;
-                                                    height: 6px;
-                                                    border-radius: 3px;
-                                                    background: Theme.accent_green;
-                                                }
-                                            }
-                                        }
-
-                                        t0_ta := TouchArea {
-                                            mouse-cursor: pointer;
-                                            clicked => { AppLogic.switch_tab(0); }
-                                        }
+                                    WorkspaceTabButton {
+                                        label: "Downloader";
+                                        icon_source: @image-url("icons/download.svg");
+                                        active: AppData.active_tab == 0;
+                                        show_dot: AppData.ytdlp_is_downloading;
+                                        dot_color: Theme.accent_green;
+                                        clicked => { AppLogic.switch_tab(0); }
                                     }
 
-                                    // Tab 1: View & Edit
-                                    t1 := Rectangle {
-                                        border-radius: Theme.radius_sm;
-                                        background: AppData.active_tab == 1 ? Theme.tab_active_bg : (t1_ta.has-hover ? Theme.tab_inactive_hover : transparent);
-                                        border-width: 1px;
-                                        border-color: AppData.active_tab == 1 ? Theme.tab_active_border : transparent;
-
-                                        animate background { duration: 140ms; easing: ease-out; }
-                                        animate border-color { duration: 140ms; easing: ease-out; }
-
-                                        HorizontalLayout {
-                                            padding-left: 11px;
-                                            padding-right: 11px;
-                                            spacing: 6px;
-                                            alignment: center;
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Image {
-                                                    source: @image-url("icons/film.svg");
-                                                    width: 13px;
-                                                    height: 13px;
-                                                    colorize: AppData.active_tab == 1 ? Theme.tab_active_text : (t1_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Text {
-                                                    text: "View & Edit";
-                                                    font-size: Theme.font_caption;
-                                                    font-weight: AppData.active_tab == 1 ? 600 : 500;
-                                                    color: AppData.active_tab == 1 ? Theme.tab_active_text : (t1_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            if AppData.has_active_trim : VerticalLayout {
-                                                width: 6px;
-                                                horizontal-stretch: 0;
-                                                alignment: center;
-                                                Rectangle {
-                                                    width: 6px;
-                                                    height: 6px;
-                                                    border-radius: 3px;
-                                                    background: Theme.accent_amber;
-                                                }
-                                            }
-                                        }
-
-                                        t1_ta := TouchArea {
-                                            mouse-cursor: pointer;
-                                            clicked => { AppLogic.switch_tab(1); }
-                                        }
+                                    WorkspaceTabButton {
+                                        label: "View & Edit";
+                                        icon_source: @image-url("icons/film.svg");
+                                        active: AppData.active_tab == 1;
+                                        show_dot: AppData.has_active_trim;
+                                        dot_color: Theme.accent_amber;
+                                        clicked => { AppLogic.switch_tab(1); }
                                     }
 
-                                    // Tab 2: Settings
-                                    t2 := Rectangle {
-                                        border-radius: Theme.radius_sm;
-                                        background: AppData.active_tab == 2 ? Theme.tab_active_bg : (t2_ta.has-hover ? Theme.tab_inactive_hover : transparent);
-                                        border-width: 1px;
-                                        border-color: AppData.active_tab == 2 ? Theme.tab_active_border : transparent;
-
-                                        animate background { duration: 140ms; easing: ease-out; }
-                                        animate border-color { duration: 140ms; easing: ease-out; }
-
-                                        HorizontalLayout {
-                                            padding-left: 11px;
-                                            padding-right: 11px;
-                                            spacing: 6px;
-                                            alignment: center;
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Image {
-                                                    source: @image-url("icons/settings.svg");
-                                                    width: 13px;
-                                                    height: 13px;
-                                                    colorize: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Text {
-                                                    text: "Settings";
-                                                    font-size: Theme.font_caption;
-                                                    font-weight: AppData.active_tab == 2 ? 600 : 500;
-                                                    color: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
-                                                }
-                                            }
-
-                                            // Notification dot when an update is available
-                                            if AppData.update_status == 3 : VerticalLayout {
-                                                width: 6px;
-                                                horizontal-stretch: 0;
-                                                alignment: center;
-                                                Rectangle {
-                                                    width: 6px;
-                                                    height: 6px;
-                                                    border-radius: 3px;
-                                                    background: Theme.accent_green;
-                                                }
-                                            }
-                                        }
-
-                                        t2_ta := TouchArea {
-                                            mouse-cursor: pointer;
-                                            clicked => { AppLogic.switch_tab(2); }
-                                        }
+                                    WorkspaceTabButton {
+                                        label: "Settings";
+                                        icon_source: @image-url("icons/settings.svg");
+                                        active: AppData.active_tab == 2;
+                                        show_dot: AppData.update_status == 3;
+                                        dot_color: Theme.accent_green;
+                                        clicked => { AppLogic.switch_tab(2); }
                                     }
                                 }
                             }

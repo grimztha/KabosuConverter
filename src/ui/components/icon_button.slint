@@ -6,10 +6,10 @@ export component IconButton inherits Rectangle {
     in property <bool> has_icon: false;
     in property <length> icon_size: 13px;
     in property <color> text_color: Theme.text_secondary;
-    in property <color> normal_bg: #00000000;
+    in property <color> normal_bg: transparent;
     in property <color> hover_bg: Theme.control_hover;
     in property <color> pressed_bg: Theme.control_pressed;
-    in property <color> normal_border: #00000000;
+    in property <color> normal_border: transparent;
     in property <color> hover_border: normal_border;
     in property <length> normal_border_width: 0px;
     in property <length> btn_width: 28px;
@@ -20,8 +20,8 @@ export component IconButton inherits Rectangle {
 
     width: root.btn_width;
     height: root.btn_height;
-    border-radius: 6px;
-    background: is_disabled ? transparent : (ta.pressed ? pressed_bg : (ta.has-hover ? hover_bg : normal_bg));
+    border-radius: Theme.radius_sm;
+    background: root.is_disabled ? transparent : (ta.pressed ? root.pressed_bg : (ta.has-hover ? root.hover_bg : root.normal_bg));
     border-width: fs.has-focus ? 1.5px : root.normal_border_width;
     border-color: fs.has-focus ? Theme.focus_ring : (ta.has-hover || ta.pressed ? root.hover_border : root.normal_border);
 
@@ -31,8 +31,8 @@ export component IconButton inherits Rectangle {
     HorizontalLayout {
         alignment: center;
         spacing: 4px;
-        padding-left: 3px;
-        padding-right: 3px;
+        padding-left: 4px;
+        padding-right: 4px;
 
         if root.has_icon : VerticalLayout {
             alignment: center;
@@ -40,7 +40,7 @@ export component IconButton inherits Rectangle {
                 source: root.icon_source;
                 width: root.icon_size;
                 height: root.icon_size;
-                colorize: is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
+                colorize: root.is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
             }
         }
 
@@ -48,7 +48,7 @@ export component IconButton inherits Rectangle {
             alignment: center;
             Text {
                 text: root.text;
-                color: is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
+                color: root.is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : root.text_color);
                 font-size: root.font_size;
                 font-weight: 600;
             }
@@ -67,7 +67,7 @@ export component IconButton inherits Rectangle {
 
         ta := TouchArea {
             enabled: !root.is_disabled;
-            mouse-cursor: is_disabled ? default : pointer;
+            mouse-cursor: root.is_disabled ? default : pointer;
             clicked => {
                 fs.focus();
                 root.clicked();

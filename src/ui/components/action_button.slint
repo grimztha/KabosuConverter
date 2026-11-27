@@ -7,30 +7,30 @@ export component ActionButton inherits Rectangle {
     in property <length> icon_size: 13px;
     in property <color> fill_color: Theme.accent_primary;
     in property <color> hover_color: Theme.accent_primary_hover;
-    in property <color> pressed_color: fill_color.darker(0.25);
-    in property <color> text_color: #ffffff;
-    in property <color> border_col: #00000000;
+    in property <color> pressed_color: fill_color.darker(0.16);
+    in property <color> text_color: Theme.text_on_accent;
+    in property <color> border_col: transparent;
     in property <color> hover_border_col: border_col;
     in property <length> normal_border_width: 0px;
     in property <length> font_size: Theme.font_body;
     in property <bool> is_disabled: false;
-    in property <length> btn_radius: 6px;
-    in property <length> pad_horizontal: 8px;
+    in property <length> btn_radius: Theme.radius_sm;
+    in property <length> pad_horizontal: 10px;
     callback clicked();
 
-    height: 34px;
+    height: Theme.btn_height_md;
     border-radius: root.btn_radius;
-    background: is_disabled ? Theme.control_bg : (ta.pressed ? pressed_color : (ta.has-hover ? hover_color : fill_color));
-    border-width: fs.has-focus ? 2px : root.normal_border_width;
-    border-color: fs.has-focus ? Theme.focus_ring : (is_disabled ? Theme.control_border : (ta.has-hover || ta.pressed ? root.hover_border_col : root.border_col));
+    background: root.is_disabled ? Theme.card_subtle_bg : (ta.pressed ? root.pressed_color : (ta.has-hover ? root.hover_color : root.fill_color));
+    border-width: fs.has-focus ? 2px : (root.is_disabled ? 1px : root.normal_border_width);
+    border-color: fs.has-focus ? Theme.focus_ring : (root.is_disabled ? Theme.card_border : (ta.has-hover || ta.pressed ? root.hover_border_col : root.border_col));
 
     animate background { duration: 120ms; easing: ease-out; }
     animate border-color { duration: 120ms; easing: ease-out; }
 
     HorizontalLayout {
         alignment: center;
-        spacing: 4px;
-        padding-left: root.pad_horizontal;
+        spacing: 5px;
+        padding-left: root.has_icon && root.title != "" ? max(2px, root.pad_horizontal - 2px) : root.pad_horizontal;
         padding-right: root.pad_horizontal;
 
         if root.has_icon : VerticalLayout {
@@ -39,7 +39,7 @@ export component ActionButton inherits Rectangle {
                 source: root.icon_source;
                 width: root.icon_size;
                 height: root.icon_size;
-                colorize: root.is_disabled ? Theme.text_muted : root.text_color;
+                colorize: root.is_disabled ? Theme.text_faint : root.text_color;
             }
         }
 
@@ -47,7 +47,7 @@ export component ActionButton inherits Rectangle {
             alignment: center;
             Text {
                 text: root.title;
-                color: root.is_disabled ? Theme.text_muted : root.text_color;
+                color: root.is_disabled ? Theme.text_faint : root.text_color;
                 font-size: root.font_size;
                 font-weight: 600;
                 overflow: elide;
@@ -66,8 +66,8 @@ export component ActionButton inherits Rectangle {
         }
 
         ta := TouchArea {
-            mouse-cursor: is_disabled ? default : pointer;
-            enabled: !is_disabled;
+            mouse-cursor: root.is_disabled ? default : pointer;
+            enabled: !root.is_disabled;
             clicked => {
                 fs.focus();
                 root.clicked();

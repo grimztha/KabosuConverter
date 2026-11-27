@@ -5,12 +5,18 @@ export component ToggleSwitch inherits Rectangle {
     in property <bool> is_disabled: false;
     callback toggled(bool);
 
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: root.is_disabled ? Theme.control_bg : (root.checked ? (ta.has-hover ? Theme.accent_primary_hover : Theme.accent_primary) : (ta.has-hover ? Theme.control_hover : Theme.control_bg));
+    width: 42px;
+    height: 22px;
+    border-radius: 11px;
+    background: root.is_disabled
+        ? Theme.card_subtle_bg
+        : (root.checked
+            ? (ta.has-hover ? Theme.accent_primary_hover : Theme.accent_primary)
+            : (ta.has-hover ? Theme.control_hover : Theme.input_bg));
     border-width: fs.has-focus ? 2px : 1px;
-    border-color: fs.has-focus ? Theme.focus_ring : Theme.border_color;
+    border-color: fs.has-focus
+        ? Theme.focus_ring
+        : (root.checked ? Theme.accent_primary : Theme.input_border);
 
     animate background { duration: 160ms; easing: ease-out; }
     animate border-color { duration: 160ms; easing: ease-out; }
@@ -18,15 +24,16 @@ export component ToggleSwitch inherits Rectangle {
     knob := Rectangle {
         x: root.checked ? (root.width - self.width - 3px) : 3px;
         y: 3px;
-        width: 18px;
-        height: 18px;
-        border-radius: 9px;
-        background: root.is_disabled ? Theme.text_faint : #ffffff;
-        drop-shadow-blur: 4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: root.is_disabled ? Theme.text_faint : (root.checked ? Theme.text_on_accent : Theme.text_secondary);
+        drop-shadow-blur: 3px;
         drop-shadow-offset-y: 1px;
         drop-shadow-color: #00000044;
 
         animate x { duration: 160ms; easing: ease-out; }
+        animate background { duration: 160ms; easing: ease-out; }
     }
 
     fs := FocusScope {
@@ -41,8 +48,6 @@ export component ToggleSwitch inherits Rectangle {
         }
 
         ta := TouchArea {
-            width: 100%;
-            height: 100%;
             enabled: !root.is_disabled;
             mouse-cursor: root.is_disabled ? default : pointer;
             clicked => {

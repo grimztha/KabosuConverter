@@ -1,5 +1,32 @@
 import { Theme } from "../theme.slint";
 
+component MeterScaleTick inherits HorizontalLayout {
+    in property <string> label: "0";
+    in property <bool> is_hot: false;
+    spacing: 3px;
+    alignment: start;
+
+    VerticalLayout {
+        alignment: center;
+        Rectangle {
+            width: 3px;
+            height: 1px;
+            background: root.is_hot ? Theme.meter_red : Theme.text_faint;
+        }
+    }
+
+    Text {
+        horizontal-stretch: 1;
+        text: root.label;
+        font-size: 9.5px;
+        font-weight: 600;
+        font-family: Theme.font_mono;
+        color: root.is_hot ? Theme.accent_red_text : Theme.text_muted;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+    }
+}
+
 export component VolumeMeter inherits Rectangle {
     in property <float> level_l_db: -60.0;
     in property <float> level_r_db: -60.0;
@@ -8,13 +35,13 @@ export component VolumeMeter inherits Rectangle {
 
     width: 56px;
     height: 280px;
-    border-radius: 8px;
+    border-radius: Theme.radius_sm;
     background: Theme.meter_bg;
     border-width: 1px;
     border-color: Theme.meter_border;
     clip: true;
 
-    // Helper calculations for normalized scale [0.0, 1.0] corresponding to [-60dB, 0dB]
+    // Normalized scale [0.0, 1.0] corresponding to [-60 dB, 0 dB]
     property <float> norm_l: max(0.0, min(1.0, (level_l_db + 60.0) / 60.0));
     property <float> norm_r: max(0.0, min(1.0, (level_r_db + 60.0) / 60.0));
     property <float> p_norm_l: max(0.0, min(1.0, (peak_l_db + 60.0) / 60.0));
@@ -23,11 +50,11 @@ export component VolumeMeter inherits Rectangle {
     HorizontalLayout {
         padding-left: 6px;
         padding-right: 5px;
-        padding-top: 10px;
-        padding-bottom: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
         spacing: 5px;
 
-        // Bars Container (Left & Right Channels)
+        // Bars Container (Left & Right Stereo Channels)
         bars_container := Rectangle {
             width: 13px;
 
@@ -36,10 +63,10 @@ export component VolumeMeter inherits Rectangle {
                 x: 0px;
                 width: 5px;
                 height: 100%;
+                border-radius: 2px;
+                clip: true;
 
                 VerticalLayout {
-                    spacing: 0px;
-                    padding: 0px;
                     width: 100%;
                     height: 100%;
 
@@ -58,7 +85,7 @@ export component VolumeMeter inherits Rectangle {
                         }
                     }
 
-                    // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
+                    // 2. Yuzu Gold Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
                         background: Theme.meter_yellow_dim;
@@ -73,7 +100,7 @@ export component VolumeMeter inherits Rectangle {
                         }
                     }
 
-                    // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
+                    // 3. Jade Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
                         background: Theme.meter_green_dim;
@@ -89,13 +116,13 @@ export component VolumeMeter inherits Rectangle {
                     }
                 }
 
-                // Black current-level indicator line
+                // Current-level hairline
                 if root.norm_l > 0.01 : Rectangle {
                     x: 0px;
                     y: max(0px, parent.height * (1.0 - root.norm_l) - 1px);
                     width: 100%;
-                    height: 1.5px;
-                    background: #000000;
+                    height: 1px;
+                    background: Theme.app_bg;
                 }
 
                 // Peak hold marker
@@ -106,26 +133,17 @@ export component VolumeMeter inherits Rectangle {
                     height: 2px;
                     background: root.p_norm_l > 0.90 ? Theme.meter_red : (root.p_norm_l > 0.70 ? Theme.meter_yellow : Theme.meter_green);
                 }
-
-                // Bottom silence/floor indicator
-                Rectangle {
-                    x: 0px;
-                    y: parent.height - 2px;
-                    width: 100%;
-                    height: 2px;
-                    background: Theme.meter_red;
-                }
             }
 
             // Channel 2 / Right (R)
             bar_r := Rectangle {
-                x: 7px;
+                x: 8px;
                 width: 5px;
                 height: 100%;
+                border-radius: 2px;
+                clip: true;
 
                 VerticalLayout {
-                    spacing: 0px;
-                    padding: 0px;
                     width: 100%;
                     height: 100%;
 
@@ -144,7 +162,7 @@ export component VolumeMeter inherits Rectangle {
                         }
                     }
 
-                    // 2. Yellow Zone: -6 dB to -18 dB (middle 20%)
+                    // 2. Yuzu Gold Zone: -6 dB to -18 dB (middle 20%)
                     Rectangle {
                         height: 20%;
                         background: Theme.meter_yellow_dim;
@@ -159,7 +177,7 @@ export component VolumeMeter inherits Rectangle {
                         }
                     }
 
-                    // 3. Green Zone: -18 dB to -60 dB (bottom 70%)
+                    // 3. Jade Green Zone: -18 dB to -60 dB (bottom 70%)
                     Rectangle {
                         height: 70%;
                         background: Theme.meter_green_dim;
@@ -175,13 +193,13 @@ export component VolumeMeter inherits Rectangle {
                     }
                 }
 
-                // Black current-level indicator line
+                // Current-level hairline
                 if root.norm_r > 0.01 : Rectangle {
                     x: 0px;
                     y: max(0px, parent.height * (1.0 - root.norm_r) - 1px);
                     width: 100%;
-                    height: 1.5px;
-                    background: #000000;
+                    height: 1px;
+                    background: Theme.app_bg;
                 }
 
                 // Peak hold marker
@@ -192,34 +210,25 @@ export component VolumeMeter inherits Rectangle {
                     height: 2px;
                     background: root.p_norm_r > 0.90 ? Theme.meter_red : (root.p_norm_r > 0.70 ? Theme.meter_yellow : Theme.meter_green);
                 }
-
-                // Bottom silence/floor indicator
-                Rectangle {
-                    x: 0px;
-                    y: parent.height - 2px;
-                    width: 100%;
-                    height: 2px;
-                    background: Theme.meter_red;
-                }
             }
         }
 
-        // dB Scale Labels Column (with "-" tick marks)
+        // Studio dB Scale Labels Column (crisp tick + full unclipped numeric markings)
         scale_column := VerticalLayout {
             horizontal-stretch: 1;
             alignment: space-between;
 
-            Text { text: "- 0"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -6"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -12"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -18"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -24"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -30"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -36"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -42"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -48"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -54"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
-            Text { text: "- -60"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; font-family: Theme.font_mono; }
+            MeterScaleTick { is_hot: true; }
+            MeterScaleTick { label: "-6"; }
+            MeterScaleTick { label: "-12"; }
+            MeterScaleTick { label: "-18"; }
+            MeterScaleTick { label: "-24"; }
+            MeterScaleTick { label: "-30"; }
+            MeterScaleTick { label: "-36"; }
+            MeterScaleTick { label: "-42"; }
+            MeterScaleTick { label: "-48"; }
+            MeterScaleTick { label: "-54"; }
+            MeterScaleTick { label: "-60"; }
         }
     }
 }

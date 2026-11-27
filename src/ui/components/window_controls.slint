@@ -1,14 +1,13 @@
 import { AppData, AppLogic, Theme } from "../globals.slint";
 
 export component WindowControls inherits HorizontalLayout {
-    spacing: 0px;
     alignment: end;
 
     // Minimize Button
     min_btn := Rectangle {
         width: 46px;
         height: 100%;
-        background: min_ta.pressed ? #2a2a34 : (min_ta.has-hover ? #1f1f26 : #00000000);
+        background: min_ta.pressed ? Theme.control_pressed : (min_ta.has-hover ? Theme.control_hover : transparent);
 
         animate background { duration: 100ms; }
 
@@ -19,13 +18,12 @@ export component WindowControls inherits HorizontalLayout {
                 Rectangle {
                     width: 10px;
                     height: 1px;
-                    background: min_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
+                    background: min_ta.has-hover ? Theme.text_primary : Theme.text_muted;
                 }
             }
         }
 
         min_ta := TouchArea {
-            mouse-cursor: default;
             clicked => {
                 AppLogic.window_minimize();
             }
@@ -36,7 +34,7 @@ export component WindowControls inherits HorizontalLayout {
     max_btn := Rectangle {
         width: 46px;
         height: 100%;
-        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : #00000000);
+        background: max_ta.pressed ? Theme.control_pressed : (max_ta.has-hover ? Theme.control_hover : transparent);
 
         animate background { duration: 100ms; }
 
@@ -57,8 +55,7 @@ export component WindowControls inherits HorizontalLayout {
                         width: 8px;
                         height: 8px;
                         border-width: 1px;
-                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
-                        background: #00000000;
+                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_muted;
                     }
 
                     // Front square
@@ -68,8 +65,8 @@ export component WindowControls inherits HorizontalLayout {
                         width: 8px;
                         height: 8px;
                         border-width: 1px;
-                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
-                        background: max_ta.pressed ? #2a2a34 : (max_ta.has-hover ? #1f1f26 : Theme.header_bg);
+                        border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_muted;
+                        background: max_ta.pressed ? Theme.control_pressed : (max_ta.has-hover ? Theme.control_hover : Theme.header_bg);
                     }
                 }
 
@@ -78,26 +75,24 @@ export component WindowControls inherits HorizontalLayout {
                     width: 10px;
                     height: 10px;
                     border-width: 1px;
-                    border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_secondary;
-                    background: #00000000;
+                    border-color: max_ta.has-hover ? Theme.text_primary : Theme.text_muted;
                     border-radius: 1px;
                 }
             }
         }
 
         max_ta := TouchArea {
-            mouse-cursor: default;
             clicked => {
                 AppLogic.window_maximize();
             }
         }
     }
 
-    // Close Button (turns Windows red on hover)
+    // Close Button (Windows native crimson on hover)
     close_btn := Rectangle {
         width: 46px;
         height: 100%;
-        background: close_ta.pressed ? #c4101e : (close_ta.has-hover ? #e81123 : #00000000);
+        background: close_ta.pressed ? #b82b3a : (close_ta.has-hover ? #d93848 : transparent);
 
         animate background { duration: 100ms; }
 
@@ -109,13 +104,12 @@ export component WindowControls inherits HorizontalLayout {
                     source: @image-url("../icons/x.svg");
                     width: 10px;
                     height: 10px;
-                    colorize: close_ta.has-hover ? #ffffff : Theme.text_secondary;
+                    colorize: close_ta.has-hover ? #ffffff : Theme.text_muted;
                 }
             }
         }
 
         close_ta := TouchArea {
-            mouse-cursor: default;
             clicked => {
                 AppLogic.window_close();
             }

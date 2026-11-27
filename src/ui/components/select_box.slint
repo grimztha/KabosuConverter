@@ -1,0 +1,163 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+// Commercial dark-themed dropdown selector replacing light-mode native ComboBox
+export component SelectBox inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: 0;
+    in property <bool> is_disabled: false;
+    in property <length> font_size: Theme.font_caption;
+    callback selected(int);
+
+    property <int> safe_index: root.model.length > 0 ? Math.max(0, Math.min(root.current-index, root.model.length - 1)) : 0;
+    property <string> current_text: root.model.length > 0 ? root.model[root.safe_index] : "";
+    property <length> popup_height: min(260px, max(40px, root.model.length * 30px + 10px));
+
+    height: Theme.btn_height_md;
+    border-radius: Theme.radius_sm;
+    background: root.is_disabled ? Theme.card_subtle_bg : (ta.pressed ? Theme.control_pressed : (ta.has-hover ? Theme.input_hover_bg : Theme.input_bg));
+    border-width: fs.has-focus ? 1.5px : 1px;
+    border-color: root.is_disabled ? Theme.card_border : (fs.has-focus ? Theme.focus_ring : (ta.has-hover ? Theme.input_hover_border : Theme.input_border));
+
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            min-width: 0px;
+
+            Text {
+                text: root.current_text;
+                font-size: root.font_size;
+                font-weight: 500;
+                color: root.is_disabled ? Theme.text_faint : Theme.text_primary;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("../icons/chevron-down.svg");
+                width: 11px;
+                height: 11px;
+                colorize: root.is_disabled ? Theme.text_faint : (ta.has-hover ? Theme.text_primary : Theme.text_muted);
+            }
+        }
+    }
+
+    fs := FocusScope {
+        enabled: !root.is_disabled;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " {
+                popup.show();
+                return accept;
+            }
+            if event.text == Key.DownArrow && root.model.length > 0 {
+                let next_idx = Math.min(root.model.length - 1, root.safe_index + 1);
+                if next_idx != root.current-index {
+                    root.current-index = next_idx;
+                    root.selected(next_idx);
+                }
+                return accept;
+            }
+            if event.text == Key.UpArrow && root.model.length > 0 {
+                let prev_idx = Math.max(0, root.safe_index - 1);
+                if prev_idx != root.current-index {
+                    root.current-index = prev_idx;
+                    root.selected(prev_idx);
+                }
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            enabled: !root.is_disabled;
+            mouse-cursor: root.is_disabled ? default : pointer;
+            clicked => {
+                fs.focus();
+                popup.show();
+            }
+        }
+    }
+
+    popup := PopupWindow {
+        x: 0px;
+        y: root.height + 4px;
+        width: Math.max(root.width, 220px);
+        height: root.popup_height;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            border-radius: Theme.radius_md;
+            background: Theme.popup_bg;
+            border-width: 1px;
+            border-color: Theme.popup_border;
+            drop-shadow-blur: 18px;
+            drop-shadow-offset-y: 6px;
+            drop-shadow-color: #00000099;
+            clip: true;
+
+            ScrollView {
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 2px;
+                    alignment: start;
+
+                    for opt[idx] in root.model : Rectangle {
+                        height: 28px;
+                        border-radius: Theme.radius_sm;
+                        background: idx == root.safe_index ? Theme.accent_surface : (item_ta.has-hover ? Theme.control_hover : transparent);
+                        border-width: idx == root.safe_index ? 1px : 0px;
+                        border-color: Theme.accent_border;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 8px;
+
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                min-width: 0px;
+                                Text {
+                                    text: opt;
+                                    font-size: Theme.font_badge;
+                                    font-weight: idx == root.safe_index ? 600 : 400;
+                                    color: idx == root.safe_index ? Theme.accent_lime : (item_ta.has-hover ? Theme.text_primary : Theme.text_secondary);
+                                    overflow: elide;
+                                }
+                            }
+
+                            if idx == root.safe_index : VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/check.svg");
+                                    width: 11px;
+                                    height: 11px;
+                                    colorize: Theme.accent_lime;
+                                }
+                            }
+                        }
+
+                        item_ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.current-index = idx;
+                                root.selected(idx);
+                                popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

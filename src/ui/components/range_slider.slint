@@ -1,0 +1,139 @@
+import { Theme } from "../theme.slint";
+
+// Commercial Kabosu-themed continuous slider replacing OS-default blue Slider
+export component RangeSlider inherits Rectangle {
+    in property <float> minimum: 0.0;
+    in property <float> maximum: 100.0;
+    in-out property <float> value: 0.0;
+    in property <float> step: 1.0;
+    in property <bool> is_centered: false;
+    in property <bool> is_disabled: false;
+    callback changed(float);
+    callback released(float);
+
+    property <float> span: max(0.0001, root.maximum - root.minimum);
+    property <float> norm: ((root.value - root.minimum) / root.span).clamp(0.0, 1.0);
+    property <float> zero_norm: ((0.0 - root.minimum) / root.span).clamp(0.0, 1.0);
+
+    height: 24px;
+
+    // Track Groove
+    track := Rectangle {
+        x: 7px;
+        y: (parent.height - self.height) / 2;
+        width: max(0px, parent.width - 14px);
+        height: 5px;
+        border-radius: 2.5px;
+        background: Theme.slider_track;
+
+        // Filled Portion (left-to-value or center-zero-to-value for bipolar sliders)
+        Rectangle {
+            x: root.is_centered ? (parent.width * min(root.zero_norm, root.norm)) : 0px;
+            y: 0px;
+            width: root.is_centered
+                ? (parent.width * abs(root.norm - root.zero_norm))
+                : (parent.width * root.norm);
+            height: 100%;
+            border-radius: 2.5px;
+            background: root.is_disabled ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+        }
+
+        // Subtle Center Detent Mark for bipolar sliders (e.g. 0 dB)
+        if root.is_centered : Rectangle {
+            x: parent.width * root.zero_norm - 0.5px;
+            y: -2px;
+            width: 1px;
+            height: 9px;
+            background: Theme.text_faint;
+        }
+    }
+
+    // Thumb Handle
+    thumb := Rectangle {
+        x: track.x + track.width * root.norm - self.width / 2;
+        y: (parent.height - self.height) / 2;
+        width: (ta.has-hover || ta.pressed || fs.has-focus) ? 15px : 13px;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.is_disabled ? Theme.text_faint : (ta.pressed ? Theme.accent_lime : Theme.slider_thumb);
+        border-width: 2px;
+        border-color: root.is_disabled ? Theme.card_border : (fs.has-focus || ta.has-hover || ta.pressed ? Theme.accent_lime : Theme.accent_primary);
+        drop-shadow-blur: 4px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #00000066;
+
+        animate width { duration: 100ms; easing: ease-out; }
+        animate height { duration: 100ms; easing: ease-out; }
+        animate border-color { duration: 120ms; easing: ease-out; }
+    }
+
+    fs := FocusScope {
+        enabled: !root.is_disabled;
+        key-pressed(event) => {
+            if event.text == Key.LeftArrow {
+                let next_v = (root.value - root.step).clamp(root.minimum, root.maximum);
+                root.value = next_v;
+                root.changed(next_v);
+                root.released(next_v);
+                return accept;
+            }
+            if event.text == Key.RightArrow {
+                let next_v = (root.value + root.step).clamp(root.minimum, root.maximum);
+                root.value = next_v;
+                root.changed(next_v);
+                root.released(next_v);
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            enabled: !root.is_disabled;
+            mouse-cursor: root.is_disabled ? default : pointer;
+
+            pointer-event(event) => {
+                if track.width > 0px {
+                    if event.kind == PointerEventKind.down {
+                        fs.focus();
+                        let r = ((self.mouse-x - track.x) / track.width).clamp(0.0, 1.0);
+                        let v = root.minimum + r * root.span;
+                        root.value = v;
+                        root.changed(v);
+                    } else if event.kind == PointerEventKind.up {
+                        let r = ((self.mouse-x - track.x) / track.width).clamp(0.0, 1.0);
+                        let v = root.minimum + r * root.span;
+                        root.value = v;
+                        root.released(v);
+                    }
+                }
+            }
+
+            moved => {
+                if self.pressed && track.width > 0px {
+                    let r = ((self.mouse-x - track.x) / track.width).clamp(0.0, 1.0);
+                    let v = root.minimum + r * root.span;
+                    root.value = v;
+                    root.changed(v);
+                }
+            }
+
+            scroll-event(event) => {
+                if event.delta-y > 0px {
+                    let v = (root.value + root.step).clamp(root.minimum, root.maximum);
+                    root.value = v;
+                    root.changed(v);
+                    root.released(v);
+                    return accept;
+                }
+                if event.delta-y < 0px {
+                    let v = (root.value - root.step).clamp(root.minimum, root.maximum);
+                    root.value = v;
+                    root.changed(v);
+                    root.released(v);
+                    return accept;
+                }
+                reject
+            }
+        }
+    }
+}

@@ -4,22 +4,25 @@ export component Badge inherits Rectangle {
     in property <string> label: "";
     in property <color> bg_color: Theme.card_secondary_bg;
     in property <color> fg_color: Theme.text_secondary;
+    in property <color> border_col: Theme.card_secondary_border;
+    in property <bool> mono: false;
 
     height: 22px;
-    border-radius: 4px;
-    background: bg_color;
+    border-radius: 5px;
+    background: root.bg_color;
     border-width: 1px;
-    border-color: bg_color.brighter(0.3);
+    border-color: root.border_col;
 
     HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 6px;
+        padding-left: 7px;
+        padding-right: 7px;
         alignment: center;
         VerticalLayout {
             alignment: center;
             Text {
                 text: root.label;
                 font-size: Theme.font_badge;
+                font-family: root.mono ? Theme.font_mono : "";
                 color: root.fg_color;
                 font-weight: 600;
             }

@@ -7,18 +7,18 @@ export component VolumeBar inherits Rectangle {
     callback volume_settled(float);
     callback toggle_mute();
 
-    height: 28px;
-    border-radius: 6px;
-    background: Theme.control_bg;
+    height: Theme.btn_height_sm;
+    border-radius: Theme.radius_sm;
+    background: Theme.input_bg;
     border-width: 1px;
-    border-color: Theme.border_color;
+    border-color: Theme.card_secondary_border;
 
     HorizontalLayout {
         padding-top: 4px;
         padding-bottom: 4px;
-        padding-left: 8px;
-        padding-right: 8px;
-        spacing: 8px;
+        padding-left: 7px;
+        padding-right: 7px;
+        spacing: 6px;
         alignment: center;
 
         // Mute / Unmute Button with Speaker Icon
@@ -26,15 +26,17 @@ export component VolumeBar inherits Rectangle {
             width: 20px;
             height: 20px;
             border-radius: 4px;
-            background: mute_ta.has-hover ? Theme.control_hover : #00000000;
+            background: mute_ta.has-hover ? Theme.control_hover : transparent;
+
+            animate background { duration: 120ms; easing: ease-out; }
 
             Image {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 14px;
-                height: 14px;
+                width: 13px;
+                height: 13px;
                 source: root.is_muted || root.volume <= 0.01 ? @image-url("../icons/volume-x.svg") : (root.volume > 0.5 ? @image-url("../icons/volume-2.svg") : @image-url("../icons/volume-1.svg"));
-                colorize: root.is_muted || root.volume <= 0.01 ? Theme.accent_red : (mute_ta.has-hover ? Theme.accent_cyan : Theme.text_muted);
+                colorize: root.is_muted || root.volume <= 0.01 ? Theme.accent_red_text : (mute_ta.has-hover ? Theme.accent_lime : Theme.text_muted);
             }
 
             mute_ta := TouchArea {
@@ -45,37 +47,37 @@ export component VolumeBar inherits Rectangle {
 
         // Interactive Volume Slider Bar Track
         slider_track := Rectangle {
-            width: 60px;
+            width: 54px;
             height: 20px;
 
             // Background Track
             Rectangle {
                 y: (parent.height - self.height) / 2;
                 width: 100%;
-                height: 5px;
-                border-radius: 2.5px;
+                height: 4px;
+                border-radius: 2px;
                 background: Theme.slider_track;
 
-                // Filled Track (colored)
+                // Filled Track (Kabosu citrus ramp)
                 Rectangle {
                     x: 0px;
                     y: 0px;
                     height: 100%;
                     width: root.is_muted || root.volume <= 0.001 ? 0px : (parent.width * root.volume.clamp(0.0, 1.0));
-                    border-radius: 2.5px;
-                    background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_cyan 100%);
+                    border-radius: 2px;
+                    background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
                 }
             }
 
             // Draggable Knob / Thumb
             Rectangle {
                 property <float> norm: root.is_muted ? 0.0 : root.volume.clamp(0.0, 1.0);
-                x: max(0px, min(parent.width - 12px, (parent.width - 12px) * self.norm));
+                x: max(0px, min(parent.width - self.width, (parent.width - self.width) * self.norm));
                 y: (parent.height - self.height) / 2;
-                width: 12px;
-                height: 12px;
-                border-radius: 6px;
-                background: root.is_muted ? Theme.text_muted : (slider_ta.has-hover || slider_ta.pressed ? Theme.accent_cyan : Theme.slider_thumb);
+                width: 11px;
+                height: 11px;
+                border-radius: 5.5px;
+                background: root.is_muted ? Theme.text_muted : (slider_ta.has-hover || slider_ta.pressed ? Theme.accent_lime : Theme.slider_thumb);
                 border-width: 1.5px;
                 border-color: root.is_muted ? Theme.text_faint : Theme.accent_primary;
             }
@@ -131,9 +133,9 @@ export component VolumeBar inherits Rectangle {
             width: 30px;
             text: root.is_muted ? "0%" : "\{round(root.volume * 100)}%";
             font-size: Theme.font_badge;
-            font-weight: 700;
+            font-weight: 600;
             font-family: Theme.font_mono;
-            color: root.is_muted ? Theme.accent_red : Theme.text_muted;
+            color: root.is_muted ? Theme.accent_red_text : Theme.text_secondary;
             vertical-alignment: center;
             horizontal-alignment: right;
         }

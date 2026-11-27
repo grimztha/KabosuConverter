@@ -7,45 +7,61 @@ export component DownloaderFormatDropdown inherits Rectangle {
     callback selected(int);
 
     pure function get_tag(s: string) -> string {
-        s.starts-with("[Audio]") ? "[Audio]" : (s.starts-with("[Video]") ? "[Video]" : "")
+        s.starts-with("[Audio]") ? "Audio" : (s.starts-with("[Video]") ? "Video" : "")
     }
 
     pure function get_tag_color(s: string) -> color {
-        s.starts-with("[Audio]") ? #a78bfa : (s.starts-with("[Video]") ? #a3e635 : Theme.text_primary)
+        s.starts-with("[Audio]") ? Theme.accent_purple : (s.starts-with("[Video]") ? Theme.accent_lime : Theme.text_primary)
+    }
+
+    pure function get_tag_bg(s: string) -> color {
+        s.starts-with("[Audio]") ? Theme.purple_surface : (s.starts-with("[Video]") ? Theme.accent_surface : Theme.card_secondary_bg)
     }
 
     pure function get_label(s: string) -> string {
         s.starts-with("[Audio] ") ? s.replace-all("[Audio] ", "") : (s.starts-with("[Video] ") ? s.replace-all("[Video] ", "") : (s.starts-with("[Audio]") ? s.replace-all("[Audio]", "") : (s.starts-with("[Video]") ? s.replace-all("[Video]", "") : s)))
     }
 
-    property <int> safe_index: Math.max(0, Math.min(root.current-index, root.model.length - 1));
+    property <int> safe_index: root.model.length > 0 ? Math.max(0, Math.min(root.current-index, root.model.length - 1)) : 0;
     property <string> current_raw: root.model.length > 0 ? root.model[root.safe_index] : "";
     property <string> current_tag: root.get_tag(root.current_raw);
     property <string> current_label: root.get_label(root.current_raw);
     property <color> current_color: root.get_tag_color(root.current_raw);
+    property <color> current_bg: root.get_tag_bg(root.current_raw);
 
-    height: 34px;
-    border-radius: 6px;
-    background: ta.has-hover ? #1c1c22 : Theme.card_bg;
-    border-width: 1px;
-    border-color: ta.has-hover ? Theme.accent_cyan : Theme.border_color;
+    height: Theme.btn_height_md;
+    border-radius: Theme.radius_sm;
+    background: ta.has-hover ? Theme.input_hover_bg : Theme.input_bg;
+    border-width: fs.has-focus ? 1.5px : 1px;
+    border-color: fs.has-focus ? Theme.focus_ring : (ta.has-hover ? Theme.input_hover_border : Theme.input_border);
 
-    animate background { duration: 150ms; }
-    animate border-color { duration: 150ms; }
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 8px;
+        padding-right: 10px;
         spacing: 8px;
 
-        // Group name tag (Colorized: Blue for [Video], Purple for [Audio])
+        // Category Pill Tag (Kabosu Zest for Video, Soft Plum for Audio)
         if root.current_tag != "" : VerticalLayout {
             alignment: center;
-            Text {
-                text: root.current_tag;
-                font-size: 11.5px;
-                font-weight: 700;
-                color: root.current_color;
+            Rectangle {
+                height: 20px;
+                border-radius: 4px;
+                background: root.current_bg;
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    alignment: center;
+                    Text {
+                        text: root.current_tag;
+                        font-size: Theme.font_badge;
+                        font-weight: 700;
+                        color: root.current_color;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
 
@@ -53,9 +69,10 @@ export component DownloaderFormatDropdown inherits Rectangle {
         VerticalLayout {
             alignment: center;
             horizontal-stretch: 1;
+            min-width: 0px;
             Text {
                 text: root.current_label;
-                font-size: 11.5px;
+                font-size: Theme.font_caption;
                 font-weight: 500;
                 color: Theme.text_primary;
                 overflow: elide;
@@ -67,43 +84,49 @@ export component DownloaderFormatDropdown inherits Rectangle {
             alignment: center;
             Image {
                 source: @image-url("../icons/chevron-down.svg");
-                width: 10px;
-                height: 10px;
+                width: 11px;
+                height: 11px;
                 colorize: ta.has-hover ? Theme.text_primary : Theme.text_muted;
             }
         }
     }
 
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            popup.show();
+    fs := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == " " {
+                popup.show();
+                return accept;
+            }
+            reject
+        }
+
+        ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                fs.focus();
+                popup.show();
+            }
         }
     }
 
     popup := PopupWindow {
-        x: 0;
-        y: root.height + 3px;
-        width: Math.max(root.width, 390px);
-        height: 280px;
+        x: 0px;
+        y: root.height + 4px;
+        width: Math.max(root.width, 400px);
+        height: 284px;
         close-policy: close-on-click-outside;
 
         Rectangle {
-            width: 100%;
-            height: 100%;
-            border-radius: 6px;
-            background: Theme.card_bg;
+            border-radius: Theme.radius_md;
+            background: Theme.popup_bg;
             border-width: 1px;
-            border-color: Theme.card_border;
-            drop-shadow-blur: 16px;
+            border-color: Theme.popup_border;
+            drop-shadow-blur: 18px;
             drop-shadow-offset-y: 6px;
-            drop-shadow-color: #000000aa;
+            drop-shadow-color: #00000099;
             clip: true;
 
             ScrollView {
-                width: 100%;
-                height: 100%;
-
                 VerticalLayout {
                     padding: 4px;
                     spacing: 2px;
@@ -111,29 +134,41 @@ export component DownloaderFormatDropdown inherits Rectangle {
 
                     for opt[idx] in root.model : Rectangle {
                         height: 28px;
-                        border-radius: 5px;
-                        background: idx == root.safe_index ? #27272a : (item_ta.has-hover ? #1f1f24 : #00000000);
+                        border-radius: Theme.radius_sm;
+                        background: idx == root.safe_index ? Theme.accent_surface : (item_ta.has-hover ? Theme.control_hover : transparent);
+                        border-width: idx == root.safe_index ? 1px : 0px;
+                        border-color: Theme.accent_border;
 
                         HorizontalLayout {
-                            padding-left: 10px;
+                            padding-left: 8px;
                             padding-right: 10px;
                             spacing: 8px;
 
-                            // Group tag in dropdown list (Colorized: Blue for [Video], Purple for [Audio])
                             if root.get_tag(opt) != "" : VerticalLayout {
                                 alignment: center;
-                                Text {
-                                    text: root.get_tag(opt);
-                                    font-size: Theme.font_badge;
-                                    font-weight: 700;
-                                    color: root.get_tag_color(opt);
+                                Rectangle {
+                                    height: 18px;
+                                    border-radius: 4px;
+                                    background: root.get_tag_bg(opt);
+                                    HorizontalLayout {
+                                        padding-left: 5px;
+                                        padding-right: 5px;
+                                        alignment: center;
+                                        Text {
+                                            text: root.get_tag(opt);
+                                            font-size: Theme.font_badge;
+                                            font-weight: 700;
+                                            color: root.get_tag_color(opt);
+                                            vertical-alignment: center;
+                                        }
+                                    }
                                 }
                             }
 
-                            // Format description text
                             VerticalLayout {
                                 alignment: center;
                                 horizontal-stretch: 1;
+                                min-width: 0px;
                                 Text {
                                     text: root.get_label(opt);
                                     font-size: Theme.font_badge;
@@ -143,7 +178,6 @@ export component DownloaderFormatDropdown inherits Rectangle {
                                 }
                             }
 
-                            // Active checkmark
                             if idx == root.safe_index : VerticalLayout {
                                 alignment: center;
                                 Image {

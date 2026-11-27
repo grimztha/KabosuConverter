@@ -1,0 +1,56 @@
+import { Theme } from "../theme.slint";
+
+// Commercial dark-themed single-line text input matching Studio Kabosu
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder: "";
+    in property <length> font_size: Theme.font_caption;
+    in property <string> font_family: "";
+    in property <bool> is_disabled: false;
+    callback edited(string);
+    callback accepted();
+
+    height: Theme.btn_height_md;
+    border-radius: Theme.radius_sm;
+    background: root.is_disabled ? Theme.card_subtle_bg : (ti.has-focus ? Theme.input_bg : (ta.has-hover ? Theme.input_hover_bg : Theme.input_bg));
+    border-width: 1px;
+    border-color: root.is_disabled ? Theme.card_border : (ti.has-focus ? Theme.focus_ring : (ta.has-hover ? Theme.input_hover_border : Theme.input_border));
+    clip: true;
+
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
+
+    ta := TouchArea {
+        enabled: !root.is_disabled;
+        mouse-cursor: root.is_disabled ? MouseCursor.default : MouseCursor.text;
+        clicked => { ti.focus(); }
+    }
+
+    ti := TextInput {
+        x: 10px;
+        width: max(0px, parent.width - 20px);
+        height: 100%;
+        vertical-alignment: center;
+        enabled: !root.is_disabled;
+        text <=> root.text;
+        font-size: root.font_size;
+        font-family: root.font_family;
+        color: root.is_disabled ? Theme.text_faint : Theme.text_primary;
+        selection-background-color: Theme.accent_primary.with-alpha(0.35);
+        selection-foreground-color: Theme.text_primary;
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(); }
+    }
+
+    if root.text == "" : Text {
+        x: 10px;
+        width: max(0px, parent.width - 20px);
+        height: 100%;
+        vertical-alignment: center;
+        text: root.placeholder;
+        font-size: root.font_size;
+        font-family: root.font_family;
+        color: Theme.text_muted.with-alpha(0.75);
+        overflow: elide;
+    }
+}

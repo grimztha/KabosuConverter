@@ -7,33 +7,44 @@ export component NumInput inherits Rectangle {
     callback edited(string);
     callback accepted();
 
-    height: 28px;
-    border-radius: 5px;
-    background: Theme.control_bg;
+    height: Theme.btn_height_sm;
+    border-radius: Theme.radius_sm;
+    background: ta.has-hover && !ti.has-focus ? Theme.input_hover_bg : Theme.input_bg;
     border-width: 1px;
-    border-color: ti.has-focus ? Theme.focus_ring : Theme.border_color;
+    border-color: ti.has-focus ? Theme.focus_ring : (ta.has-hover ? Theme.input_hover_border : Theme.input_border);
+    clip: true;
+
+    animate background { duration: 120ms; easing: ease-out; }
+    animate border-color { duration: 120ms; easing: ease-out; }
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.text;
+        clicked => { ti.focus(); }
+    }
 
     ti := TextInput {
-        x: 6px;
-        width: parent.width - 12px;
+        x: 7px;
+        width: max(0px, parent.width - 14px);
         height: 100%;
         vertical-alignment: center;
         text <=> root.text;
         font-size: Theme.font_caption;
         font-family: Theme.font_mono;
         color: Theme.text_primary;
-        selection-background-color: Theme.accent_primary;
+        selection-background-color: Theme.accent_primary.with-alpha(0.35);
+        selection-foreground-color: Theme.text_primary;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(); }
     }
 
-    if root.text == "" && !ti.has-focus : Text {
-        x: 6px;
-        width: parent.width - 12px;
+    if root.text == "" : Text {
+        x: 7px;
+        width: max(0px, parent.width - 14px);
         height: 100%;
         vertical-alignment: center;
         text: root.placeholder;
         font-size: Theme.font_caption;
-        color: Theme.text_muted;
+        font-family: Theme.font_mono;
+        color: Theme.text_muted.with-alpha(0.7);
     }
 }

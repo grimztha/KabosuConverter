@@ -200,6 +200,8 @@ export component MainWindow inherits Window {
                                             }
 
                                             if AppData.ytdlp_is_downloading : VerticalLayout {
+                                                width: 6px;
+                                                horizontal-stretch: 0;
                                                 alignment: center;
                                                 Rectangle {
                                                     width: 6px;
@@ -253,6 +255,8 @@ export component MainWindow inherits Window {
                                             }
 
                                             if AppData.has_active_trim : VerticalLayout {
+                                                width: 6px;
+                                                horizontal-stretch: 0;
                                                 alignment: center;
                                                 Rectangle {
                                                     width: 6px;
@@ -307,6 +311,8 @@ export component MainWindow inherits Window {
 
                                             // Notification dot when an update is available
                                             if AppData.update_status == 3 : VerticalLayout {
+                                                width: 6px;
+                                                horizontal-stretch: 0;
                                                 alignment: center;
                                                 Rectangle {
                                                     width: 6px;

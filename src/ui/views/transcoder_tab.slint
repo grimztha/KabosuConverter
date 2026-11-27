@@ -429,12 +429,11 @@ export component TranscoderTab inherits ScrollView {
                                     alignment: end;
 
                                     VerticalLayout {
-                                        horizontal-stretch: 1;
+                                        width: 180px;
                                         alignment: center;
                                         RangeSlider {
-                                            minimum: 0.0;
+                                            width: 180px;
                                             maximum: 51.0;
-                                            step: 1.0;
                                             value <=> AppData.crf_value;
                                             released(_) => { AppLogic.save_settings(); }
                                         }
@@ -1157,7 +1156,6 @@ export component TranscoderTab inherits ScrollView {
                                         title: "Download Update";
                                         icon_source: @image-url("../icons/download.svg");
                                         has_icon: true;
-                                        icon_size: 13px;
                                         fill_color: Theme.accent_primary;
                                         hover_color: Theme.accent_primary_hover;
                                         text_color: Theme.text_on_accent;

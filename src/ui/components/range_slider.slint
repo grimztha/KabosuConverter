@@ -15,6 +15,7 @@ export component RangeSlider inherits Rectangle {
     property <float> norm: ((root.value - root.minimum) / root.span).clamp(0.0, 1.0);
     property <float> zero_norm: ((0.0 - root.minimum) / root.span).clamp(0.0, 1.0);
 
+    min-width: 80px;
     height: 24px;
 
     // Track Groove

@@ -443,19 +443,6 @@ export component MainWindow inherits Window {
                         // Flexible spacer
                         Rectangle { horizontal-stretch: 1; }
 
-                        // Bottom-Right Engine Subtitle
-                        VerticalLayout {
-                            alignment: center;
-                            padding-right: 4px;
-                            Text {
-                                text: "Rust + FFmpeg Native Media Engine";
-                                font-size: Theme.font_badge;
-                                font-weight: 500;
-                                color: Theme.text_muted;
-                                overflow: elide;
-                            }
-                        }
-
                         // Bottom-Right Corner: GPU Acceleration Status and Logs Toggle
                         HorizontalLayout {
                             spacing: 8px;

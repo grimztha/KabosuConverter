@@ -56,7 +56,7 @@ export component TimelineFadeOverlay inherits Rectangle {
     private property <bool> show_in_pill: root.can_fade && (root.fade_in_sec > 0.01 || root.in_active);
     private property <bool> show_out_pill: root.can_fade && (root.fade_out_sec > 0.01 || root.out_active);
 
-    // Fade-In Curve Line
+    // Fade-In Curve Line (static white for crisp contrast over green waveform)
     if root.show_in_curve : Path {
         x: root.in_x;
         y: root.knob_cy;
@@ -64,14 +64,14 @@ export component TimelineFadeOverlay inherits Rectangle {
         height: root.curve_h;
         viewbox-width: root.in_curve_pw;
         viewbox-height: root.curve_ph;
-        stroke: root.in_active ? Theme.accent_lime : Theme.text_primary.with-alpha(0.82);
+        stroke: Theme.text_primary;
         stroke-width: root.in_active ? 2px : 1.5px;
 
         MoveTo { x: 0; y: root.curve_ph; }
         QuadraticTo { control-x: root.in_curve_pw * 0.55; control-y: root.curve_ph * 0.90; x: root.in_curve_pw; y: 0; }
     }
 
-    // Fade-Out Curve Line
+    // Fade-Out Curve Line (static white for crisp contrast over green waveform)
     if root.show_out_curve : Path {
         x: root.out_handle_cx;
         y: root.knob_cy;
@@ -79,7 +79,7 @@ export component TimelineFadeOverlay inherits Rectangle {
         height: root.curve_h;
         viewbox-width: root.out_curve_pw;
         viewbox-height: root.curve_ph;
-        stroke: root.out_active ? Theme.accent_lime : Theme.text_primary.with-alpha(0.82);
+        stroke: Theme.text_primary;
         stroke-width: root.out_active ? 2px : 1.5px;
 
         MoveTo { x: 0; y: 0; }
@@ -160,10 +160,10 @@ export component TimelineFadeOverlay inherits Rectangle {
             width: parent.knob_d;
             height: parent.knob_d;
             border-radius: self.width / 2;
-            background: root.in_active ? Theme.accent_lime : Theme.text_primary;
+            background: Theme.text_primary;
             border-width: 1.5px;
             border-color: Theme.app_bg;
-            opacity: root.in_active || root.fade_in_sec > 0.01 ? 1.0 : 0.88;
+            opacity: root.in_active || root.fade_in_sec > 0.01 ? 1.0 : 0.9;
 
             animate width { duration: 100ms; easing: ease-out; }
             animate height { duration: 100ms; easing: ease-out; }
@@ -217,10 +217,10 @@ export component TimelineFadeOverlay inherits Rectangle {
             width: parent.knob_d;
             height: parent.knob_d;
             border-radius: self.width / 2;
-            background: root.out_active ? Theme.accent_lime : Theme.text_primary;
+            background: Theme.text_primary;
             border-width: 1.5px;
             border-color: Theme.app_bg;
-            opacity: root.out_active || root.fade_out_sec > 0.01 ? 1.0 : 0.88;
+            opacity: root.out_active || root.fade_out_sec > 0.01 ? 1.0 : 0.9;
 
             animate width { duration: 100ms; easing: ease-out; }
             animate height { duration: 100ms; easing: ease-out; }

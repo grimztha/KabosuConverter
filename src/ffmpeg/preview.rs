@@ -601,12 +601,12 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     let filter = if height >= 100 {
         format!(
-            "aformat=channel_layouts=stereo,showwavespic=s={}x{}:split_channels=1:colors=0x8fd14b|0xa799eb:filter=peak:scale=sqrt",
+            "aformat=channel_layouts=stereo,showwavespic=s={}x{}:split_channels=1:colors=0x38bdf8|0xa799eb:filter=peak:scale=sqrt",
             width, height
         )
     } else {
         format!(
-            "aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x8fd14b:filter=peak:scale=sqrt",
+            "aformat=sample_fmts=s16:channel_layouts=mono,showwavespic=s={}x{}:colors=0x38bdf8:filter=peak:scale=sqrt",
             width, height
         )
     };

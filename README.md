@@ -23,11 +23,7 @@
 
 
 <p align="center">
-  <img src="assets/previews/example_1.png" alt="Kabosu Converter Preview 2" width="50%" />
-</p>
-
-<p align="center">
-  <img src="assets/previews/example_2.png" alt="Kabosu Converter Preview 3" width="50%" />
+  <img src="assets/previews/example_1.png" alt="Kabosu Converter Preview 1" width="50%" />
 </p>
 
 ---

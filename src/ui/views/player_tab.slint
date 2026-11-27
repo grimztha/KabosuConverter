@@ -118,7 +118,7 @@ export component PlayerTab inherits VerticalLayout {
             padding-bottom: 10px;
             spacing: 8px;
 
-            // Header Row: Media Badge + Filename + Active Trim Readout + VU Meter Toggle
+            // Header Row: Media Badge + Filename
             HorizontalLayout {
                 spacing: 8px;
 
@@ -150,52 +150,6 @@ export component PlayerTab inherits VerticalLayout {
                         color: Theme.text_primary;
                         overflow: elide;
                         vertical-alignment: center;
-                    }
-                }
-
-                // Active Trim Duration Badge (always cleanly visible, never clipped)
-                if AppData.has_active_trim : Rectangle {
-                    horizontal-stretch: 0;
-                    height: Theme.btn_height_sm;
-                    border-radius: Theme.radius_sm;
-                    background: Theme.amber_surface;
-                    border-width: 1px;
-                    border-color: Theme.amber_border;
-
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 5px;
-                        alignment: center;
-
-                        VerticalLayout {
-                            alignment: center;
-                            Image {
-                                source: @image-url("../icons/scissors.svg");
-                                width: 11px;
-                                height: 11px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "Trim";
-                                font-size: Theme.font_badge;
-                                font-weight: 600;
-                                color: Theme.accent_amber;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: AppData.trim_duration_text;
-                                font-size: Theme.font_badge;
-                                font-weight: 700;
-                                font-family: Theme.font_mono;
-                                color: Theme.accent_amber;
-                            }
-                        }
                     }
                 }
             }
@@ -327,7 +281,7 @@ export component PlayerTab inherits VerticalLayout {
             VerticalLayout {
                 spacing: 8px;
 
-                // Clean Unclipped Utility Bar: Timecode (left) · Zoom, Volume & Meter (right)
+                // Utility Bar: Timecode + Trim (left) · Zoom, Volume & Meter (right)
                 HorizontalLayout {
                     spacing: 6px;
 
@@ -350,7 +304,53 @@ export component PlayerTab inherits VerticalLayout {
                         }
                     }
 
-                    Rectangle { horizontal-stretch: 1; }
+                    // Active Trim Duration Pill
+                    if AppData.has_active_trim : Rectangle {
+                        horizontal-stretch: 0;
+                        height: Theme.btn_height_sm;
+                        border-radius: Theme.radius_sm;
+                        background: Theme.amber_surface;
+                        border-width: 1px;
+                        border-color: Theme.amber_border;
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 5px;
+                            alignment: center;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/scissors.svg");
+                                    width: 11px;
+                                    height: 11px;
+                                    colorize: Theme.accent_amber;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Trim";
+                                    font-size: Theme.font_badge;
+                                    font-weight: 600;
+                                    color: Theme.accent_amber;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: AppData.trim_duration_text;
+                                    font-size: Theme.font_badge;
+                                    font-weight: 700;
+                                    font-family: Theme.font_mono;
+                                    color: Theme.accent_amber;
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { horizontal-stretch: 1; min-width: 0px; }
 
                     // 1. Compact Timeline Zoom Controls Pill
                     Rectangle {

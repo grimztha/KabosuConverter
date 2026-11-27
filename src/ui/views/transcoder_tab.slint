@@ -1,7 +1,35 @@
-import { ComboBox, ScrollView, Slider } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { AppData, AppLogic, Theme } from "../globals.slint";
 import { ActionButton } from "../components/action_button.slint";
 import { ToggleSwitch } from "../components/toggle_switch.slint";
+import { SelectBox } from "../components/select_box.slint";
+import { RangeSlider } from "../components/range_slider.slint";
+
+component SettingIconTile inherits VerticalLayout {
+    in property <image> icon_source;
+    in property <color> tint: Theme.text_secondary;
+    in property <color> tile_bg: Theme.card_secondary_bg;
+    alignment: center;
+    width: 32px;
+
+    Rectangle {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        background: root.tile_bg;
+        border-width: 1px;
+        border-color: Theme.card_border;
+
+        Image {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            source: root.icon_source;
+            width: 15px;
+            height: 15px;
+            colorize: root.tint;
+        }
+    }
+}
 
 export component TranscoderTab inherits ScrollView {
     VerticalLayout {
@@ -9,13 +37,12 @@ export component TranscoderTab inherits ScrollView {
         padding-right: 24px;
         padding-top: 18px;
         padding-bottom: 32px;
-        spacing: 18px;
+        spacing: 20px;
         alignment: start;
 
         // Page Header
         HorizontalLayout {
-            padding-left: 4px;
-            padding-bottom: 2px;
+            padding-left: 2px;
             Text {
                 text: "Settings";
                 font-size: Theme.font_title + 2px;
@@ -28,7 +55,7 @@ export component TranscoderTab inherits ScrollView {
         // SECTION 1: GENERAL
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
                 text: "General";
@@ -44,26 +71,19 @@ export component TranscoderTab inherits ScrollView {
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
 
                     // Row: Open Folder on Finish
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/folder-open.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/folder-open.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -76,7 +96,7 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Show target destination in Windows File Explorer when export completes";
+                                text: "Reveal exported files in File Explorer automatically when tasks complete";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -94,25 +114,15 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-
                     // Row: Play Sound on Finish
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/volume-2.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_purple;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/volume-2.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -125,7 +135,7 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Play an audible notification sound when batch encoding completes";
+                                text: "Play an audible chime when batch encoding completes";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -143,29 +153,20 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-
                     // Row: Default Destination Folder
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/folder.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_red;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/folder.svg"); }
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
+                            min-width: 0px;
                             spacing: 2px;
                             Text {
                                 text: "Default destination folder";
@@ -188,30 +189,36 @@ export component TranscoderTab inherits ScrollView {
                                 spacing: 8px;
 
                                 ActionButton {
-                                    width: 105px;
+                                    width: 112px;
                                     height: Theme.btn_height_md;
                                     title: "Change...";
                                     icon_source: @image-url("../icons/folder.svg");
                                     has_icon: true;
                                     icon_size: 12px;
-                                    font_size: 11px;
+                                    font_size: Theme.font_badge;
                                     fill_color: Theme.btn_neutral_bg;
                                     hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.text_primary;
+                                    text_color: Theme.btn_neutral_text;
+                                    border_col: Theme.btn_neutral_border;
+                                    hover_border_col: Theme.input_hover_border;
+                                    normal_border_width: 1px;
                                     clicked => { AppLogic.select_output_dir(); }
                                 }
 
                                 ActionButton {
-                                    width: 75px;
+                                    width: 82px;
                                     height: Theme.btn_height_md;
                                     title: "Open";
                                     icon_source: @image-url("../icons/folder-open.svg");
                                     has_icon: true;
                                     icon_size: 12px;
-                                    font_size: 11px;
+                                    font_size: Theme.font_badge;
                                     fill_color: Theme.btn_neutral_bg;
                                     hover_color: Theme.btn_neutral_hover;
                                     text_color: Theme.text_secondary;
+                                    border_col: Theme.btn_neutral_border;
+                                    hover_border_col: Theme.input_hover_border;
+                                    normal_border_width: 1px;
                                     clicked => { AppLogic.open_output_dir(); }
                                 }
                             }
@@ -225,7 +232,7 @@ export component TranscoderTab inherits ScrollView {
         // SECTION 2: VIDEO & TRANSCODING
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
                 text: "Video & Transcoding";
@@ -241,26 +248,19 @@ export component TranscoderTab inherits ScrollView {
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
 
                     // Row: Primary Video Codec
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/video.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_cyan;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/video.svg"); tint: Theme.accent_lime; tile_bg: Theme.accent_surface; }
 
                         VerticalLayout {
                             alignment: center;
@@ -281,52 +281,39 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 250px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "H.264 (AVC) — Universal Web",
-                                        "H.265 (HEVC) — High Efficiency",
-                                        "AV1 — Next-Gen Open Video",
-                                        "Apple ProRes — Editing Intermediate",
-                                        "Avid DNxHD / DNxHR — Broadcast NLE",
-                                        "VP9 — Open Web Codec",
-                                        "Rewrap / Remux (No Re-encode)",
-                                        "Lossless Cut (Instant Trim)",
-                                        "Extract Video Track Only",
-                                        "Extract Audio Track Only",
-                                        "Audio Normalization (EBU R128)",
-                                        "Audio Conversion (AAC/MP3/FLAC)",
-                                        "Extract Subtitle Stream (.srt)"
-                                    ];
-                                    current-index <=> AppData.function_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "H.264 (AVC) — Universal Web",
+                                    "H.265 (HEVC) — High Efficiency",
+                                    "AV1 — Next-Gen Open Video",
+                                    "Apple ProRes — Editing Intermediate",
+                                    "Avid DNxHD / DNxHR — Broadcast NLE",
+                                    "VP9 — Open Web Codec",
+                                    "Rewrap / Remux (No Re-encode)",
+                                    "Lossless Cut (Instant Trim)",
+                                    "Extract Video Track Only",
+                                    "Extract Audio Track Only",
+                                    "Audio Normalization (EBU R128)",
+                                    "Audio Conversion (AAC/MP3/FLAC)",
+                                    "Extract Subtitle Stream (.srt)"
+                                ];
+                                current-index <=> AppData.function_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Hardware Acceleration
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/zap.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_green;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/zap.svg"); tint: Theme.accent_green; tile_bg: Theme.emerald_surface; }
 
                         VerticalLayout {
                             alignment: center;
@@ -347,45 +334,32 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 230px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "Auto Detect (Recommended)",
-                                        "NVIDIA NVENC (CUDA)",
-                                        "Intel QuickSync (QSV)",
-                                        "AMD AMF",
-                                        "Apple VideoToolbox",
-                                        "CPU Software Only"
-                                    ];
-                                    current-index <=> AppData.hw_accel_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "Auto Detect (Recommended)",
+                                    "NVIDIA NVENC (CUDA)",
+                                    "Intel QuickSync (QSV)",
+                                    "AMD AMF",
+                                    "Apple VideoToolbox",
+                                    "CPU Software Only"
+                                ];
+                                current-index <=> AppData.hw_accel_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Rate Control Mode
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/sliders.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -406,38 +380,25 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
-                                    current-index <=> AppData.rate_control_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: ["Constant Quality (CRF)", "Target Bitrate (ABR)"];
+                                current-index <=> AppData.rate_control_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Quality Target Tuning (CRF or Bitrate)
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/sliders.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -451,7 +412,7 @@ export component TranscoderTab inherits ScrollView {
                             }
                             Text {
                                 text: AppData.rate_control_index == 0 ?
-                                    "Visual quality: 0 = lossless, 18 = high fidelity, 23 = balanced, 28 = compact" :
+                                    "0 = lossless, 18 = high fidelity, 23 = balanced, 28 = compact" :
                                     "Average stream bandwidth allocated for encoding";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
@@ -463,37 +424,45 @@ export component TranscoderTab inherits ScrollView {
                             HorizontalLayout {
                                 alignment: end;
                                 if AppData.rate_control_index == 0 : HorizontalLayout {
-                                    spacing: 12px;
+                                    width: 248px;
+                                    spacing: 10px;
                                     alignment: end;
-                                    Slider {
-                                        width: 150px;
-                                        minimum: 0;
-                                        maximum: 51;
-                                        value <=> AppData.crf_value;
-                                        released(_) => { AppLogic.save_settings(); }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        alignment: center;
+                                        RangeSlider {
+                                            minimum: 0.0;
+                                            maximum: 51.0;
+                                            step: 1.0;
+                                            value <=> AppData.crf_value;
+                                            released(_) => { AppLogic.save_settings(); }
+                                        }
                                     }
+
                                     Rectangle {
-                                        width: 54px;
-                                        height: 28px;
-                                        border-radius: 4px;
-                                        background: Theme.card_secondary_bg;
+                                        width: 58px;
+                                        height: Theme.btn_height_sm;
+                                        border-radius: Theme.radius_sm;
+                                        background: Theme.accent_surface;
                                         border-width: 1px;
-                                        border-color: Theme.card_secondary_border;
+                                        border-color: Theme.accent_border;
                                         HorizontalLayout {
                                             alignment: center;
                                             Text {
                                                 text: "CRF " + Math.round(AppData.crf_value);
                                                 font-size: Theme.font_badge;
                                                 font-weight: 700;
-                                                color: Theme.accent_cyan;
+                                                font-family: Theme.font_mono;
+                                                color: Theme.accent_lime;
                                                 vertical-alignment: center;
                                             }
                                         }
                                     }
                                 }
 
-                                if AppData.rate_control_index == 1 : ComboBox {
-                                    width: 210px;
+                                if AppData.rate_control_index == 1 : SelectBox {
+                                    width: 248px;
                                     height: Theme.btn_height_md;
                                     model: [
                                         "12000 kbps (4K/High)",
@@ -510,25 +479,15 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-
                     // Row: Encoder Preset & Speed
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/clock.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_red;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/clock.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -549,38 +508,25 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 190px;
-                                    height: Theme.btn_height_md;
-                                    model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
-                                    current-index <=> AppData.preset_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: ["ultrafast", "faster", "fast", "medium", "slow", "veryslow"];
+                                current-index <=> AppData.preset_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Resolution Scaling
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/film.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_cyan;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/film.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -601,45 +547,32 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "Original Source",
-                                        "4K UHD (3840x2160)",
-                                        "1440p QHD (2560x1440)",
-                                        "1080p Full HD (1920x1080)",
-                                        "720p HD (1280x720)",
-                                        "480p SD (854x480)"
-                                    ];
-                                    current-index <=> AppData.resolution_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "Original Source",
+                                    "4K UHD (3840x2160)",
+                                    "1440p QHD (2560x1440)",
+                                    "1080p Full HD (1920x1080)",
+                                    "720p HD (1280x720)",
+                                    "480p SD (854x480)"
+                                ];
+                                current-index <=> AppData.resolution_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Framerate Conform
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/monitor.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_purple;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/monitor.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -660,48 +593,35 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "Original Source",
-                                        "23.976 fps (Cinema)",
-                                        "24.0 fps (Film)",
-                                        "25.0 fps (PAL)",
-                                        "29.97 fps (NTSC)",
-                                        "30.0 fps (Standard)",
-                                        "50.0 fps (PAL High)",
-                                        "59.94 fps (NTSC High)",
-                                        "60.0 fps (Smooth)"
-                                    ];
-                                    current-index <=> AppData.fps_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "Original Source",
+                                    "23.976 fps (Cinema)",
+                                    "24.0 fps (Film)",
+                                    "25.0 fps (PAL)",
+                                    "29.97 fps (NTSC)",
+                                    "30.0 fps (Standard)",
+                                    "50.0 fps (PAL High)",
+                                    "59.94 fps (NTSC High)",
+                                    "60.0 fps (Smooth)"
+                                ];
+                                current-index <=> AppData.fps_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Deinterlacing Filter
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/layers.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/layers.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -722,42 +642,29 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "None (Keep Progressive)",
-                                        "YADIF (Deinterlace)",
-                                        "BBDenoise + Deinterlace"
-                                    ];
-                                    current-index <=> AppData.deinterlace_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "None (Keep Progressive)",
+                                    "YADIF (Deinterlace)",
+                                    "BBDenoise + Deinterlace"
+                                ];
+                                current-index <=> AppData.deinterlace_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Web FastStart Optimization
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/globe.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_cyan;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/globe.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -788,25 +695,15 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-
                     // Row: Output Container Format
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/film.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_green;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/film.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -827,22 +724,19 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        ".mp4 (Standard MPEG-4)",
-                                        ".mkv (Matroska Multi-Track)",
-                                        ".mov (Apple QuickTime)",
-                                        ".webm (HTML5 WebM)",
-                                        ".avi (Legacy Windows)",
-                                        ".ts (MPEG-TS Transport)"
-                                    ];
-                                    current-index <=> AppData.container_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    ".mp4 (Standard MPEG-4)",
+                                    ".mkv (Matroska Multi-Track)",
+                                    ".mov (Apple QuickTime)",
+                                    ".webm (HTML5 WebM)",
+                                    ".avi (Legacy Windows)",
+                                    ".ts (MPEG-TS Transport)"
+                                ];
+                                current-index <=> AppData.container_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
@@ -854,7 +748,7 @@ export component TranscoderTab inherits ScrollView {
         // SECTION 3: AUDIO & BROADCAST LOUDNESS
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
                 text: "Audio & Broadcast Loudness";
@@ -870,26 +764,19 @@ export component TranscoderTab inherits ScrollView {
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
 
                     // Row: Default Audio Codec
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/audio.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_purple;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/audio.svg"); tint: Theme.accent_purple; tile_bg: Theme.purple_surface; }
 
                         VerticalLayout {
                             alignment: center;
@@ -910,45 +797,32 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 230px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "AAC (Universal MP4 Standard - Recommended)",
-                                        "MP3 (Audio Files & Legacy AVI Only)",
-                                        "Opus (Low Latency / High Fidelity)",
-                                        "FLAC (Lossless Studio)",
-                                        "WAV (Linear PCM Uncompressed)",
-                                        "Passthrough Copy (Original Stream)"
-                                    ];
-                                    current-index <=> AppData.audio_codec_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "AAC (Universal MP4 Standard)",
+                                    "MP3 (Audio Files & Legacy AVI)",
+                                    "Opus (Low Latency / High Fidelity)",
+                                    "FLAC (Lossless Studio)",
+                                    "WAV (Linear PCM Uncompressed)",
+                                    "Passthrough Copy (Original Stream)"
+                                ];
+                                current-index <=> AppData.audio_codec_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Target Audio Bitrate
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/sliders.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_amber;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/sliders.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -969,44 +843,31 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "320 kbps (Maximum Fidelity)",
-                                        "256 kbps (Studio Quality)",
-                                        "192 kbps (Standard Quality)",
-                                        "128 kbps (Compact Web)",
-                                        "96 kbps (Speech Optimized)"
-                                    ];
-                                    current-index <=> AppData.audio_bitrate_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "320 kbps (Maximum Fidelity)",
+                                    "256 kbps (Studio Quality)",
+                                    "192 kbps (Standard Quality)",
+                                    "128 kbps (Compact Web)",
+                                    "96 kbps (Speech Optimized)"
+                                ];
+                                current-index <=> AppData.audio_bitrate_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Sample Rate
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/wave.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_red;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/wave.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -1027,43 +888,30 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 210px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "Keep Source Frequency",
-                                        "48.0 kHz (Cinema & Video Standard)",
-                                        "44.1 kHz (CD Audio Standard)",
-                                        "96.0 kHz (Hi-Res Audio Studio)"
-                                    ];
-                                    current-index <=> AppData.audio_sample_rate_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "Keep Source Frequency",
+                                    "48.0 kHz (Cinema & Video)",
+                                    "44.1 kHz (CD Audio Standard)",
+                                    "96.0 kHz (Hi-Res Studio)"
+                                ];
+                                current-index <=> AppData.audio_sample_rate_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
-
 
                     // Row: Broadcast Loudness Normalization
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 12px;
-                        padding-bottom: 12px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/volume-2.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent_purple;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/volume-2.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -1084,21 +932,18 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                ComboBox {
-                                    width: 240px;
-                                    height: Theme.btn_height_md;
-                                    model: [
-                                        "Disabled (Preserve Dynamic Range)",
-                                        "EBU R128 TV Broadcast (-23 LUFS)",
-                                        "YouTube & Web Video (-14 LUFS)",
-                                        "Podcasts & Speech (-16 LUFS)",
-                                        "Apple Music Standard (-16 LUFS)"
-                                    ];
-                                    current-index <=> AppData.normalize_index;
-                                    selected(_) => { AppLogic.save_settings(); }
-                                }
+                            SelectBox {
+                                width: 248px;
+                                height: Theme.btn_height_md;
+                                model: [
+                                    "Disabled (Preserve Dynamic Range)",
+                                    "EBU R128 TV Broadcast (-23 LUFS)",
+                                    "YouTube & Web Video (-14 LUFS)",
+                                    "Podcasts & Speech (-16 LUFS)",
+                                    "Apple Music Standard (-16 LUFS)"
+                                ];
+                                current-index <=> AppData.normalize_index;
+                                selected(_) => { AppLogic.save_settings(); }
                             }
                         }
                     }
@@ -1107,13 +952,13 @@ export component TranscoderTab inherits ScrollView {
         }
 
         // ==========================================
-        // SECTION 4: ABOUT
+        // SECTION 4: ABOUT & ENGINE RUNTIME
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
-                text: "About";
+                text: "About & Runtime";
                 font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
@@ -1126,40 +971,52 @@ export component TranscoderTab inherits ScrollView {
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    spacing: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
 
                     // Row: About Kabosu Converter
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 9px;
-                        padding-bottom: 9px;
+                        padding-top: 11px;
+                        padding-bottom: 11px;
                         spacing: 14px;
 
                         VerticalLayout {
                             alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/brand-logo.png");
-                                width: 20px;
-                                height: 20px;
+                            width: 32px;
+                            Rectangle {
+                                width: 30px;
+                                height: 30px;
+                                border-radius: 7px;
+                                background: Theme.card_secondary_bg;
+                                border-width: 1px;
+                                border-color: Theme.card_border;
+                                Image {
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                    source: @image-url("../icons/brand-logo.png");
+                                    width: 20px;
+                                    height: 20px;
+                                }
                             }
                         }
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
-                            spacing: 1px;
+                            spacing: 2px;
                             Text {
-                                text: "About Kabosu Converter";
+                                text: "Kabosu Converter";
                                 font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
                                 text: AppData.update_status == 3 ?
-                                    ("New version " + AppData.update_latest_version + " available! See notification below.") :
-                                    "A high-performance media transcoder and universal video downloader by SThao";
+                                    ("New version " + AppData.update_latest_version + " available. See update action below.") :
+                                    "High-performance media transcoder and universal video downloader";
                                 font-size: Theme.font_badge;
                                 color: AppData.update_status == 3 ? Theme.accent_green : Theme.text_muted;
                             }
@@ -1169,63 +1026,35 @@ export component TranscoderTab inherits ScrollView {
                             alignment: center;
                             HorizontalLayout {
                                 alignment: end;
-                                spacing: 6px;
+                                spacing: 8px;
 
-                                // Current Application Version Display
                                 Text {
-                                    text: "Version " + AppData.app_version;
+                                    text: "v" + AppData.app_version;
                                     font-size: Theme.font_badge;
-                                    font-weight: 500;
-                                    color: Theme.text_muted;
+                                    font-family: Theme.font_mono;
+                                    font-weight: 600;
+                                    color: Theme.text_secondary;
                                     vertical-alignment: center;
                                 }
 
-                                if AppData.update_status == 3 : Rectangle {
-                                    border-radius: 4px;
-                                    background: Theme.accent_green.with-alpha(0.18);
-                                    HorizontalLayout {
-                                        padding-left: 6px;
-                                        padding-right: 6px;
-                                        padding-top: 2px;
-                                        padding-bottom: 2px;
-                                        Text {
-                                            text: "New: " + AppData.update_latest_version;
-                                            font-size: Theme.font_badge;
-                                            font-weight: 700;
-                                            color: Theme.accent_green;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-
-                                Text {
-                                    text: "•";
-                                    font-size: Theme.font_badge;
-                                    font-weight: 500;
-                                    color: Theme.text_muted;
-                                    vertical-alignment: center;
-                                }
-
-                                // Interactive Clickable Update Status / Download Button Pill
+                                // Interactive Update Check / Status Pill
                                 Rectangle {
-                                    border-radius: 4px;
+                                    height: 24px;
+                                    border-radius: Theme.radius_sm;
                                     background: update_ta.has-hover ?
-                                        (AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.2) : Theme.card_secondary_bg) :
-                                        (AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.12) : #00000000);
-                                    border-width: AppData.update_status == 3 ? 1px : 0px;
-                                    border-color: AppData.update_status == 3 ? Theme.accent_green.with-alpha(0.4) : #00000000;
+                                        (AppData.update_status == 3 ? Theme.emerald_surface_hover : Theme.control_hover) :
+                                        (AppData.update_status == 3 ? Theme.emerald_surface : Theme.control_bg);
+                                    border-width: 1px;
+                                    border-color: AppData.update_status == 3 ? Theme.emerald_border : Theme.control_border;
 
                                     animate background { duration: 120ms; }
 
                                     HorizontalLayout {
-                                        padding-left: AppData.update_status == 3 ? 8px : 4px;
-                                        padding-right: AppData.update_status == 3 ? 8px : 4px;
-                                        padding-top: 3px;
-                                        padding-bottom: 3px;
+                                        padding-left: 8px;
+                                        padding-right: 8px;
                                         spacing: 5px;
                                         alignment: center;
 
-                                        // Subtle status indicator dot or icon
                                         if AppData.update_status == 1 : VerticalLayout {
                                             alignment: center;
                                             Rectangle {
@@ -1257,12 +1086,12 @@ export component TranscoderTab inherits ScrollView {
                                         Text {
                                             text: AppData.update_status_text;
                                             font-size: Theme.font_badge;
-                                            font-weight: (AppData.update_status == 3 || update_ta.has-hover) ? 600 : 500;
+                                            font-weight: 600;
                                             color: AppData.update_status == 3 ? Theme.accent_green :
                                                    (AppData.update_status == 1 ? Theme.accent_amber :
                                                    (AppData.update_status == 5 ? Theme.accent_green :
-                                                   (AppData.update_status == 6 ? Theme.accent_red :
-                                                   (update_ta.has-hover ? Theme.text_primary : Theme.text_muted))));
+                                                   (AppData.update_status == 6 ? Theme.accent_red_text :
+                                                   (update_ta.has-hover ? Theme.text_primary : Theme.text_secondary))));
                                             vertical-alignment: center;
                                         }
                                     }
@@ -1284,234 +1113,114 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
-                    // Update Notification Banner (Status 3: Update Available)
-                    if AppData.update_status == 3 : Rectangle {
-                        border-radius: 6px;
-                        background: Theme.accent_green.with-alpha(0.08);
-                        border-width: 1px;
-                        border-color: Theme.accent_green.with-alpha(0.3);
+                    // Update Available Banner (Status 3)
+                    if AppData.update_status == 3 : HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 4px;
+                        padding-bottom: 6px;
 
-                        HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 16px;
-                            padding-top: 10px;
-                            padding-bottom: 10px;
-                            spacing: 12px;
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            border-radius: Theme.radius_md;
+                            background: Theme.emerald_surface;
+                            border-width: 1px;
+                            border-color: Theme.emerald_border;
 
-                            VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 30px;
-                                    height: 30px;
-                                    border-radius: 6px;
-                                    background: Theme.accent_green.with-alpha(0.18);
-                                    Image {
-                                        source: @image-url("../icons/download.svg");
-                                        width: 16px;
-                                        height: 16px;
-                                        colorize: Theme.accent_green;
-                                        x: (parent.width - self.width) / 2;
-                                        y: (parent.height - self.height) / 2;
-                                    }
-                                }
-                            }
+                            HorizontalLayout {
+                                padding: 12px;
+                                spacing: 12px;
 
-                            VerticalLayout {
-                                alignment: center;
-                                horizontal-stretch: 1;
-                                spacing: 2px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    spacing: 2px;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
                                     Text {
-                                        text: "New Version Update Available!";
+                                        text: "Update Available: " + AppData.update_latest_version;
                                         font-size: Theme.font_body;
                                         font-weight: 700;
                                         color: Theme.accent_green;
                                     }
-                                    Rectangle {
-                                        border-radius: 3px;
-                                        background: Theme.accent_green.with-alpha(0.2);
-                                        HorizontalLayout {
-                                            padding-left: 6px;
-                                            padding-right: 6px;
-                                            padding-top: 1px;
-                                            padding-bottom: 1px;
-                                            Text {
-                                                text: AppData.update_latest_version;
-                                                font-size: Theme.font_badge;
-                                                font-weight: 700;
-                                                color: Theme.accent_green;
-                                            }
-                                        }
+                                    Text {
+                                        text: "A new release of Kabosu Converter is ready to download (installed: v" + AppData.app_version + ").";
+                                        font-size: Theme.font_badge;
+                                        color: Theme.text_secondary;
                                     }
                                 }
 
-                                Text {
-                                    text: "A new release (" + AppData.update_latest_version + ") of Kabosu Converter is available. Installed version: v" + AppData.app_version + ".";
-                                    font-size: Theme.font_badge;
-                                    color: Theme.text_secondary;
-                                }
-                            }
-
-                            VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    border-radius: 6px;
-                                    background: btn_update_ta.has-hover ? Theme.accent_green : Theme.accent_green.with-alpha(0.85);
-
-                                    HorizontalLayout {
-                                        padding-left: 14px;
-                                        padding-right: 14px;
-                                        padding-top: 7px;
-                                        padding-bottom: 7px;
-                                        spacing: 6px;
-
-                                        Image {
-                                            source: @image-url("../icons/download.svg");
-                                            width: 13px;
-                                            height: 13px;
-                                            colorize: #ffffff;
-                                        }
-
-                                        Text {
-                                            text: "Download Update";
-                                            font-size: Theme.font_body;
-                                            font-weight: 600;
-                                            color: #ffffff;
-                                        }
-                                    }
-
-                                    btn_update_ta := TouchArea {
-                                        mouse-cursor: pointer;
-                                        clicked => {
-                                            AppLogic.download_update();
-                                        }
+                                VerticalLayout {
+                                    alignment: center;
+                                    ActionButton {
+                                        width: 148px;
+                                        height: Theme.btn_height_md;
+                                        title: "Download Update";
+                                        icon_source: @image-url("../icons/download.svg");
+                                        has_icon: true;
+                                        icon_size: 13px;
+                                        fill_color: Theme.accent_primary;
+                                        hover_color: Theme.accent_primary_hover;
+                                        text_color: Theme.text_on_accent;
+                                        font_size: Theme.font_caption;
+                                        clicked => { AppLogic.download_update(); }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Update Downloading Banner (Status 4: Downloading)
-                    if AppData.update_status == 4 : Rectangle {
-                        border-radius: 6px;
-                        background: Theme.accent_amber.with-alpha(0.08);
-                        border-width: 1px;
-                        border-color: Theme.accent_amber.with-alpha(0.3);
+                    // Update Downloading Banner (Status 4)
+                    if AppData.update_status == 4 : HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 4px;
+                        padding-bottom: 6px;
 
-                        HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 16px;
-                            padding-top: 10px;
-                            padding-bottom: 10px;
-                            spacing: 12px;
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            border-radius: Theme.radius_md;
+                            background: Theme.amber_surface;
+                            border-width: 1px;
+                            border-color: Theme.amber_border;
 
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/download.svg");
-                                    width: 16px;
-                                    height: 16px;
-                                    colorize: Theme.accent_amber;
-                                }
-                            }
+                            HorizontalLayout {
+                                padding: 12px;
+                                spacing: 12px;
 
-                            VerticalLayout {
-                                alignment: center;
-                                horizontal-stretch: 1;
-                                spacing: 4px;
-
-                                Text {
-                                    text: "Downloading New Version: " + AppData.update_status_text;
-                                    font-size: Theme.font_body;
-                                    font-weight: 600;
-                                    color: Theme.accent_amber;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("../icons/download.svg");
+                                        width: 16px;
+                                        height: 16px;
+                                        colorize: Theme.accent_amber;
+                                    }
                                 }
 
-                                Rectangle {
-                                    height: 4px;
-                                    border-radius: 2px;
-                                    background: Theme.control_bg;
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "Downloading Update: " + AppData.update_status_text;
+                                        font-size: Theme.font_caption;
+                                        font-weight: 600;
+                                        color: Theme.accent_amber;
+                                    }
 
                                     Rectangle {
-                                        x: 0px;
-                                        width: parent.width * AppData.update_download_progress;
-                                        height: 100%;
-                                        border-radius: 2px;
-                                        background: Theme.accent_amber;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                                        height: 5px;
+                                        border-radius: 2.5px;
+                                        background: Theme.slider_track;
+                                        clip: true;
 
-                    // Update Ready Banner (Status 5: Downloaded)
-                    if AppData.update_status == 5 : Rectangle {
-                        border-radius: 6px;
-                        background: Theme.accent_green.with-alpha(0.08);
-                        border-width: 1px;
-                        border-color: Theme.accent_green.with-alpha(0.3);
-
-                        HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 16px;
-                            padding-top: 10px;
-                            padding-bottom: 10px;
-                            spacing: 12px;
-
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/zap.svg");
-                                    width: 16px;
-                                    height: 16px;
-                                    colorize: Theme.accent_green;
-                                }
-                            }
-
-                            VerticalLayout {
-                                alignment: center;
-                                horizontal-stretch: 1;
-                                spacing: 2px;
-
-                                Text {
-                                    text: "Update Ready to Install!";
-                                    font-size: Theme.font_body;
-                                    font-weight: 700;
-                                    color: Theme.accent_green;
-                                }
-                                Text {
-                                    text: "New release package downloaded. Click 'Open Update' to install.";
-                                    font-size: Theme.font_badge;
-                                    color: Theme.text_secondary;
-                                }
-                            }
-
-                            VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    border-radius: 6px;
-                                    background: btn_open_ta.has-hover ? Theme.accent_green : Theme.accent_green.with-alpha(0.85);
-
-                                    HorizontalLayout {
-                                        padding-left: 14px;
-                                        padding-right: 14px;
-                                        padding-top: 7px;
-                                        padding-bottom: 7px;
-
-                                        Text {
-                                            text: "Open Update";
-                                            font-size: Theme.font_body;
-                                            font-weight: 600;
-                                            color: #ffffff;
-                                        }
-                                    }
-
-                                    btn_open_ta := TouchArea {
-                                        mouse-cursor: pointer;
-                                        clicked => {
-                                            AppLogic.open_downloaded_update();
+                                        Rectangle {
+                                            x: 0px;
+                                            width: parent.width * AppData.update_download_progress.clamp(0.0, 1.0);
+                                            height: 100%;
+                                            border-radius: 2.5px;
+                                            background: Theme.accent_amber;
                                         }
                                     }
                                 }
@@ -1519,25 +1228,68 @@ export component TranscoderTab inherits ScrollView {
                         }
                     }
 
+                    // Update Ready Banner (Status 5)
+                    if AppData.update_status == 5 : HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 4px;
+                        padding-bottom: 6px;
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            border-radius: Theme.radius_md;
+                            background: Theme.emerald_surface;
+                            border-width: 1px;
+                            border-color: Theme.emerald_border;
+
+                            HorizontalLayout {
+                                padding: 12px;
+                                spacing: 12px;
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    spacing: 2px;
+
+                                    Text {
+                                        text: "Update Ready to Install";
+                                        font-size: Theme.font_body;
+                                        font-weight: 700;
+                                        color: Theme.accent_green;
+                                    }
+                                    Text {
+                                        text: "Release package downloaded. Open it to complete installation.";
+                                        font-size: Theme.font_badge;
+                                        color: Theme.text_secondary;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    ActionButton {
+                                        width: 126px;
+                                        height: Theme.btn_height_md;
+                                        title: "Open Update";
+                                        fill_color: Theme.accent_primary;
+                                        hover_color: Theme.accent_primary_hover;
+                                        text_color: Theme.text_on_accent;
+                                        font_size: Theme.font_caption;
+                                        clicked => { AppLogic.open_downloaded_update(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Row: FFmpeg Core Engine
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 9px;
-                        padding-bottom: 9px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/zap.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: Theme.accent_green;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/zap.svg"); }
 
                         VerticalLayout {
                             alignment: center;
@@ -1550,7 +1302,7 @@ export component TranscoderTab inherits ScrollView {
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Core transcode engine with NVENC, QSV, AMF, ProRes, AV1, and multi-track audio muxing";
+                                text: "NVENC, QSV, AMF, ProRes, AV1, and multi-track audio pipeline";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -1558,50 +1310,38 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                Text {
-                                    text: AppData.ffmpeg_version_badge;
-                                    font-size: Theme.font_badge;
-                                    font-weight: 500;
-                                    color: Theme.text_secondary;
-                                }
+                            Text {
+                                text: AppData.ffmpeg_version_badge;
+                                font-size: Theme.font_badge;
+                                font-family: Theme.font_mono;
+                                font-weight: 500;
+                                color: Theme.text_secondary;
                             }
                         }
                     }
-
 
                     // Row: yt-dlp Stream Extractor
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 9px;
-                        padding-bottom: 9px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/download.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: Theme.accent_red;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/download.svg"); }
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
                             spacing: 1px;
                             Text {
-                                text: "yt-dlp Downloader Engine";
+                                text: "yt-dlp Stream Extractor";
                                 font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Ingests media and livestreams from over 1,000 video, audio, and playlist platforms";
+                                text: "Media and livestream ingestion across 1,000+ platforms";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -1609,50 +1349,38 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                Text {
-                                    text: AppData.ytdlp_version_badge;
-                                    font-size: Theme.font_badge;
-                                    font-weight: 500;
-                                    color: Theme.text_secondary;
-                                }
+                            Text {
+                                text: AppData.ytdlp_version_badge;
+                                font-size: Theme.font_badge;
+                                font-family: Theme.font_mono;
+                                font-weight: 500;
+                                color: Theme.text_secondary;
                             }
                         }
                     }
-
 
                     // Row: Slint UI & Rust Core Runtime
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 16px;
-                        padding-top: 9px;
-                        padding-bottom: 9px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
                         spacing: 14px;
 
-                        VerticalLayout {
-                            alignment: center;
-                            width: 24px;
-                            Image {
-                                source: @image-url("../icons/layers.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: Theme.accent_orange;
-                            }
-                        }
+                        SettingIconTile { icon_source: @image-url("../icons/layers.svg"); }
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
                             spacing: 1px;
                             Text {
-                                text: "Core Framework & Runtime";
+                                text: "Native Application Runtime";
                                 font-size: Theme.font_body;
                                 font-weight: 600;
                                 color: Theme.text_primary;
                             }
                             Text {
-                                text: "Slint UI 1.18 Native GUI Toolkit • Rust 2021 Edition • tokio, rodio, image, symphonia";
+                                text: "Slint 1.18 Native GUI Toolkit · Rust 2021 · Tokio Async Runtime";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                             }
@@ -1660,14 +1388,12 @@ export component TranscoderTab inherits ScrollView {
 
                         VerticalLayout {
                             alignment: center;
-                            HorizontalLayout {
-                                alignment: end;
-                                Text {
-                                    text: "Slint 1.18 • Rust 2021";
-                                    font-size: Theme.font_badge;
-                                    font-weight: 500;
-                                    color: Theme.text_secondary;
-                                }
+                            Text {
+                                text: "Slint 1.18 · Rust 2021";
+                                font-size: Theme.font_badge;
+                                font-family: Theme.font_mono;
+                                font-weight: 500;
+                                color: Theme.text_secondary;
                             }
                         }
                     }

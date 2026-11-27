@@ -25,7 +25,6 @@ export component QueuePanel inherits Rectangle {
                 btn_height: 26px;
                 icon_source: @image-url("../icons/chevron-right.svg");
                 has_icon: true;
-                icon_size: 13px;
                 text_color: Theme.text_muted;
                 hover_bg: Theme.control_hover;
                 clicked => { AppLogic.toggle_queue_panel(); }
@@ -38,15 +37,16 @@ export component QueuePanel inherits Rectangle {
                 width: 24px;
                 height: 24px;
                 border-radius: 12px;
-                background: Theme.card_secondary_bg;
+                background: AppData.queue.length > 0 ? Theme.accent_surface : Theme.card_secondary_bg;
                 border-width: 1px;
-                border-color: Theme.card_secondary_border;
+                border-color: AppData.queue.length > 0 ? Theme.accent_border : Theme.card_secondary_border;
 
                 Text {
                     text: "\{AppData.queue.length}";
                     font-size: Theme.font_badge;
                     font-weight: 700;
-                    color: AppData.queue.length > 0 ? Theme.accent_cyan : Theme.text_muted;
+                    font-family: Theme.font_mono;
+                    color: AppData.queue.length > 0 ? Theme.accent_lime : Theme.text_muted;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -56,13 +56,12 @@ export component QueuePanel inherits Rectangle {
 
     // EXPANDED STATE
     if AppData.queue_panel_expanded : VerticalLayout {
-        padding: 10px;
+        padding: 12px;
         spacing: 10px;
 
         // Section Title & Collapse Control
         HorizontalLayout {
             padding-left: 2px;
-            padding-right: 0px;
             spacing: 8px;
 
             VerticalLayout {
@@ -78,9 +77,11 @@ export component QueuePanel inherits Rectangle {
             VerticalLayout {
                 alignment: center;
                 Badge {
-                    label: "\{AppData.queue.length} file(s)";
+                    label: AppData.queue.length == 1 ? "1 file" : "\{AppData.queue.length} files";
                     bg_color: Theme.card_secondary_bg;
                     fg_color: Theme.text_muted;
+                    border_col: Theme.card_border;
+                    height: 20px;
                 }
             }
 
@@ -104,7 +105,7 @@ export component QueuePanel inherits Rectangle {
         // Queue Container Box (Concentric: Outer 14px = Inner 6px + Padding 8px)
         Rectangle {
             vertical-stretch: 1;
-            border-radius: 14px;
+            border-radius: Theme.radius_lg;
             background: Theme.card_bg;
             border-width: 1px;
             border-color: Theme.card_border;
@@ -120,24 +121,51 @@ export component QueuePanel inherits Rectangle {
                 padding: 8px;
                 spacing: 8px;
 
-                // Empty State if no files
+                // Empty State
                 if AppData.queue.length == 0 : VerticalLayout {
                     vertical-stretch: 1;
                     alignment: center;
-                    spacing: 8px;
-                    Text {
-                        text: "No files in queue";
-                        font-size: Theme.font_body;
-                        font-weight: 600;
-                        color: Theme.text_secondary;
-                        horizontal-alignment: center;
+                    spacing: 10px;
+                    padding-left: 14px;
+                    padding-right: 14px;
+
+                    HorizontalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 42px;
+                            height: 42px;
+                            border-radius: 21px;
+                            background: Theme.card_secondary_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_secondary_border;
+
+                            Image {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                source: @image-url("../icons/folder-open.svg");
+                                width: 18px;
+                                height: 18px;
+                                colorize: Theme.text_muted;
+                            }
+                        }
                     }
-                    Text {
-                        text: "Drag & drop media files here, or click '+ Add Files'";
-                        font-size: Theme.font_caption;
-                        color: Theme.text_muted;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
+
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: "Queue is empty";
+                            font-size: Theme.font_body;
+                            font-weight: 600;
+                            color: Theme.text_primary;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "Drop video or audio files here, or use Add Files below.";
+                            font-size: Theme.font_caption;
+                            color: Theme.text_muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
                     }
                 }
 
@@ -145,14 +173,15 @@ export component QueuePanel inherits Rectangle {
                 if AppData.queue.length > 0 : ScrollView {
                     vertical-stretch: 1;
                     VerticalLayout {
-                        spacing: 4px;
+                        spacing: 5px;
+                        alignment: start;
 
                         for file[idx] in AppData.queue : Rectangle {
-                            height: 40px;
-                            border-radius: 6px;
-                            background: AppData.selected_file_index == idx ? Theme.card_secondary_bg : (card_ta.has-hover ? Theme.control_hover : Theme.card_subtle_bg);
+                            height: 44px;
+                            border-radius: Theme.radius_sm;
+                            background: AppData.selected_file_index == idx ? Theme.accent_surface : (card_ta.has-hover ? Theme.card_secondary_bg : Theme.card_subtle_bg);
                             border-width: 1px;
-                            border-color: AppData.selected_file_index == idx ? Theme.accent_cyan : (card_ta.has-hover ? Theme.control_border : Theme.card_subtle_border);
+                            border-color: AppData.selected_file_index == idx ? Theme.accent_border : (card_ta.has-hover ? Theme.card_secondary_border : Theme.card_subtle_border);
                             clip: true;
 
                             animate background { duration: 120ms; easing: ease-out; }
@@ -167,47 +196,61 @@ export component QueuePanel inherits Rectangle {
                                 }
                             }
 
-                            // Selection Accent Bar on left edge
-                            Rectangle {
-                                x: 0px;
-                                y: 0px;
-                                width: 3px;
-                                height: 100%;
-                                background: AppData.selected_file_index == idx ? Theme.accent_cyan : Theme.border_color;
-                            }
-
                             // Bottom inline encoding progress bar
                             if file.progress > 0.0 && file.progress < 1.0 : Rectangle {
-                                x: 3px;
+                                x: 0px;
                                 y: parent.height - 2px;
-                                width: max(4px, (parent.width - 3px) * file.progress);
+                                width: max(4px, parent.width * file.progress);
                                 height: 2px;
-                                background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_cyan 50%, Theme.accent_emerald 100%);
+                                background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
                             }
 
                             HorizontalLayout {
-                                padding-left: 10px;
+                                padding-left: 8px;
                                 padding-right: 6px;
-                                padding-top: 3px;
-                                padding-bottom: 3px;
-                                spacing: 6px;
+                                padding-top: 4px;
+                                padding-bottom: 4px;
+                                spacing: 8px;
+
+                                // Media Type Leading Icon Tile
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 26px;
+                                        height: 26px;
+                                        border-radius: 5px;
+                                        background: file.is_video
+                                            ? (AppData.selected_file_index == idx ? Theme.accent_primary.with-alpha(0.18) : Theme.card_secondary_bg)
+                                            : (AppData.selected_file_index == idx ? Theme.purple_surface : Theme.card_secondary_bg);
+
+                                        Image {
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                            source: file.is_video ? @image-url("../icons/video.svg") : @image-url("../icons/audio.svg");
+                                            width: 13px;
+                                            height: 13px;
+                                            colorize: file.is_video
+                                                ? (AppData.selected_file_index == idx ? Theme.accent_lime : Theme.text_muted)
+                                                : Theme.accent_purple;
+                                        }
+                                    }
+                                }
 
                                 VerticalLayout {
                                     horizontal-stretch: 1;
+                                    min-width: 0px;
                                     spacing: 1px;
                                     alignment: center;
 
-                                    // Row 1: File Name
                                     Text {
                                         text: file.file_name;
                                         font-size: Theme.font_caption;
                                         font-weight: 600;
-                                        color: AppData.selected_file_index == idx ? Theme.accent_cyan : Theme.text_primary;
+                                        color: AppData.selected_file_index == idx ? Theme.accent_lime : Theme.text_primary;
                                         horizontal-alignment: left;
                                         overflow: elide;
                                     }
 
-                                    // Row 2: File Path (Elevated from 9.5px to 11px)
                                     Text {
                                         text: file.file_path;
                                         font-size: Theme.font_badge;
@@ -224,9 +267,10 @@ export component QueuePanel inherits Rectangle {
                                         icon_source: @image-url("../icons/x.svg");
                                         has_icon: true;
                                         icon_size: 10px;
-                                        btn_width: 20px;
-                                        btn_height: 20px;
-                                        hover_bg: Theme.accent_red.with-alpha(0.2);
+                                        btn_width: 22px;
+                                        btn_height: 22px;
+                                        text_color: Theme.text_muted;
+                                        hover_bg: Theme.red_surface;
                                         is_disabled: AppData.is_processing;
                                         clicked => {
                                             AppLogic.remove_file(idx);
@@ -239,7 +283,7 @@ export component QueuePanel inherits Rectangle {
                     }
                 }
 
-                // Bottom Queue Actions: Add Files & Clear Queue (Two-Click Safe)
+                // Bottom Queue Actions: Add Files (Tinted Secondary) & Clear Queue (Two-Click Safe)
                 HorizontalLayout {
                     spacing: 6px;
                     height: Theme.btn_height_md;
@@ -252,8 +296,12 @@ export component QueuePanel inherits Rectangle {
                         icon_source: @image-url("../icons/plus.svg");
                         has_icon: true;
                         icon_size: 12px;
-                        fill_color: Theme.accent_primary;
-                        hover_color: Theme.accent_primary_hover;
+                        fill_color: Theme.accent_surface;
+                        hover_color: Theme.accent_surface_hover;
+                        text_color: Theme.accent_lime;
+                        border_col: Theme.accent_border;
+                        hover_border_col: Theme.accent_primary;
+                        normal_border_width: 1px;
                         font_size: Theme.font_caption;
                         clicked => {
                             root.confirm_clear = false;
@@ -266,13 +314,16 @@ export component QueuePanel inherits Rectangle {
                         min-width: 0px;
                         horizontal-stretch: 11;
                         height: Theme.btn_height_md;
-                        title: root.confirm_clear ? "Confirm Clear?" : "Clear Queue";
+                        title: root.confirm_clear ? "Confirm?" : "Clear Queue";
                         icon_source: @image-url("../icons/trash.svg");
                         has_icon: true;
                         icon_size: 12px;
-                        fill_color: root.confirm_clear ? Theme.accent_red : Theme.btn_neutral_bg;
+                        fill_color: root.confirm_clear ? Theme.accent_red_solid : Theme.btn_neutral_bg;
                         hover_color: root.confirm_clear ? Theme.accent_red_hover : Theme.btn_neutral_hover;
                         text_color: root.confirm_clear ? #ffffff : Theme.btn_neutral_text;
+                        border_col: root.confirm_clear ? Theme.accent_red : Theme.btn_neutral_border;
+                        hover_border_col: root.confirm_clear ? Theme.accent_red_hover : Theme.input_hover_border;
+                        normal_border_width: 1px;
                         font_size: Theme.font_badge;
                         is_disabled: AppData.queue.length == 0 || AppData.is_processing;
                         clicked => {
@@ -289,46 +340,47 @@ export component QueuePanel inherits Rectangle {
             }
         }
 
-        // SELECTED ITEM METADATA BOX
+        // SELECTED ITEM METADATA CARD
         if AppData.selected_file_index >= 0 && AppData.selected_file_index < AppData.queue.length : Rectangle {
-            height: 112px;
-            border-radius: 10px;
+            height: 116px;
+            border-radius: Theme.radius_md;
             background: Theme.card_bg;
             border-width: 1px;
-            border-color: Theme.accent_cyan.with-alpha(0.35);
+            border-color: Theme.card_border;
 
             TouchArea {
                 clicked => { root.request_focus(); }
             }
 
             VerticalLayout {
-                padding-left: 10px;
-                padding-right: 10px;
-                padding-top: 8px;
-                padding-bottom: 8px;
-                spacing: 6px;
+                padding-left: 12px;
+                padding-right: 12px;
+                padding-top: 9px;
+                padding-bottom: 9px;
+                spacing: 8px;
                 alignment: start;
 
-                // Header Row: Media Type Badge + Section Title + Status
+                // Header Row: Media Type Pill + Label + Status
                 HorizontalLayout {
-                    height: 18px;
+                    height: 20px;
                     spacing: 6px;
 
                     VerticalLayout {
                         alignment: center;
                         Badge {
                             label: AppData.queue[AppData.selected_file_index].is_video ? "Video" : "Audio";
-                            bg_color: AppData.queue[AppData.selected_file_index].is_video ? Theme.accent_primary : Theme.accent_purple.darker(0.3);
-                            fg_color: #ffffff;
-                            height: 16px;
+                            bg_color: AppData.queue[AppData.selected_file_index].is_video ? Theme.accent_surface : Theme.purple_surface;
+                            fg_color: AppData.queue[AppData.selected_file_index].is_video ? Theme.accent_lime : Theme.accent_purple;
+                            border_col: AppData.queue[AppData.selected_file_index].is_video ? Theme.accent_border : Theme.purple_border;
+                            height: 18px;
                         }
                     }
 
                     Text {
-                        text: "Selected Item Metadata";
+                        text: "Media Specs";
                         font-size: Theme.font_badge;
-                        font-weight: 700;
-                        color: Theme.text_primary;
+                        font-weight: 600;
+                        color: Theme.text_secondary;
                         vertical-alignment: center;
                     }
 
@@ -338,17 +390,19 @@ export component QueuePanel inherits Rectangle {
                         text: AppData.queue[AppData.selected_file_index].status;
                         font-size: Theme.font_badge;
                         font-weight: 700;
-                        color: AppData.queue[AppData.selected_file_index].status == "Completed" ? Theme.accent_green : (AppData.queue[AppData.selected_file_index].status == "Probing..." ? Theme.accent_purple : (AppData.queue[AppData.selected_file_index].status == "Ready" ? Theme.accent_cyan : (AppData.queue[AppData.selected_file_index].progress > 0.0 && AppData.queue[AppData.selected_file_index].progress < 1.0 ? Theme.accent_amber : Theme.accent_red)));
+                        color: AppData.queue[AppData.selected_file_index].status == "Completed" ? Theme.accent_green
+                            : (AppData.queue[AppData.selected_file_index].status == "Probing..." ? Theme.accent_purple
+                            : (AppData.queue[AppData.selected_file_index].status == "Ready" ? Theme.accent_lime
+                            : (AppData.queue[AppData.selected_file_index].progress > 0.0 && AppData.queue[AppData.selected_file_index].progress < 1.0 ? Theme.accent_amber
+                            : Theme.accent_red_text)));
                         vertical-alignment: center;
                         overflow: elide;
                     }
                 }
 
-                Rectangle { height: 1px; background: Theme.card_border; }
-
                 // Row 1: Resolution, Duration, File Size
                 HorizontalLayout {
-                    height: 30px;
+                    height: 32px;
                     spacing: 8px;
 
                     VerticalLayout {
@@ -365,7 +419,7 @@ export component QueuePanel inherits Rectangle {
                             font-size: Theme.font_caption;
                             font-weight: 600;
                             font-family: Theme.font_mono;
-                            color: Theme.accent_cyan;
+                            color: Theme.text_primary;
                             overflow: elide;
                         }
                     }
@@ -394,7 +448,7 @@ export component QueuePanel inherits Rectangle {
                         spacing: 2px;
                         alignment: center;
                         Text {
-                            text: "File Size";
+                            text: "Size";
                             font-size: Theme.font_badge;
                             color: Theme.text_muted;
                         }
@@ -415,7 +469,7 @@ export component QueuePanel inherits Rectangle {
                     spacing: 2px;
                     alignment: center;
                     Text {
-                        text: "Codecs";
+                        text: "Streams";
                         font-size: Theme.font_badge;
                         color: Theme.text_muted;
                     }
@@ -424,45 +478,40 @@ export component QueuePanel inherits Rectangle {
                         font-size: Theme.font_caption;
                         font-weight: 600;
                         font-family: Theme.font_mono;
-                        color: Theme.accent_purple;
+                        color: Theme.text_secondary;
                         overflow: elide;
                     }
                 }
             }
         }
 
-        // RUN TASK Button
-        HorizontalLayout {
-            alignment: center;
+        // PRIMARY HERO CTA: RUN TASK (Full-width inset for balanced commercial hierarchy)
+        if !AppData.is_processing : ActionButton {
             height: Theme.btn_height_lg;
+            title: "Run Task";
+            icon_source: @image-url("../icons/play.svg");
+            has_icon: true;
+            fill_color: Theme.accent_primary;
+            hover_color: Theme.accent_primary_hover;
+            pressed_color: Theme.accent_primary_pressed;
+            text_color: Theme.text_on_accent;
+            is_disabled: AppData.queue.length == 0;
+            font_size: Theme.font_body;
+            btn_radius: Theme.radius_md;
+            clicked => { AppLogic.run_task(); }
+        }
 
-            if !AppData.is_processing : ActionButton {
-                width: 170px;
-                height: Theme.btn_height_lg;
-                title: "Run Task";
-                icon_source: @image-url("../icons/play.svg");
-                has_icon: true;
-                icon_size: 13px;
-                fill_color: AppData.queue.length == 0 ? Theme.control_bg : Theme.accent_emerald;
-                hover_color: AppData.queue.length == 0 ? Theme.control_bg : Theme.accent_emerald_hover;
-                text_color: AppData.queue.length == 0 ? Theme.text_muted : #ffffff;
-                is_disabled: AppData.queue.length == 0;
-                font_size: Theme.font_caption;
-                clicked => { AppLogic.run_task(); }
-            }
-
-            if AppData.is_processing : ActionButton {
-                width: 170px;
-                height: Theme.btn_height_lg;
-                title: "Stop / Cancel";
-                icon_source: @image-url("../icons/stop.svg");
-                has_icon: true;
-                icon_size: 13px;
-                fill_color: Theme.accent_red;
-                hover_color: Theme.accent_red_hover;
-                font_size: Theme.font_caption;
-                clicked => { AppLogic.cancel_processing(); }
-            }
+        if AppData.is_processing : ActionButton {
+            height: Theme.btn_height_lg;
+            title: "Stop / Cancel";
+            icon_source: @image-url("../icons/stop.svg");
+            has_icon: true;
+            fill_color: Theme.accent_red_solid;
+            hover_color: Theme.accent_red_hover;
+            text_color: #ffffff;
+            font_size: Theme.font_body;
+            btn_radius: Theme.radius_md;
+            clicked => { AppLogic.cancel_processing(); }
         }
     }
 }

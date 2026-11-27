@@ -1,16 +1,17 @@
-import { LineEdit, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { AppData, AppLogic, Theme } from "../globals.slint";
 import { ActionButton } from "../components/action_button.slint";
 import { Badge } from "../components/badge.slint";
+import { TextField } from "../components/text_field.slint";
 import { DownloaderFormatDropdown } from "../components/downloader_format_dropdown.slint";
 
 export component DownloaderTab inherits ScrollView {
     property <bool> confirm_clear_history: false;
 
     VerticalLayout {
-        padding-left: 20px;
-        padding-right: 20px;
-        padding-top: 16px;
+        padding-left: 22px;
+        padding-right: 22px;
+        padding-top: 18px;
         padding-bottom: 28px;
         spacing: 18px;
         alignment: start;
@@ -19,45 +20,46 @@ export component DownloaderTab inherits ScrollView {
         // SECTION 1: UNIVERSAL MEDIA DOWNLOADER
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
-            Text {
-                text: "Universal Media Downloader";
-                font-size: 12.5px;
-                font-weight: 600;
-                color: Theme.text_secondary;
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: "Universal Media Downloader";
+                    font-size: Theme.font_section;
+                    font-weight: 700;
+                    color: Theme.text_primary;
+                    vertical-alignment: center;
+                }
             }
 
             Rectangle {
                 vertical-stretch: 0;
-                border-radius: 8px;
+                border-radius: Theme.radius_md;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 12px;
-                    padding-bottom: 12px;
+                    padding: 14px;
                     spacing: 10px;
 
-                    // URL Input Box with Spacious Action Buttons
+                    // URL Input Box with Action Controls
                     HorizontalLayout {
                         spacing: 8px;
 
-                        LineEdit {
+                        TextField {
                             height: Theme.btn_height_md;
                             horizontal-stretch: 1;
-                            font-size: 12px;
+                            font_size: Theme.font_caption;
                             text <=> AppData.ytdlp_url;
-                            placeholder-text: "Paste stream URL (e.g. https://www.youtube.com/watch?v=... or direct m3u8 playlist)";
+                            placeholder: "Paste stream URL (YouTube, Twitch, Vimeo, direct m3u8 playlist...)";
                             accepted => { AppLogic.ytdlp_discover(); }
                             edited(val) => { AppLogic.ytdlp_url_changed(val); }
                         }
 
                         ActionButton {
-                            width: 76px;
+                            width: 78px;
                             height: Theme.btn_height_md;
                             title: "Paste";
                             icon_source: @image-url("../icons/layers.svg");
@@ -65,8 +67,11 @@ export component DownloaderTab inherits ScrollView {
                             icon_size: 12px;
                             fill_color: Theme.btn_neutral_bg;
                             hover_color: Theme.btn_neutral_hover;
-                            text_color: Theme.accent_cyan;
-                            font_size: 11.5px;
+                            text_color: Theme.btn_neutral_text;
+                            border_col: Theme.btn_neutral_border;
+                            hover_border_col: Theme.input_hover_border;
+                            normal_border_width: 1px;
+                            font_size: Theme.font_caption;
                             clicked => { AppLogic.ytdlp_paste_clipboard(); }
                         }
 
@@ -80,60 +85,67 @@ export component DownloaderTab inherits ScrollView {
                             fill_color: Theme.btn_neutral_bg;
                             hover_color: Theme.btn_neutral_hover;
                             text_color: Theme.text_secondary;
-                            font_size: 11.5px;
+                            border_col: Theme.btn_neutral_border;
+                            hover_border_col: Theme.input_hover_border;
+                            normal_border_width: 1px;
+                            font_size: Theme.font_caption;
+                            is_disabled: AppData.ytdlp_url == "";
                             clicked => { AppLogic.ytdlp_clear_url(); }
                         }
 
                         ActionButton {
-                            width: 130px;
+                            width: 136px;
                             height: Theme.btn_height_md;
                             title: AppData.ytdlp_is_discovering ? "Detecting..." : "Discover Media";
                             icon_source: @image-url("../icons/search.svg");
                             has_icon: true;
-                            icon_size: 13px;
-                            fill_color: Theme.accent_primary;
-                            hover_color: Theme.accent_primary_hover;
-                            text_color: #ffffff;
-                            font_size: 12px;
+                            fill_color: Theme.accent_surface;
+                            hover_color: Theme.accent_surface_hover;
+                            text_color: Theme.accent_lime;
+                            border_col: Theme.accent_border;
+                            hover_border_col: Theme.accent_primary;
+                            normal_border_width: 1px;
+                            font_size: Theme.font_caption;
                             is_disabled: AppData.ytdlp_url == "" || AppData.ytdlp_is_discovering;
                             clicked => { AppLogic.ytdlp_discover(); }
                         }
                     }
 
-                    // Supported Sites Pill Tags Showcase
+                    // Restrained Supported Platforms Reference Line
                     HorizontalLayout {
                         spacing: 6px;
                         alignment: start;
 
-                        Text {
-                            text: "Supported Platforms:";
-                            font-size: Theme.font_badge;
-                            font-weight: 600;
-                            color: Theme.text_muted;
-                            vertical-alignment: center;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: @image-url("../icons/globe.svg");
+                                width: 12px;
+                                height: 12px;
+                                colorize: Theme.text_muted;
+                            }
                         }
 
-                        Badge { label: "YouTube"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_red; height: 19px; }
-                        Badge { label: "Twitch"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; height: 19px; }
-                        Badge { label: "Vimeo"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_vimeo; height: 19px; }
-                        Badge { label: "TikTok"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_red; height: 19px; }
-                        Badge { label: "Bilibili"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_bilibili; height: 19px; }
-                        Badge { label: "SoundCloud"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_amber; height: 19px; }
-                        Badge { label: "X / Twitter"; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_primary; height: 19px; }
-                        Badge { label: "Instagram"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_instagram; height: 19px; }
-                        Badge { label: "Facebook"; bg_color: Theme.card_secondary_bg; fg_color: Theme.brand_facebook; height: 19px; }
+                        Text {
+                            text: "Supports YouTube · Twitch · Vimeo · TikTok · Bilibili · SoundCloud · X · Instagram · Facebook + 1,000 platforms";
+                            font-size: Theme.font_badge;
+                            font-weight: 500;
+                            color: Theme.text_muted;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
                     }
                 }
             }
         }
 
-        // CARD 2: MEDIA INSPECTOR / DISCOVERY STATE / IDLE CAPABILITIES GUIDE
+        // DISCOVERY IN-PROGRESS STATE
         if AppData.ytdlp_is_discovering : Rectangle {
             vertical-stretch: 0;
-            border-radius: 8px;
-            background: Theme.accent_primary.with-alpha(0.08);
+            border-radius: Theme.radius_md;
+            background: Theme.accent_surface;
             border-width: 1px;
-            border-color: Theme.accent_primary.with-alpha(0.33);
+            border-color: Theme.accent_border;
 
             HorizontalLayout {
                 padding-left: 14px;
@@ -147,30 +159,31 @@ export component DownloaderTab inherits ScrollView {
                     alignment: center;
                     Image {
                         source: @image-url("../icons/search.svg");
-                        width: 16px;
-                        height: 16px;
-                        colorize: Theme.accent_cyan;
+                        width: 15px;
+                        height: 15px;
+                        colorize: Theme.accent_lime;
                     }
                 }
 
                 VerticalLayout {
                     alignment: center;
                     Text {
-                        text: "Querying stream metadata and discovering available formats & audio tracks via yt-dlp...";
-                        font-size: 12px;
+                        text: "Querying stream metadata and available video/audio formats via yt-dlp...";
+                        font-size: Theme.font_caption;
                         font-weight: 600;
-                        color: Theme.accent_cyan;
+                        color: Theme.accent_lime;
                     }
                 }
             }
         }
 
+        // ERROR BANNER
         if AppData.ytdlp_has_error : Rectangle {
             vertical-stretch: 0;
-            border-radius: 8px;
-            background: Theme.accent_red.with-alpha(0.08);
+            border-radius: Theme.radius_md;
+            background: Theme.red_surface;
             border-width: 1px;
-            border-color: Theme.accent_red.with-alpha(0.33);
+            border-color: Theme.red_border;
 
             HorizontalLayout {
                 padding-left: 14px;
@@ -185,7 +198,7 @@ export component DownloaderTab inherits ScrollView {
                         source: @image-url("../icons/x.svg");
                         width: 15px;
                         height: 15px;
-                        colorize: Theme.accent_red;
+                        colorize: Theme.accent_red_text;
                     }
                 }
 
@@ -194,51 +207,51 @@ export component DownloaderTab inherits ScrollView {
                     horizontal-stretch: 1;
                     Text {
                         text: "Error: " + AppData.ytdlp_error_message;
-                        font-size: 11px;
+                        font-size: Theme.font_badge;
                         font-weight: 600;
-                        color: #fca5a5;
+                        color: Theme.accent_red_text;
                         wrap: word-wrap;
                     }
                 }
 
                 ActionButton {
-                    width: 68px;
-                    height: 28px;
+                    width: 72px;
+                    height: Theme.btn_height_sm;
                     title: "Dismiss";
-                    fill_color: Theme.accent_red.with-alpha(0.20);
-                    hover_color: Theme.accent_red.with-alpha(0.33);
-                    text_color: #fca5a5;
-                    font_size: 10.5px;
+                    fill_color: Theme.red_surface_hover;
+                    hover_color: Theme.accent_red.with-alpha(0.32);
+                    text_color: Theme.accent_red_text;
+                    border_col: Theme.red_border;
+                    normal_border_width: 1px;
+                    font_size: Theme.font_badge;
                     clicked => { AppData.ytdlp_has_error = false; }
                 }
             }
         }
 
+        // DISCOVERED MEDIA STREAM CARD
         if AppData.ytdlp_has_discovered : VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
-                text: "Discovered Media Stream";
-                font-size: 12.5px;
+                text: "Discovered Stream";
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
                 vertical-stretch: 0;
-                border-radius: 8px;
+                border-radius: Theme.radius_md;
                 background: Theme.card_bg;
                 border-width: 1px;
-                border-color: Theme.accent_emerald.with-alpha(0.40);
+                border-color: Theme.emerald_border;
 
                 VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 12px;
-                    padding-bottom: 12px;
-                    spacing: 10px;
+                    padding: 14px;
+                    spacing: 12px;
 
-                    // Header Row: Metadata Badges + Ready Status
+                    // Header Row: Metadata Pills + Ready Status
                     HorizontalLayout {
                         spacing: 8px;
 
@@ -248,165 +261,150 @@ export component DownloaderTab inherits ScrollView {
                                 source: @image-url("../icons/film.svg");
                                 width: 14px;
                                 height: 14px;
-                                colorize: Theme.accent_emerald;
+                                colorize: Theme.accent_lime;
                             }
                         }
 
                         if AppData.ytdlp_uploader != "" : Rectangle {
-                        height: 20px;
-                        border-radius: 4px;
-                        background: Theme.card_secondary_bg;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
-                            alignment: center;
-                            Text {
-                                text: "Author:";
-                                font-size: Theme.font_badge;
-                                color: Theme.text_muted;
-                                vertical-alignment: center;
-                            }
-                            Text {
-                                text: AppData.ytdlp_uploader;
-                                font-size: Theme.font_badge;
-                                font-weight: 600;
-                                color: Theme.accent_cyan;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    if AppData.ytdlp_duration != "" : Rectangle {
-                        height: 20px;
-                        border-radius: 4px;
-                        background: Theme.card_secondary_bg;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/clock.svg");
-                                    width: 10px;
-                                    height: 10px;
-                                    colorize: Theme.text_muted;
-                                }
-                            }
-                            Text {
-                                text: AppData.ytdlp_duration;
-                                font-size: Theme.font_badge;
-                                font-weight: 600;
-                                color: Theme.text_primary;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    if AppData.ytdlp_discovered_id != "" : Rectangle {
-                        height: 20px;
-                        border-radius: 4px;
-                        background: Theme.card_secondary_bg;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            alignment: center;
-                            Text {
-                                text: "ID: " + AppData.ytdlp_discovered_id;
-                                font-size: Theme.font_badge;
-                                font-weight: 600;
-                                color: Theme.text_muted;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    Rectangle { horizontal-stretch: 1; }
-
-                    // Ready Status Badge
-                    Rectangle {
-                        height: 20px;
-                        border-radius: 4px;
-                        background: #05966922;
-                        border-width: 1px;
-                        border-color: Theme.accent_emerald;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 5px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/check.svg");
-                                    width: 10px;
-                                    height: 10px;
-                                    colorize: Theme.accent_emerald;
-                                }
-                            }
-                            VerticalLayout {
+                            height: 22px;
+                            border-radius: 5px;
+                            background: Theme.card_secondary_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_border;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 4px;
                                 alignment: center;
                                 Text {
-                                    text: "Ready to Download";
+                                    text: "Channel:";
                                     font-size: Theme.font_badge;
-                                    font-weight: 700;
-                                    color: Theme.accent_emerald;
+                                    color: Theme.text_muted;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: AppData.ytdlp_uploader;
+                                    font-size: Theme.font_badge;
+                                    font-weight: 600;
+                                    color: Theme.text_primary;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        if AppData.ytdlp_duration != "" : Rectangle {
+                            height: 22px;
+                            border-radius: 5px;
+                            background: Theme.card_secondary_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_border;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("../icons/clock.svg");
+                                        width: 11px;
+                                        height: 11px;
+                                        colorize: Theme.text_muted;
+                                    }
+                                }
+                                Text {
+                                    text: AppData.ytdlp_duration;
+                                    font-size: Theme.font_badge;
+                                    font-weight: 600;
+                                    font-family: Theme.font_mono;
+                                    color: Theme.text_primary;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        if AppData.ytdlp_discovered_id != "" : Rectangle {
+                            height: 22px;
+                            border-radius: 5px;
+                            background: Theme.card_secondary_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_border;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                alignment: center;
+                                Text {
+                                    text: "ID: " + AppData.ytdlp_discovered_id;
+                                    font-size: Theme.font_badge;
+                                    font-weight: 500;
+                                    font-family: Theme.font_mono;
+                                    color: Theme.text_muted;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        // Ready Status Pill
+                        Rectangle {
+                            height: 22px;
+                            border-radius: 5px;
+                            background: Theme.emerald_surface;
+                            border-width: 1px;
+                            border-color: Theme.emerald_border;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("../icons/check.svg");
+                                        width: 10px;
+                                        height: 10px;
+                                        colorize: Theme.accent_green;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: "Ready";
+                                        font-size: Theme.font_badge;
+                                        font-weight: 700;
+                                        color: Theme.accent_green;
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Title Text with high prominence
-                Text {
-                    text: AppData.ytdlp_title;
-                    font-size: 13.5px;
-                    font-weight: 700;
-                    color: #f4f4f5;
-                    overflow: elide;
-                }
+                    // Stream Title
+                    Text {
+                        text: AppData.ytdlp_title;
+                        font-size: Theme.font_section;
+                        font-weight: 700;
+                        color: Theme.text_primary;
+                        overflow: elide;
+                    }
 
-                // CUSTOM SAVE FILE NAME SECTION (Full Width Container)
-                Rectangle {
-                    border-radius: 6px;
-                    background: Theme.bg_surface;
-                    border-width: 1px;
-                    border-color: Theme.accent_primary.with-alpha(0.27);
-
+                    // Custom Output File Name Row
                     VerticalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        padding-top: 8px;
-                        padding-bottom: 8px;
                         spacing: 6px;
 
                         HorizontalLayout {
                             spacing: 6px;
-
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/sliders.svg");
-                                    width: 12px;
-                                    height: 12px;
-                                    colorize: Theme.accent_cyan;
-                                }
-                            }
-
                             Text {
-                                text: "Custom Output File Name:";
-                                font-size: 11px;
-                                font-weight: 700;
-                                color: Theme.accent_cyan;
+                                text: "Output File Name";
+                                font-size: Theme.font_badge;
+                                font-weight: 600;
+                                color: Theme.text_secondary;
                                 vertical-alignment: center;
                             }
-
                             Rectangle { horizontal-stretch: 1; }
-
                             Text {
-                                text: "(Appropriate extension will be auto-appended based on selected preset)";
+                                text: "Extension auto-appended from selected format";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                                 vertical-alignment: center;
@@ -416,16 +414,16 @@ export component DownloaderTab inherits ScrollView {
                         HorizontalLayout {
                             spacing: 8px;
 
-                            LineEdit {
+                            TextField {
                                 horizontal-stretch: 1;
                                 height: Theme.btn_height_md;
-                                font-size: 11.5px;
-                                placeholder-text: "Enter custom file name (without extension)...";
+                                font_size: Theme.font_caption;
+                                placeholder: "Enter custom file name (without extension)...";
                                 text <=> AppData.ytdlp_custom_filename;
                             }
 
                             ActionButton {
-                                width: 80px;
+                                width: 82px;
                                 height: Theme.btn_height_md;
                                 title: "Reset";
                                 icon_source: @image-url("../icons/reset.svg");
@@ -433,8 +431,11 @@ export component DownloaderTab inherits ScrollView {
                                 icon_size: 11px;
                                 fill_color: Theme.btn_neutral_bg;
                                 hover_color: Theme.btn_neutral_hover;
-                                text_color: Theme.text_secondary;
-                                font_size: 11px;
+                                text_color: Theme.btn_neutral_text;
+                                border_col: Theme.btn_neutral_border;
+                                hover_border_col: Theme.input_hover_border;
+                                normal_border_width: 1px;
+                                font_size: Theme.font_badge;
                                 clicked => { AppData.ytdlp_custom_filename = AppData.ytdlp_title; }
                             }
                         }
@@ -442,21 +443,20 @@ export component DownloaderTab inherits ScrollView {
                 }
             }
         }
-    }
 
         // ==========================================
-        // SECTION: DOWNLOAD FORMAT & TARGET DESTINATION
+        // SECTION 2: FORMAT & DESTINATION
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             HorizontalLayout {
                 spacing: 8px;
                 alignment: start;
 
                 Text {
-                    text: "Download Format & Target Destination";
-                    font-size: 12.5px;
+                    text: "Format & Destination";
+                    font-size: Theme.font_body;
                     font-weight: 600;
                     color: Theme.text_secondary;
                     vertical-alignment: center;
@@ -464,15 +464,15 @@ export component DownloaderTab inherits ScrollView {
 
                 property <bool> is_audio_format: AppData.ytdlp_format_options.length > 0 && AppData.ytdlp_selected_format_index < AppData.ytdlp_format_options.length && AppData.ytdlp_format_options[AppData.ytdlp_selected_format_index].starts-with("[Audio]");
                 Rectangle {
-                    height: 18px;
-                    border-radius: 4px;
-                    background: is_audio_format ? #7c3aed22 : Theme.accent_primary.with-alpha(0.13);
+                    height: 20px;
+                    border-radius: 5px;
+                    background: is_audio_format ? Theme.purple_surface : Theme.accent_surface;
                     border-width: 1px;
-                    border-color: is_audio_format ? Theme.accent_purple.with-alpha(0.5) : Theme.accent_cyan.with-alpha(0.5);
+                    border-color: is_audio_format ? Theme.purple_border : Theme.accent_border;
                     HorizontalLayout {
-                        padding-left: 6px;
-                        padding-right: 6px;
-                        spacing: 4px;
+                        padding-left: 7px;
+                        padding-right: 7px;
+                        spacing: 5px;
                         alignment: center;
                         VerticalLayout {
                             alignment: center;
@@ -480,14 +480,14 @@ export component DownloaderTab inherits ScrollView {
                                 source: is_audio_format ? @image-url("../icons/audio.svg") : @image-url("../icons/video.svg");
                                 width: 10px;
                                 height: 10px;
-                                colorize: is_audio_format ? Theme.accent_purple : Theme.accent_cyan;
+                                colorize: is_audio_format ? Theme.accent_purple : Theme.accent_lime;
                             }
                         }
                         Text {
-                            text: is_audio_format ? "Audio Extraction Mode" : "Video + Audio Merge (MP4)";
+                            text: is_audio_format ? "Audio Extraction" : "Video + Audio Mux (MP4)";
                             font-size: Theme.font_badge;
                             font-weight: 600;
-                            color: is_audio_format ? Theme.accent_purple : Theme.accent_cyan;
+                            color: is_audio_format ? Theme.accent_purple : Theme.accent_lime;
                             vertical-alignment: center;
                         }
                     }
@@ -496,34 +496,30 @@ export component DownloaderTab inherits ScrollView {
 
             Rectangle {
                 vertical-stretch: 0;
-                border-radius: 8px;
+                border-radius: Theme.radius_md;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 12px;
-                    padding-bottom: 12px;
-                    spacing: 8px;
+                    padding: 14px;
+                    spacing: 10px;
                     alignment: start;
 
-                    // 2-Column Split: Format Dropdown (Left) and Destination Folder (Right)
                     HorizontalLayout {
                         spacing: 16px;
 
-                        // Left Column: Format Selection (Reduced width)
+                        // Left Column: Format Selection
                         VerticalLayout {
-                            width: 320px;
-                            spacing: 4px;
+                            width: 330px;
+                            spacing: 6px;
                             alignment: start;
 
                             Text {
-                                text: "Stream Quality & Format Preset:";
-                                font-size: 11px;
+                                text: "Stream Quality & Format";
+                                font-size: Theme.font_badge;
                                 font-weight: 600;
-                                color: #a1a1aa;
+                                color: Theme.text_secondary;
                             }
 
                             DownloaderFormatDropdown {
@@ -534,39 +530,39 @@ export component DownloaderTab inherits ScrollView {
                             }
 
                             Text {
-                                text: "Highest available video and audio streams are muxed without generation quality loss.";
+                                text: "Muxes highest-fidelity streams without re-encoding.";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                                 wrap: word-wrap;
                             }
                         }
 
-                        // Right Column: Destination Folder (Expanded width)
+                        // Right Column: Destination Folder
                         VerticalLayout {
                             horizontal-stretch: 1;
-                            spacing: 4px;
+                            spacing: 6px;
                             alignment: start;
 
                             Text {
-                                text: "Save Destination Folder:";
-                                font-size: 11px;
+                                text: "Save Destination Folder";
+                                font-size: Theme.font_badge;
                                 font-weight: 600;
-                                color: #a1a1aa;
+                                color: Theme.text_secondary;
                             }
 
                             HorizontalLayout {
                                 spacing: 8px;
 
-                                LineEdit {
+                                TextField {
                                     horizontal-stretch: 1;
                                     height: Theme.btn_height_md;
-                                    font-size: 11.5px;
-                                    placeholder-text: "Choose or paste folder path to save downloaded media";
+                                    font_size: Theme.font_caption;
+                                    placeholder: "Choose or paste folder path...";
                                     text <=> AppData.ytdlp_output_dir;
                                 }
 
                                 ActionButton {
-                                    width: 84px;
+                                    width: 88px;
                                     height: Theme.btn_height_md;
                                     title: "Browse...";
                                     icon_source: @image-url("../icons/folder.svg");
@@ -574,13 +570,16 @@ export component DownloaderTab inherits ScrollView {
                                     icon_size: 12px;
                                     fill_color: Theme.btn_neutral_bg;
                                     hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.accent_cyan;
-                                    font_size: 11px;
+                                    text_color: Theme.btn_neutral_text;
+                                    border_col: Theme.btn_neutral_border;
+                                    hover_border_col: Theme.input_hover_border;
+                                    normal_border_width: 1px;
+                                    font_size: Theme.font_badge;
                                     clicked => { AppLogic.ytdlp_select_output_dir(); }
                                 }
 
                                 ActionButton {
-                                    width: 98px;
+                                    width: 100px;
                                     height: Theme.btn_height_md;
                                     title: "Open Folder";
                                     icon_source: @image-url("../icons/folder-open.svg");
@@ -589,13 +588,16 @@ export component DownloaderTab inherits ScrollView {
                                     fill_color: Theme.btn_neutral_bg;
                                     hover_color: Theme.btn_neutral_hover;
                                     text_color: Theme.text_secondary;
-                                    font_size: 11px;
+                                    border_col: Theme.btn_neutral_border;
+                                    hover_border_col: Theme.input_hover_border;
+                                    normal_border_width: 1px;
+                                    font_size: Theme.font_badge;
                                     clicked => { AppLogic.ytdlp_open_output_dir(); }
                                 }
                             }
 
                             Text {
-                                text: "Default directory configured in Settings. Changes apply to subsequent downloads.";
+                                text: "Defaults to Settings directory. Overrides apply to subsequent downloads.";
                                 font-size: Theme.font_badge;
                                 color: Theme.text_muted;
                                 wrap: word-wrap;
@@ -607,42 +609,39 @@ export component DownloaderTab inherits ScrollView {
         }
 
         // ==========================================
-        // SECTION: DOWNLOAD CONTROLS & STATUS
+        // SECTION 3: DOWNLOAD CONTROLS & PROGRESS
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             Text {
-                text: "Download Controls & Progress";
-                font-size: 12.5px;
+                text: "Transfer Status";
+                font-size: Theme.font_body;
                 font-weight: 600;
                 color: Theme.text_secondary;
             }
 
             Rectangle {
                 vertical-stretch: 0;
-                border-radius: 8px;
-                background: AppData.ytdlp_download_finished ? #05966910 : Theme.card_bg;
+                border-radius: Theme.radius_md;
+                background: AppData.ytdlp_download_finished ? Theme.emerald_surface : Theme.card_bg;
                 border-width: 1px;
-                border-color: AppData.ytdlp_download_finished ? #10b98166 : Theme.card_border;
+                border-color: AppData.ytdlp_download_finished ? Theme.emerald_border : Theme.card_border;
 
                 VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 12px;
-                    padding-bottom: 12px;
-                    spacing: 10px;
+                    padding: 14px;
+                    spacing: 12px;
 
-                    // Status Message + Telemetry Badges + Action Button
                     HorizontalLayout {
                         spacing: 12px;
 
                         VerticalLayout {
                             alignment: center;
                             horizontal-stretch: 1;
+                            min-width: 0px;
 
                             HorizontalLayout {
-                                spacing: 6px;
+                                spacing: 7px;
 
                                 if AppData.ytdlp_download_finished : VerticalLayout {
                                     alignment: center;
@@ -650,124 +649,124 @@ export component DownloaderTab inherits ScrollView {
                                         source: @image-url("../icons/check.svg");
                                         width: 14px;
                                         height: 14px;
-                                        colorize: Theme.accent_emerald;
+                                        colorize: Theme.accent_green;
                                     }
                                 }
 
                                 Text {
                                     text: AppData.ytdlp_status_message;
-                                    font-size: 11.5px;
+                                    font-size: Theme.font_caption;
                                     font-weight: 600;
-                                    color: AppData.ytdlp_download_finished ? Theme.accent_emerald : (AppData.ytdlp_is_downloading ? Theme.accent_cyan : Theme.text_secondary);
+                                    color: AppData.ytdlp_download_finished ? Theme.accent_green : (AppData.ytdlp_is_downloading ? Theme.accent_lime : Theme.text_secondary);
                                     vertical-alignment: center;
                                     overflow: elide;
                                 }
                             }
                         }
 
+                        // Clean Mono Telemetry Readouts
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: end;
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_progress_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; height: 22px; }
+                                Badge { label: AppData.ytdlp_progress_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_lime; mono: true; }
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_speed_text; bg_color: Theme.card_secondary_bg; fg_color: #a78bfa; height: 22px; }
+                                Badge { label: AppData.ytdlp_speed_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_primary; mono: true; }
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_eta_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_emerald; height: 22px; }
+                                Badge { label: AppData.ytdlp_eta_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_secondary; mono: true; }
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Badge { label: AppData.ytdlp_size_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_primary; height: 22px; }
+                                Badge { label: AppData.ytdlp_size_text; bg_color: Theme.card_secondary_bg; fg_color: Theme.text_secondary; mono: true; }
                             }
                         }
 
+                        // SOLE SOLID PRIMARY CTA IN DOWNLOADER TAB
                         if !AppData.ytdlp_is_downloading : ActionButton {
-                            width: 170px;
+                            width: 162px;
                             height: Theme.btn_height_md;
                             title: "Start Download";
                             icon_source: @image-url("../icons/download.svg");
                             has_icon: true;
                             icon_size: 14px;
-                            fill_color: Theme.accent_emerald;
-                            hover_color: Theme.accent_emerald_hover;
+                            fill_color: Theme.accent_primary;
+                            hover_color: Theme.accent_primary_hover;
+                            pressed_color: Theme.accent_primary_pressed;
+                            text_color: Theme.text_on_accent;
                             font_size: Theme.font_caption;
                             clicked => { AppLogic.ytdlp_start_download(); }
                         }
 
                         if AppData.ytdlp_is_downloading : ActionButton {
-                            width: 170px;
+                            width: 162px;
                             height: Theme.btn_height_md;
                             title: "Cancel Download";
                             icon_source: @image-url("../icons/stop.svg");
                             has_icon: true;
                             icon_size: 14px;
-                            fill_color: Theme.accent_red;
+                            fill_color: Theme.accent_red_solid;
                             hover_color: Theme.accent_red_hover;
+                            text_color: #ffffff;
                             font_size: Theme.font_caption;
                             clicked => { AppLogic.ytdlp_cancel_download(); }
                         }
                     }
 
-                    // Sleek Modern Progress Bar
+                    // Progress Track
                     Rectangle {
-                        height: 8px;
-                        border-radius: 4px;
-                        background: Theme.control_bg;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: Theme.slider_track;
+                        clip: true;
 
                         Rectangle {
                             x: 0px;
                             width: parent.width * (AppData.ytdlp_progress / 100.0).clamp(0.0, 1.0);
                             height: parent.height;
-                            border-radius: 4px;
-                            background: @linear-gradient(90deg, Theme.accent_primary 0%, #10b981 100%);
+                            border-radius: 3px;
+                            background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
                         }
                     }
 
-                    // Merged Completion Details & Actions (Saved file path + Add to Transcoder Queue + Open Folder)
-                    if AppData.ytdlp_download_finished : Rectangle {
-                        height: 1px;
-                        background: #10b98133;
-                    }
-
+                    // Completion Row
                     if AppData.ytdlp_download_finished : HorizontalLayout {
+                        padding-top: 4px;
                         spacing: 12px;
 
                         VerticalLayout {
                             horizontal-stretch: 1;
+                            min-width: 0px;
                             alignment: center;
 
                             Text {
                                 text: AppData.ytdlp_last_downloaded_file != "" ? "Saved: " + AppData.ytdlp_last_downloaded_file : "";
-                                font-size: 11px;
-                                color: #d4d4d8;
+                                font-size: Theme.font_badge;
+                                font-family: Theme.font_mono;
+                                color: Theme.text_secondary;
                                 horizontal-alignment: left;
                                 vertical-alignment: center;
                                 overflow: elide;
                             }
                         }
 
-                        HorizontalLayout {
-                            horizontal-stretch: 0;
-                            spacing: 8px;
-                            alignment: end;
-
-                            ActionButton {
-                                height: Theme.btn_height_md;
-                                title: "Add to Transcoder Queue";
-                                icon_source: @image-url("../icons/plus.svg");
-                                has_icon: true;
-                                icon_size: 12px;
-                                fill_color: Theme.btn_neutral_bg;
-                                hover_color: Theme.btn_neutral_hover;
-                                text_color: Theme.accent_cyan;
-                                font_size: 11px;
-                                clicked => { AppLogic.ytdlp_send_to_queue(); }
-                            }
+                        ActionButton {
+                            height: Theme.btn_height_sm;
+                            title: "Add to Queue";
+                            icon_source: @image-url("../icons/plus.svg");
+                            has_icon: true;
+                            icon_size: 12px;
+                            fill_color: Theme.accent_surface;
+                            hover_color: Theme.accent_surface_hover;
+                            text_color: Theme.accent_lime;
+                            border_col: Theme.accent_border;
+                            normal_border_width: 1px;
+                            font_size: Theme.font_badge;
+                            clicked => { AppLogic.ytdlp_send_to_queue(); }
                         }
                     }
                 }
@@ -775,55 +774,45 @@ export component DownloaderTab inherits ScrollView {
         }
 
         // ==========================================
-        // SECTION: SESSION DOWNLOAD HISTORY
+        // SECTION 4: SESSION DOWNLOAD HISTORY
         // ==========================================
         VerticalLayout {
-            spacing: 6px;
+            spacing: 8px;
 
             HorizontalLayout {
                 spacing: 8px;
                 alignment: start;
 
                 Text {
-                    text: "Session Download History";
-                    font-size: 12.5px;
+                    text: "Session History";
+                    font-size: Theme.font_body;
                     font-weight: 600;
                     color: Theme.text_secondary;
                     vertical-alignment: center;
                 }
 
-                Rectangle {
-                    height: 18px;
-                    border-radius: 4px;
-                    background: AppData.ytdlp_history.length > 0 ? Theme.accent_primary.with-alpha(0.13) : Theme.card_secondary_bg;
-                    border-width: 1px;
-                    border-color: AppData.ytdlp_history.length > 0 ? Theme.accent_cyan.with-alpha(0.4) : Theme.border_color;
-                    HorizontalLayout {
-                        padding-left: 6px;
-                        padding-right: 6px;
-                        alignment: center;
-                        Text {
-                            text: AppData.ytdlp_history.length == 0 ? "0 items" : (AppData.ytdlp_history.length == 1 ? "1 item" : "\{AppData.ytdlp_history.length} items");
-                            font-size: Theme.font_badge;
-                            font-weight: 600;
-                            color: AppData.ytdlp_history.length > 0 ? Theme.accent_cyan : Theme.text_muted;
-                            vertical-alignment: center;
-                        }
-                    }
+                Badge {
+                    label: AppData.ytdlp_history.length == 1 ? "1 item" : "\{AppData.ytdlp_history.length} items";
+                    bg_color: AppData.ytdlp_history.length > 0 ? Theme.accent_surface : Theme.card_secondary_bg;
+                    fg_color: AppData.ytdlp_history.length > 0 ? Theme.accent_lime : Theme.text_muted;
+                    border_col: AppData.ytdlp_history.length > 0 ? Theme.accent_border : Theme.card_border;
+                    height: 20px;
                 }
 
                 Rectangle { horizontal-stretch: 1; }
 
                 if AppData.ytdlp_history.length > 0 : ActionButton {
-                    width: 110px;
+                    width: 112px;
                     height: Theme.btn_height_sm;
-                    title: root.confirm_clear_history ? "Confirm Clear?" : "Clear History";
+                    title: root.confirm_clear_history ? "Confirm?" : "Clear History";
                     icon_source: @image-url("../icons/trash.svg");
                     has_icon: true;
                     icon_size: 11px;
-                    fill_color: root.confirm_clear_history ? Theme.accent_red : Theme.btn_neutral_bg;
+                    fill_color: root.confirm_clear_history ? Theme.accent_red_solid : Theme.btn_neutral_bg;
                     hover_color: root.confirm_clear_history ? Theme.accent_red_hover : Theme.btn_neutral_hover;
                     text_color: root.confirm_clear_history ? #ffffff : Theme.text_secondary;
+                    border_col: root.confirm_clear_history ? Theme.accent_red : Theme.btn_neutral_border;
+                    normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => {
                         if root.confirm_clear_history {
@@ -838,188 +827,187 @@ export component DownloaderTab inherits ScrollView {
 
             Rectangle {
                 vertical-stretch: 0;
-                border-radius: 8px;
+                border-radius: Theme.radius_md;
                 background: Theme.card_bg;
                 border-width: 1px;
                 border-color: Theme.card_border;
 
                 VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 12px;
-                    padding-bottom: 12px;
-                    spacing: 10px;
+                    padding: 12px;
+                    spacing: 8px;
                     alignment: start;
 
-                    // Empty state when no downloads yet in this open session
+                    // Empty state
                     if AppData.ytdlp_history.length == 0 : Rectangle {
-                    height: 54px;
-                    border-radius: 6px;
-                    background: Theme.card_subtle_bg;
-                    border-width: 1px;
-                    border-color: Theme.card_subtle_border;
+                        height: 54px;
+                        border-radius: Theme.radius_sm;
+                        background: Theme.card_subtle_bg;
+                        border-width: 1px;
+                        border-color: Theme.card_subtle_border;
 
-                    HorizontalLayout {
-                        padding-left: 14px;
-                        padding-right: 14px;
-                        spacing: 10px;
-                        alignment: center;
-
-                        VerticalLayout {
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            spacing: 10px;
                             alignment: center;
-                            Image {
-                                source: @image-url("../icons/download.svg");
-                                width: 15px;
-                                height: 15px;
-                                colorize: Theme.text_muted;
+
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: @image-url("../icons/download.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: Theme.text_muted;
+                                }
                             }
-                        }
 
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: "No files downloaded in this session yet. Completed downloads will appear here with quick reveal and management.";
-                                font-size: 11px;
-                                color: Theme.text_muted;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "Completed downloads in this session will appear here for one-click queue import or folder reveal.";
+                                    font-size: Theme.font_badge;
+                                    color: Theme.text_muted;
+                                }
                             }
                         }
                     }
-                }
 
-                // Download History List items
-                if AppData.ytdlp_history.length > 0 : VerticalLayout {
-                    spacing: 6px;
+                    // History rows
+                    if AppData.ytdlp_history.length > 0 : VerticalLayout {
+                        spacing: 6px;
 
-                    for item[idx] in AppData.ytdlp_history : Rectangle {
-                        height: 50px;
-                        border-radius: 6px;
-                        background: Theme.card_secondary_bg;
-                        border-width: 1px;
-                        border-color: Theme.card_secondary_border;
+                        for item[idx] in AppData.ytdlp_history : Rectangle {
+                            height: 50px;
+                            border-radius: Theme.radius_sm;
+                            background: Theme.card_secondary_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_border;
 
-                        HorizontalLayout {
-                            padding-left: 12px;
-                            padding-right: 10px;
-                            padding-top: 6px;
-                            padding-bottom: 6px;
-                            spacing: 10px;
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 6px;
+                                padding-bottom: 6px;
+                                spacing: 10px;
 
-                            // Media File Icon Pill
-                            VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 32px;
-                                    height: Theme.btn_height_md;
-                                    border-radius: 5px;
-                                    background: Theme.accent_primary.with-alpha(0.09);
-                                    border-width: 1px;
-                                    border-color: Theme.accent_cyan.with-alpha(0.3);
-                                    Image {
-                                        source: @image-url("../icons/film.svg");
-                                        width: 14px;
-                                        height: 14px;
-                                        colorize: Theme.accent_cyan;
-                                        x: (parent.width - self.width) / 2;
-                                        y: (parent.height - self.height) / 2;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 32px;
+                                        height: 32px;
+                                        border-radius: Theme.radius_sm;
+                                        background: Theme.accent_surface;
+                                        border-width: 1px;
+                                        border-color: Theme.accent_border;
+                                        Image {
+                                            source: @image-url("../icons/film.svg");
+                                            width: 14px;
+                                            height: 14px;
+                                            colorize: Theme.accent_lime;
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                        }
                                     }
                                 }
-                            }
 
-                            // Details (File Name on top row, Saved Path on bottom row)
-                            VerticalLayout {
-                                alignment: center;
-                                horizontal-stretch: 1;
-                                spacing: 2px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    min-width: 0px;
+                                    spacing: 2px;
 
-                                Text {
-                                    text: item.file_name;
-                                    font-size: 11.5px;
-                                    font-weight: 600;
-                                    color: Theme.text_primary;
-                                    overflow: elide;
-                                }
-
-                                Text {
-                                    text: item.file_path;
-                                    font-size: Theme.font_badge;
-                                    color: Theme.text_muted;
-                                    overflow: elide;
-                                }
-                            }
-
-                            // File Size formatted (right-aligned before Action buttons)
-                            if item.file_size_formatted != "" : VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "• " + item.file_size_formatted;
-                                    font-size: Theme.font_badge;
-                                    color: Theme.accent_cyan;
-                                    vertical-alignment: center;
-                                }
-                            }
-
-                            // Action: Add to Input Queue
-                            VerticalLayout {
-                                alignment: center;
-                                ActionButton {
-                                    width: 140px;
-                                    height: Theme.btn_height_md;
-                                    title: "Add to Input Queue";
-                                    icon_source: @image-url("../icons/plus.svg");
-                                    has_icon: true;
-                                    icon_size: 12px;
-                                    fill_color: Theme.btn_neutral_bg;
-                                    hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.accent_cyan;
-                                    font_size: 11px;
-                                    clicked => { AppLogic.ytdlp_add_history_item_to_queue(idx); }
-                                }
-                            }
-
-                            // Action: Open in File Explorer & Select File
-                            VerticalLayout {
-                                alignment: center;
-                                ActionButton {
-                                    width: 118px;
-                                    height: Theme.btn_height_md;
-                                    title: "Show in Folder";
-                                    icon_source: @image-url("../icons/folder-open.svg");
-                                    has_icon: true;
-                                    icon_size: 12px;
-                                    fill_color: Theme.btn_neutral_bg;
-                                    hover_color: Theme.btn_neutral_hover;
-                                    text_color: Theme.accent_cyan;
-                                    font_size: 11px;
-                                    clicked => { AppLogic.ytdlp_open_history_item(idx); }
-                                }
-                            }
-
-                            // Action: Remove from History List
-                            VerticalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 30px;
-                                    height: Theme.btn_height_md;
-                                    border-radius: 5px;
-                                    background: rem_ta.pressed ? Theme.accent_red.with-alpha(0.20) : (rem_ta.has-hover ? Theme.accent_red.with-alpha(0.12) : Theme.btn_neutral_bg);
-                                    border-width: 1px;
-                                    border-color: rem_ta.has-hover ? Theme.accent_red.with-alpha(0.33) : Theme.border_color;
-
-                                    animate background { duration: 100ms; }
-                                    animate border-color { duration: 100ms; }
-
-                                    Image {
-                                        source: @image-url("../icons/x.svg");
-                                        width: 12px;
-                                        height: 12px;
-                                        colorize: rem_ta.has-hover ? #f87171 : Theme.text_muted;
-                                        x: (parent.width - self.width) / 2;
-                                        y: (parent.height - self.height) / 2;
+                                    Text {
+                                        text: item.file_name;
+                                        font-size: Theme.font_caption;
+                                        font-weight: 600;
+                                        color: Theme.text_primary;
+                                        overflow: elide;
                                     }
 
-                                    rem_ta := TouchArea {
-                                        mouse-cursor: pointer;
-                                        clicked => { AppLogic.ytdlp_remove_history_item(idx); }
+                                    Text {
+                                        text: item.file_path;
+                                        font-size: Theme.font_badge;
+                                        color: Theme.text_muted;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                if item.file_size_formatted != "" : VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: item.file_size_formatted;
+                                        font-size: Theme.font_badge;
+                                        font-family: Theme.font_mono;
+                                        font-weight: 600;
+                                        color: Theme.text_secondary;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    ActionButton {
+                                        width: 120px;
+                                        height: Theme.btn_height_sm;
+                                        title: "Add to Queue";
+                                        icon_source: @image-url("../icons/plus.svg");
+                                        has_icon: true;
+                                        icon_size: 11px;
+                                        fill_color: Theme.accent_surface;
+                                        hover_color: Theme.accent_surface_hover;
+                                        text_color: Theme.accent_lime;
+                                        border_col: Theme.accent_border;
+                                        normal_border_width: 1px;
+                                        font_size: Theme.font_badge;
+                                        clicked => { AppLogic.ytdlp_add_history_item_to_queue(idx); }
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    ActionButton {
+                                        width: 110px;
+                                        height: Theme.btn_height_sm;
+                                        title: "Show Folder";
+                                        icon_source: @image-url("../icons/folder-open.svg");
+                                        has_icon: true;
+                                        icon_size: 11px;
+                                        fill_color: Theme.btn_neutral_bg;
+                                        hover_color: Theme.btn_neutral_hover;
+                                        text_color: Theme.btn_neutral_text;
+                                        border_col: Theme.btn_neutral_border;
+                                        normal_border_width: 1px;
+                                        font_size: Theme.font_badge;
+                                        clicked => { AppLogic.ytdlp_open_history_item(idx); }
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 28px;
+                                        height: Theme.btn_height_sm;
+                                        border-radius: Theme.radius_sm;
+                                        background: rem_ta.pressed ? Theme.red_surface_hover : (rem_ta.has-hover ? Theme.red_surface : Theme.btn_neutral_bg);
+                                        border-width: 1px;
+                                        border-color: rem_ta.has-hover ? Theme.red_border : Theme.btn_neutral_border;
+
+                                        animate background { duration: 100ms; }
+                                        animate border-color { duration: 100ms; }
+
+                                        Image {
+                                            source: @image-url("../icons/x.svg");
+                                            width: 11px;
+                                            height: 11px;
+                                            colorize: rem_ta.has-hover ? Theme.accent_red_text : Theme.text_muted;
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                        }
+
+                                        rem_ta := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { AppLogic.ytdlp_remove_history_item(idx); }
+                                        }
                                     }
                                 }
                             }
@@ -1029,5 +1017,4 @@ export component DownloaderTab inherits ScrollView {
             }
         }
     }
-}
 }

@@ -58,14 +58,14 @@ export component VolumeBar inherits Rectangle {
                 border-radius: 2px;
                 background: Theme.slider_track;
 
-                // Filled Track (Kabosu citrus ramp)
+                // Filled Track (Kabosu green to Yuzu yellow ramp)
                 Rectangle {
                     x: 0px;
                     y: 0px;
                     height: 100%;
                     width: root.is_muted || root.volume <= 0.001 ? 0px : (parent.width * root.volume.clamp(0.0, 1.0));
                     border-radius: 2px;
-                    background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+                    background: root.is_muted ? Theme.text_faint : @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_yuzu 100%);
                 }
             }
 

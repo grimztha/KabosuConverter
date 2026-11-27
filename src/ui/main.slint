@@ -122,14 +122,14 @@ export component MainWindow inherits Window {
                                                 font-size: 12px;
                                                 font-weight: 800;
                                                 letter-spacing: 0.8px;
-                                                color: Theme.text_primary;
+                                                color: Theme.text_heading;
                                             }
                                             Text {
                                                 text: "CONVERTER";
                                                 font-size: 12px;
                                                 font-weight: 500;
                                                 letter-spacing: 0.8px;
-                                                color: Theme.text_muted;
+                                                color: Theme.text_primary;
                                                 overflow: elide;
                                             }
                                         }
@@ -508,7 +508,7 @@ export component MainWindow inherits Window {
                                         width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
                                         height: 100%;
                                         border-radius: 3px;
-                                        background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+                                        background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_yuzu 65%, Theme.accent_orange 100%);
                                     }
                                 }
                             }
@@ -525,7 +525,7 @@ export component MainWindow inherits Window {
                                 text: "Rust + FFmpeg Native Media Engine";
                                 font-size: Theme.font_badge;
                                 font-weight: 500;
-                                color: Theme.text_faint;
+                                color: Theme.text_muted;
                                 overflow: elide;
                             }
                         }

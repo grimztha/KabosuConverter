@@ -70,7 +70,7 @@ export component QueuePanel inherits Rectangle {
                     text: "Input Queue";
                     font-size: Theme.font_body;
                     font-weight: 700;
-                    color: Theme.text_primary;
+                    color: Theme.text_heading;
                 }
             }
 
@@ -179,7 +179,7 @@ export component QueuePanel inherits Rectangle {
                         for file[idx] in AppData.queue : Rectangle {
                             height: 44px;
                             border-radius: Theme.radius_sm;
-                            background: AppData.selected_file_index == idx ? Theme.accent_surface : (card_ta.has-hover ? Theme.card_secondary_bg : Theme.card_subtle_bg);
+                            background: AppData.selected_file_index == idx ? Theme.card_secondary_bg : (card_ta.has-hover ? Theme.control_bg : Theme.card_subtle_bg);
                             border-width: 1px;
                             border-color: AppData.selected_file_index == idx ? Theme.accent_border : (card_ta.has-hover ? Theme.card_secondary_border : Theme.card_subtle_border);
                             clip: true;
@@ -196,13 +196,13 @@ export component QueuePanel inherits Rectangle {
                                 }
                             }
 
-                            // Bottom inline encoding progress bar
+                            // Bottom inline encoding progress bar (Kabosu -> Yuzu -> Orange)
                             if file.progress > 0.0 && file.progress < 1.0 : Rectangle {
                                 x: 0px;
                                 y: parent.height - 2px;
                                 width: max(4px, parent.width * file.progress);
                                 height: 2px;
-                                background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+                                background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_yuzu 65%, Theme.accent_orange 100%);
                             }
 
                             HorizontalLayout {

@@ -81,12 +81,12 @@ export component TimelineGrid inherits Rectangle {
         width: 1px;
         height: 100%;
 
-        // Major Vertical Grid Line through Waveform
+        // Major Vertical Grid Line through Waveform (Neutral Dark Grey)
         Rectangle {
             y: root.ruler_height;
             width: 1px;
             height: max(0px, parent.height - root.ruler_height);
-            background: root.is_dual_channel ? Theme.accent_lime.with-alpha(0.11) : Theme.accent_lime.with-alpha(0.09);
+            background: root.is_dual_channel ? Theme.card_secondary_border.with-alpha(0.65) : Theme.card_secondary_border.with-alpha(0.55);
         }
 
         // Major Tick Mark in Ruler Bar

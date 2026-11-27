@@ -28,7 +28,7 @@ export component DownloaderTab inherits ScrollView {
                     text: "Universal Media Downloader";
                     font-size: Theme.font_section;
                     font-weight: 700;
-                    color: Theme.text_primary;
+                    color: Theme.text_heading;
                     vertical-alignment: center;
                 }
             }
@@ -236,8 +236,8 @@ export component DownloaderTab inherits ScrollView {
             Text {
                 text: "Discovered Stream";
                 font-size: Theme.font_body;
-                font-weight: 600;
-                color: Theme.text_secondary;
+                font-weight: 700;
+                color: Theme.text_heading;
             }
 
             Rectangle {
@@ -245,7 +245,7 @@ export component DownloaderTab inherits ScrollView {
                 border-radius: Theme.radius_md;
                 background: Theme.card_bg;
                 border-width: 1px;
-                border-color: Theme.emerald_border;
+                border-color: Theme.card_border;
 
                 VerticalLayout {
                     padding: 14px;
@@ -457,8 +457,8 @@ export component DownloaderTab inherits ScrollView {
                 Text {
                     text: "Format & Destination";
                     font-size: Theme.font_body;
-                    font-weight: 600;
-                    color: Theme.text_secondary;
+                    font-weight: 700;
+                    color: Theme.text_heading;
                     vertical-alignment: center;
                 }
 
@@ -617,14 +617,14 @@ export component DownloaderTab inherits ScrollView {
             Text {
                 text: "Transfer Status";
                 font-size: Theme.font_body;
-                font-weight: 600;
-                color: Theme.text_secondary;
+                font-weight: 700;
+                color: Theme.text_heading;
             }
 
             Rectangle {
                 vertical-stretch: 0;
                 border-radius: Theme.radius_md;
-                background: AppData.ytdlp_download_finished ? Theme.emerald_surface : Theme.card_bg;
+                background: Theme.card_bg;
                 border-width: 1px;
                 border-color: AppData.ytdlp_download_finished ? Theme.emerald_border : Theme.card_border;
 
@@ -717,7 +717,7 @@ export component DownloaderTab inherits ScrollView {
                         }
                     }
 
-                    // Progress Track
+                    // Progress Track (Kabosu Green -> Yuzu Yellow -> Citrus Orange)
                     Rectangle {
                         height: 6px;
                         border-radius: 3px;
@@ -729,7 +729,7 @@ export component DownloaderTab inherits ScrollView {
                             width: parent.width * (AppData.ytdlp_progress / 100.0).clamp(0.0, 1.0);
                             height: parent.height;
                             border-radius: 3px;
-                            background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+                            background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_yuzu 65%, Theme.accent_orange 100%);
                         }
                     }
 
@@ -786,8 +786,8 @@ export component DownloaderTab inherits ScrollView {
                 Text {
                     text: "Session History";
                     font-size: Theme.font_body;
-                    font-weight: 600;
-                    color: Theme.text_secondary;
+                    font-weight: 700;
+                    color: Theme.text_heading;
                     vertical-alignment: center;
                 }
 

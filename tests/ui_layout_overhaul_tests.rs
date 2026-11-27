@@ -41,9 +41,11 @@ slint::slint! {
 
         // Studio Kabosu surface & text tokens
         out property <color> theme_app_bg: Theme.app_bg;
+        out property <color> theme_panel_bg: Theme.panel_bg;
         out property <color> theme_card_bg: Theme.card_bg;
         out property <color> theme_card_secondary_bg: Theme.card_secondary_bg;
         out property <color> theme_input_bg: Theme.input_bg;
+        out property <color> theme_text_heading: Theme.text_heading;
         out property <color> theme_text_primary: Theme.text_primary;
         out property <color> theme_text_secondary: Theme.text_secondary;
         out property <color> theme_text_muted: Theme.text_muted;
@@ -52,6 +54,8 @@ slint::slint! {
         // Studio Kabosu accent & status tokens
         out property <color> theme_accent_primary: Theme.accent_primary;
         out property <color> theme_accent_lime: Theme.accent_lime;
+        out property <color> theme_accent_yuzu: Theme.accent_yuzu;
+        out property <color> theme_accent_orange: Theme.accent_orange;
         out property <color> theme_accent_surface: Theme.accent_surface;
         out property <color> theme_accent_emerald: Theme.accent_emerald;
         out property <color> theme_accent_green: Theme.accent_green;
@@ -196,17 +200,21 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert_eq!(outer_r, inner_r + padding, "Outer radius must equal inner radius plus padding");
     assert_eq!(outer_r, r_lg);
 
-    // 4. Studio Kabosu Color System & Real WCAG 2.1 AA Contrast Verification
+    // 4. Neutral Dark-Grey Body + Kabosu/Yuzu Citrus Accents & Real WCAG 2.1 Contrast Verification
     let app_bg = helper.get_theme_app_bg();
+    let panel_bg = helper.get_theme_panel_bg();
     let card_bg = helper.get_theme_card_bg();
     let card_sec = helper.get_theme_card_secondary_bg();
     let input_bg = helper.get_theme_input_bg();
+    let text_heading = helper.get_theme_text_heading();
     let text_primary = helper.get_theme_text_primary();
     let text_secondary = helper.get_theme_text_secondary();
     let text_muted = helper.get_theme_text_muted();
     let text_on_accent = helper.get_theme_text_on_accent();
     let accent_primary = helper.get_theme_accent_primary();
     let accent_lime = helper.get_theme_accent_lime();
+    let accent_yuzu = helper.get_theme_accent_yuzu();
+    let accent_orange = helper.get_theme_accent_orange();
     let accent_surface = helper.get_theme_accent_surface();
     let focus_ring = helper.get_theme_focus_ring();
 
@@ -214,11 +222,28 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert_eq!(text_primary.alpha(), 255);
     assert_eq!(focus_ring.alpha(), 255);
 
-    // Botanical Kabosu green identity check: green channel leads both primary and zest lime
+    // Pure neutral dark & dark-grey body check (no green wash across app surfaces)
+    assert!(app_bg.green() <= app_bg.red() + 2, "app_bg must remain neutral dark without green tint");
+    assert!(panel_bg.green() <= panel_bg.red() + 2, "panel_bg must remain neutral dark grey without green tint");
+    assert!(card_bg.green() <= card_bg.red() + 2, "card_bg must remain neutral dark grey without green tint");
+
+    // Kabosu green headings & buttons + Yuzu yellow & citrus orange complements
+    assert!(text_heading.green() > text_heading.red() && text_heading.green() > text_heading.blue(),
+        "Main text_heading must use the Kabosu green palette");
     assert!(accent_primary.green() > accent_primary.red() && accent_primary.green() > accent_primary.blue(),
         "Kabosu accent_primary must be green-dominant");
     assert!(accent_lime.green() > accent_lime.red() && accent_lime.green() > accent_lime.blue(),
         "Kabosu accent_lime must be green-dominant");
+    assert!(accent_yuzu.red() > 200 && accent_yuzu.green() > 180 && accent_yuzu.blue() < 120,
+        "accent_yuzu must be a warm yuzu yellow");
+    assert!(accent_orange.red() > 200 && accent_orange.green() > 100 && accent_orange.blue() < 90,
+        "accent_orange must be a warm citrus orange");
+
+    // Crisp white primary/secondary/description text on neutral dark grey
+    assert!(text_primary.red() >= 250 && text_primary.green() >= 250 && text_primary.blue() >= 250,
+        "text_primary must be crisp white");
+    assert!(contrast_ratio(text_heading, card_bg) >= 7.0, "text_heading on card_bg must pass WCAG AAA (7:1)");
+    assert!(contrast_ratio(text_muted, card_bg) >= 10.0, "white/soft-white minor text_muted must exceed 10:1 on card_bg");
 
     // Botanical dark surfaces stay genuinely dark with clear elevation steps
     assert!(relative_luminance(app_bg) < relative_luminance(card_bg), "card_bg must elevate above app_bg");

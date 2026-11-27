@@ -16,14 +16,14 @@ export component TimelineGrid inherits Rectangle {
         if raw <= 10.0 { return 10.0; }
         if raw <= 15.0 { return 15.0; }
         if raw <= 30.0 { return 30.0; }
-        if raw <= 60.0 { return 60.0; }       // 1 min
-        if raw <= 120.0 { return 120.0; }     // 2 min
-        if raw <= 300.0 { return 300.0; }     // 5 min
-        if raw <= 600.0 { return 600.0; }     // 10 min
-        if raw <= 900.0 { return 900.0; }     // 15 min
-        if raw <= 1800.0 { return 1800.0; }   // 30 min
-        if raw <= 3600.0 { return 3600.0; }   // 1 hour
-        if raw <= 7200.0 { return 7200.0; }   // 2 hours
+        if raw <= 60.0 { return 60.0; }
+        if raw <= 120.0 { return 120.0; }
+        if raw <= 300.0 { return 300.0; }
+        if raw <= 600.0 { return 600.0; }
+        if raw <= 900.0 { return 900.0; }
+        if raw <= 1800.0 { return 1800.0; }
+        if raw <= 3600.0 { return 3600.0; }
+        if raw <= 7200.0 { return 7200.0; }
         return max(3600.0, floor(raw / 3600.0) * 3600.0);
     }
 
@@ -62,14 +62,14 @@ export component TimelineGrid inherits Rectangle {
         y: 0px;
         width: 100%;
         height: root.ruler_height;
-        background: @linear-gradient(180deg, #14141a 0%, #0d0d12 100%);
+        background: Theme.card_subtle_bg;
 
         // Ruler bottom divider
         Rectangle {
             y: parent.height - 1px;
             width: 100%;
             height: 1px;
-            background: #272732;
+            background: Theme.timeline_border;
         }
     }
 
@@ -86,15 +86,15 @@ export component TimelineGrid inherits Rectangle {
             y: root.ruler_height;
             width: 1px;
             height: max(0px, parent.height - root.ruler_height);
-            background: root.is_dual_channel ? #a3e63524 : #a3e63520;
+            background: root.is_dual_channel ? Theme.accent_lime.with-alpha(0.11) : Theme.accent_lime.with-alpha(0.09);
         }
 
         // Major Tick Mark in Ruler Bar
         Rectangle {
-            y: root.ruler_height - 6px;
+            y: root.ruler_height - 5px;
             width: 1px;
-            height: 6px;
-            background: Theme.text_muted;
+            height: 5px;
+            background: Theme.text_faint;
         }
 
         // Timecode Label in Ruler Bar
@@ -102,8 +102,8 @@ export component TimelineGrid inherits Rectangle {
             x: 4px;
             y: 2px;
             text: root.format_timecode(tick_item.tick_sec, root.show_fraction);
-            font-size: Theme.font_badge;
-            font-weight: 700;
+            font-size: 10px;
+            font-weight: 600;
             font-family: Theme.font_mono;
             color: Theme.text_muted;
         }
@@ -114,20 +114,18 @@ export component TimelineGrid inherits Rectangle {
             width: 1px;
             height: 100%;
 
-            // Minor vertical line through waveform
             Rectangle {
                 y: root.ruler_height;
                 width: 1px;
                 height: max(0px, parent.height - root.ruler_height);
-                background: #1e293b26;
+                background: Theme.card_border.with-alpha(0.45);
             }
 
-            // Minor tick in ruler
             Rectangle {
                 y: root.ruler_height - 3px;
                 width: 1px;
                 height: 3px;
-                background: #64748b66;
+                background: Theme.text_faint.with-alpha(0.5);
             }
         }
     }

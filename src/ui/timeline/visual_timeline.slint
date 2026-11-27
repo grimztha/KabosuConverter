@@ -55,17 +55,14 @@ export component VisualTimeline inherits Rectangle {
 
     height: root.zoom_level > 1.01 ? 92px : 74px;
     border-radius: 8px;
-    background: Theme.bg_surface;
+    background: Theme.timeline_track_bg;
     border-width: 1px;
-    border-color: Theme.card_border;
+    border-color: Theme.timeline_border;
     clip: true;
 
     animate height { duration: 150ms; easing: ease-out; }
 
     VerticalLayout {
-        padding: 0px;
-        spacing: 0px;
-
         sv := ScrollView {
             horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
             vertical-scrollbar-policy: ScrollBarPolicy.always-off;
@@ -75,7 +72,7 @@ export component VisualTimeline inherits Rectangle {
             track := Rectangle {
                 width: max(parent.width, parent.width * root.zoom_level);
                 height: 100%;
-                background: Theme.bg_surface;
+                background: Theme.timeline_track_bg;
 
                 // Audio Waveform Visualization Layer
                 if AppData.has_waveform : Image {
@@ -85,7 +82,6 @@ export component VisualTimeline inherits Rectangle {
                     height: max(0px, parent.height - 18px);
                     source: AppData.timeline_waveform;
                     image-fit: fill;
-                    image-rendering: smooth;
                     opacity: 0.9;
                 }
 
@@ -94,19 +90,17 @@ export component VisualTimeline inherits Rectangle {
                     width: 100%;
                     height: 100%;
                     duration: root.duration;
-                    is_dual_channel: false;
-                    ruler_height: 18px;
                 }
 
-                // Active Trim Region Highlight
+                // Active Trim Region Highlight (Refined Yuzu Gold)
                 if root.has_trim : Rectangle {
                     x: max(0px, track.width * root.in_point_norm);
                     width: max(4px, track.width * (root.out_point_norm - root.in_point_norm));
                     y: 18px;
                     height: max(0px, parent.height - 18px);
-                    background: @linear-gradient(90deg, Theme.accent_amber_hover.with-alpha(0.2) 0%, Theme.trim_out_marker.with-alpha(0.33) 50%, Theme.accent_amber_hover.with-alpha(0.2) 100%);
+                    background: @linear-gradient(90deg, Theme.trim_out_marker.with-alpha(0.14) 0%, Theme.trim_out_marker.with-alpha(0.24) 50%, Theme.trim_out_marker.with-alpha(0.14) 100%);
                     border-width: 1px;
-                    border-color: Theme.trim_out_marker.with-alpha(0.53);
+                    border-color: Theme.trim_out_marker.with-alpha(0.45);
 
                     // Left boundary edge line
                     Rectangle {
@@ -167,21 +161,21 @@ export component VisualTimeline inherits Rectangle {
                     }
                 }
 
-                // Playhead Needle & Scrubber Cursor
+                // Playhead Needle & Scrubber Cursor (Crisp Kabosu Zest)
                 Rectangle {
                     property <float> norm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
                     x: max(0px, min(track.width - 2px, (track.width - 2px) * self.norm));
                     width: 2px;
                     height: 100%;
-                    background: Theme.trim_in_marker;
+                    background: Theme.playhead_marker;
 
-                    // Triangular playhead knob pointing down toward needle
                     Image {
                         x: -6px;
                         y: 0px;
                         width: 14px;
                         height: 12px;
                         source: @image-url("../icons/playhead-triangle.svg");
+                        colorize: Theme.playhead_marker;
                     }
                 }
 
@@ -190,18 +184,18 @@ export component VisualTimeline inherits Rectangle {
                     property <float> norm: root.in_point_sec >= 0.0 ? root.in_point_norm : 0.0;
                     x: max(0px, min(track.width - self.width, track.width * self.norm));
                     y: max(18px, track.height - self.height - 2px);
-                    width: root.in_point_sec >= 0.0 ? 32px : 18px;
+                    width: root.in_point_sec >= 0.0 ? 34px : 18px;
                     height: 22px;
-                    border-radius: 3px;
-                    background: in_ta.has-hover || in_ta.pressed ? Theme.accent_amber : (root.in_point_sec >= 0.0 ? Theme.trim_out_marker : Theme.accent_amber.darker(0.5).with-alpha(0.53));
+                    border-radius: 4px;
+                    background: in_ta.has-hover || in_ta.pressed ? Theme.accent_amber_hover : (root.in_point_sec >= 0.0 ? Theme.trim_out_marker : Theme.amber_surface);
                     border-width: 1px;
-                    border-color: root.in_point_sec >= 0.0 ? #ffffff : Theme.trim_out_marker.with-alpha(0.53);
+                    border-color: root.in_point_sec >= 0.0 ? Theme.text_primary.with-alpha(0.75) : Theme.amber_border;
 
                     Text {
                         text: root.in_point_sec >= 0.0 ? "[ IN" : "[";
                         font-size: root.in_point_sec >= 0.0 ? 9.5px : 11px;
                         font-weight: 800;
-                        color: root.in_point_sec >= 0.0 ? #000000 : Theme.accent_amber;
+                        color: root.in_point_sec >= 0.0 ? Theme.text_on_accent : Theme.accent_amber;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                     }
@@ -230,18 +224,18 @@ export component VisualTimeline inherits Rectangle {
                     property <float> norm: root.out_point_sec >= 0.0 ? root.out_point_norm : 1.0;
                     x: max(0px, min(track.width - self.width, track.width * self.norm - self.width));
                     y: max(18px, track.height - self.height - 2px);
-                    width: root.out_point_sec >= 0.0 ? 36px : 18px;
+                    width: root.out_point_sec >= 0.0 ? 38px : 18px;
                     height: 22px;
-                    border-radius: 3px;
-                    background: out_ta.has-hover || out_ta.pressed ? Theme.accent_amber : (root.out_point_sec >= 0.0 ? Theme.trim_out_marker : Theme.accent_amber.darker(0.5).with-alpha(0.53));
+                    border-radius: 4px;
+                    background: out_ta.has-hover || out_ta.pressed ? Theme.accent_amber_hover : (root.out_point_sec >= 0.0 ? Theme.trim_out_marker : Theme.amber_surface);
                     border-width: 1px;
-                    border-color: root.out_point_sec >= 0.0 ? #ffffff : Theme.trim_out_marker.with-alpha(0.53);
+                    border-color: root.out_point_sec >= 0.0 ? Theme.text_primary.with-alpha(0.75) : Theme.amber_border;
 
                     Text {
                         text: root.out_point_sec >= 0.0 ? "OUT ]" : "]";
                         font-size: root.out_point_sec >= 0.0 ? 9.5px : 11px;
                         font-weight: 800;
-                        color: root.out_point_sec >= 0.0 ? #000000 : Theme.accent_amber;
+                        color: root.out_point_sec >= 0.0 ? Theme.text_on_accent : Theme.accent_amber;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                     }
@@ -287,7 +281,7 @@ export component VisualTimeline inherits Rectangle {
 
         if root.zoom_level > 1.01 : Rectangle {
             height: 1px;
-            background: Theme.btn_neutral_bg;
+            background: Theme.timeline_border;
         }
 
         if root.zoom_level > 1.01 : HorizontalLayout {
@@ -297,7 +291,6 @@ export component VisualTimeline inherits Rectangle {
             padding-bottom: 3px;
 
             TimelineScrollBar {
-                height: 12px;
                 track_width: track.width;
                 viewport_width: sv.width;
                 zoom_level: root.zoom_level;

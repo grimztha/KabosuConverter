@@ -59,9 +59,9 @@ export component CropOverlayView inherits Rectangle {
         y: root.box_y;
         width: root.box_w;
         height: root.box_h;
-        border-width: 2px;
-        border-color: Theme.accent_cyan;
-        background: Theme.accent_cyan.with-alpha(0.04);
+        border-width: 1.5px;
+        border-color: Theme.accent_lime;
+        background: Theme.accent_lime.with-alpha(0.03);
 
         // Rule of thirds vertical lines
         Rectangle {
@@ -69,14 +69,14 @@ export component CropOverlayView inherits Rectangle {
             y: 0px;
             width: 1px;
             height: parent.height;
-            background: #ffffff.with-alpha(0.27);
+            background: Theme.text_primary.with-alpha(0.22);
         }
         Rectangle {
             x: (parent.width * 2) / 3;
             y: 0px;
             width: 1px;
             height: parent.height;
-            background: #ffffff.with-alpha(0.27);
+            background: Theme.text_primary.with-alpha(0.22);
         }
 
         // Rule of thirds horizontal lines
@@ -85,14 +85,14 @@ export component CropOverlayView inherits Rectangle {
             y: parent.height / 3;
             width: parent.width;
             height: 1px;
-            background: #ffffff.with-alpha(0.27);
+            background: Theme.text_primary.with-alpha(0.22);
         }
         Rectangle {
             x: 0px;
             y: (parent.height * 2) / 3;
             width: parent.width;
             height: 1px;
-            background: #ffffff.with-alpha(0.27);
+            background: Theme.text_primary.with-alpha(0.22);
         }
 
         // Center Crosshair
@@ -101,35 +101,35 @@ export component CropOverlayView inherits Rectangle {
             y: (parent.height - 1px) / 2;
             width: 12px;
             height: 1px;
-            background: Theme.accent_cyan.with-alpha(0.66);
+            background: Theme.accent_lime.with-alpha(0.65);
         }
         Rectangle {
             x: (parent.width - 1px) / 2;
             y: (parent.height - 12px) / 2;
             width: 1px;
             height: 12px;
-            background: Theme.accent_cyan.with-alpha(0.66);
+            background: Theme.accent_lime.with-alpha(0.65);
         }
 
         // Live Dimensions & Coordinates Readout Pill inside Crop Box
         if parent.width > 95px && parent.height > 32px : Rectangle {
-            x: 6px;
-            y: 6px;
-            height: 20px;
-            width: dim_txt.preferred-width + 12px;
-            border-radius: 4px;
-            background: Theme.card_bg.with-alpha(0.8);
+            x: 8px;
+            y: 8px;
+            height: 22px;
+            width: dim_txt.preferred-width + 14px;
+            border-radius: 5px;
+            background: Theme.popup_bg.with-alpha(0.9);
             border-width: 1px;
-            border-color: Theme.accent_cyan.with-alpha(0.53);
+            border-color: Theme.accent_border;
 
             dim_txt := Text {
-                x: 6px;
+                x: 7px;
                 y: (parent.height - self.height) / 2;
                 text: "\{root.crop_px_w} × \{root.crop_px_h}  (\{root.crop_px_x}, \{root.crop_px_y})";
                 font-size: Theme.font_badge;
                 font-family: Theme.font_mono;
-                font-weight: 700;
-                color: Theme.accent_cyan;
+                font-weight: 600;
+                color: Theme.accent_lime;
             }
         }
 
@@ -168,7 +168,7 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: tl_ta.has-hover || tl_ta.pressed ? Theme.accent_amber : #ffffff;
+        background: tl_ta.has-hover || tl_ta.pressed ? Theme.accent_amber : Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
         tl_ta := TouchArea {
@@ -206,7 +206,7 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: tr_ta.has-hover || tr_ta.pressed ? Theme.accent_amber : #ffffff;
+        background: tr_ta.has-hover || tr_ta.pressed ? Theme.accent_amber : Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
         tr_ta := TouchArea {
@@ -244,7 +244,7 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: bl_ta.has-hover || bl_ta.pressed ? Theme.accent_amber : #ffffff;
+        background: bl_ta.has-hover || bl_ta.pressed ? Theme.accent_amber : Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
         bl_ta := TouchArea {
@@ -282,7 +282,7 @@ export component CropOverlayView inherits Rectangle {
         width: 12px;
         height: 12px;
         border-radius: 3px;
-        background: br_ta.has-hover || br_ta.pressed ? Theme.accent_amber : #ffffff;
+        background: br_ta.has-hover || br_ta.pressed ? Theme.accent_amber : Theme.text_primary;
         border-width: 2px;
         border-color: Theme.accent_primary;
         br_ta := TouchArea {
@@ -316,11 +316,11 @@ export component CropOverlayView inherits Rectangle {
     // Top Edge (4)
     Rectangle {
         x: root.box_x + (root.box_w - 24px) / 2;
-        y: root.box_y - 4px;
+        y: root.box_y - 3.5px;
         width: 24px;
-        height: 8px;
-        border-radius: 2px;
-        background: t_ta.has-hover || t_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
+        height: 7px;
+        border-radius: 3px;
+        background: t_ta.has-hover || t_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
         t_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
@@ -352,11 +352,11 @@ export component CropOverlayView inherits Rectangle {
     // Bottom Edge (5)
     Rectangle {
         x: root.box_x + (root.box_w - 24px) / 2;
-        y: root.box_y + root.box_h - 4px;
+        y: root.box_y + root.box_h - 3.5px;
         width: 24px;
-        height: 8px;
-        border-radius: 2px;
-        background: b_ta.has-hover || b_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
+        height: 7px;
+        border-radius: 3px;
+        background: b_ta.has-hover || b_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
         b_ta := TouchArea {
             mouse-cursor: ns-resize;
             pointer-event(ev) => {
@@ -387,12 +387,12 @@ export component CropOverlayView inherits Rectangle {
 
     // Left Edge (6)
     Rectangle {
-        x: root.box_x - 4px;
+        x: root.box_x - 3.5px;
         y: root.box_y + (root.box_h - 24px) / 2;
-        width: 8px;
+        width: 7px;
         height: 24px;
-        border-radius: 2px;
-        background: l_ta.has-hover || l_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
+        border-radius: 3px;
+        background: l_ta.has-hover || l_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
         l_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {
@@ -423,12 +423,12 @@ export component CropOverlayView inherits Rectangle {
 
     // Right Edge (7)
     Rectangle {
-        x: root.box_x + root.box_w - 4px;
+        x: root.box_x + root.box_w - 3.5px;
         y: root.box_y + (root.box_h - 24px) / 2;
-        width: 8px;
+        width: 7px;
         height: 24px;
-        border-radius: 2px;
-        background: r_ta.has-hover || r_ta.pressed ? Theme.accent_amber : Theme.accent_cyan;
+        border-radius: 3px;
+        background: r_ta.has-hover || r_ta.pressed ? Theme.accent_amber : Theme.accent_lime;
         r_ta := TouchArea {
             mouse-cursor: ew-resize;
             pointer-event(ev) => {

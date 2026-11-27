@@ -1,8 +1,8 @@
-import { LineEdit } from "std-widgets.slint";
 import { AppData, AppLogic, Theme } from "../globals.slint";
 import { IconButton } from "../components/icon_button.slint";
 import { ActionButton } from "../components/action_button.slint";
 import { Badge } from "../components/badge.slint";
+import { TextField } from "../components/text_field.slint";
 import { VolumeBar } from "../components/volume_bar.slint";
 import { VolumeMeter } from "../components/volume_meter.slint";
 import { VisualTimeline } from "../timeline/visual_timeline.slint";
@@ -12,40 +12,41 @@ import { CropOverlayView } from "./crop_overlay.slint";
 export component PlayerTab inherits VerticalLayout {
     callback request_focus();
 
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-    spacing: 0px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 
     // MEDIA PLAYER & TRIMMING STUDIO EMPTY STATE
     if !AppData.player_has_media : Rectangle {
         vertical-stretch: 1;
         min-height: 240px;
-        border-radius: 12px;
+        border-radius: Theme.radius_lg;
         background: Theme.card_bg;
         border-width: 1px;
         border-color: Theme.card_border;
 
         VerticalLayout {
             padding: 36px;
-            spacing: 18px;
+            spacing: 20px;
             alignment: center;
 
             HorizontalLayout {
                 alignment: center;
                 Rectangle {
-                    width: 64px;
-                    height: 64px;
-                    border-radius: 32px;
-                    background: @linear-gradient(135deg, Theme.accent_primary 0%, #a3e635 100%);
+                    width: 60px;
+                    height: 60px;
+                    border-radius: 16px;
+                    background: Theme.accent_surface;
+                    border-width: 1px;
+                    border-color: Theme.accent_border;
                     Image {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                         source: @image-url("../icons/film.svg");
-                        width: 28px;
-                        height: Theme.btn_height_sm;
-                        colorize: #ffffff;
+                        width: 26px;
+                        height: 26px;
+                        colorize: Theme.accent_lime;
                     }
                 }
             }
@@ -54,54 +55,58 @@ export component PlayerTab inherits VerticalLayout {
                 spacing: 6px;
                 alignment: center;
                 Text {
-                    text: "View & Edit";
-                    font-size: 18px;
+                    text: "View & Edit Studio";
+                    font-size: Theme.font_title;
                     font-weight: 700;
                     color: Theme.text_primary;
                     horizontal-alignment: center;
                 }
                 Text {
-                    text: "Load any audio or video file to preview frame-by-frame, scrub the interactive timeline, and trim.";
+                    text: "Load any audio or video file to inspect frame-by-frame, trim with precision, crop, and tune audio.";
                     font-size: Theme.font_body;
-                    color: Theme.text_secondary;
+                    color: Theme.text_muted;
                     horizontal-alignment: center;
+                    wrap: word-wrap;
                 }
             }
 
             HorizontalLayout {
                 alignment: center;
                 ActionButton {
-                    width: 240px;
+                    width: 224px;
                     height: Theme.btn_height_lg;
-                    title: "Open Audio or Video File";
+                    title: "Open Media File";
                     icon_source: @image-url("../icons/folder-open.svg");
                     has_icon: true;
-                    icon_size: 16px;
+                    icon_size: 15px;
                     fill_color: Theme.accent_primary;
                     hover_color: Theme.accent_primary_hover;
+                    pressed_color: Theme.accent_primary_pressed;
+                    text_color: Theme.text_on_accent;
                     font_size: Theme.font_body;
+                    btn_radius: Theme.radius_md;
                     clicked => { AppLogic.add_files(); }
                 }
             }
 
             HorizontalLayout {
                 alignment: center;
-                spacing: 8px;
-                Badge { label: "MP4"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
-                Badge { label: "MKV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
-                Badge { label: "MOV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
-                Badge { label: "WEBM"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_cyan; }
-                Badge { label: "MP3"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
-                Badge { label: "WAV"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
-                Badge { label: "FLAC"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
-                Badge { label: "AAC"; bg_color: Theme.card_secondary_bg; fg_color: Theme.accent_purple; }
+                spacing: 6px;
+                Badge { label: "MP4"; bg_color: Theme.accent_surface; fg_color: Theme.accent_lime; border_col: Theme.accent_border; }
+                Badge { label: "MKV"; bg_color: Theme.accent_surface; fg_color: Theme.accent_lime; border_col: Theme.accent_border; }
+                Badge { label: "MOV"; bg_color: Theme.accent_surface; fg_color: Theme.accent_lime; border_col: Theme.accent_border; }
+                Badge { label: "WEBM"; bg_color: Theme.accent_surface; fg_color: Theme.accent_lime; border_col: Theme.accent_border; }
+                Badge { label: "MP3"; bg_color: Theme.purple_surface; fg_color: Theme.accent_purple; border_col: Theme.purple_border; }
+                Badge { label: "WAV"; bg_color: Theme.purple_surface; fg_color: Theme.accent_purple; border_col: Theme.purple_border; }
+                Badge { label: "FLAC"; bg_color: Theme.purple_surface; fg_color: Theme.accent_purple; border_col: Theme.purple_border; }
+                Badge { label: "AAC"; bg_color: Theme.purple_surface; fg_color: Theme.accent_purple; border_col: Theme.purple_border; }
             }
         }
     }
 
     if AppData.player_has_media : Rectangle {
         vertical-stretch: 1;
-        border-radius: 10px;
+        border-radius: Theme.radius_md;
         background: Theme.card_bg;
         border-width: 1px;
         border-color: Theme.card_border;
@@ -113,22 +118,24 @@ export component PlayerTab inherits VerticalLayout {
             padding-bottom: 10px;
             spacing: 8px;
 
-            // Header row
+            // Header Row: Media Badge + Filename + Active Trim Readout + VU Meter Toggle
             HorizontalLayout {
-                spacing: 10px;
+                spacing: 8px;
 
                 Rectangle {
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 6px;
-                    background: AppData.selected_is_video ? @linear-gradient(135deg, Theme.accent_primary 0%, #a3e635 100%) : @linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+                    width: 28px;
+                    height: 28px;
+                    border-radius: Theme.radius_sm;
+                    background: AppData.selected_is_video ? Theme.accent_surface : Theme.purple_surface;
+                    border-width: 1px;
+                    border-color: AppData.selected_is_video ? Theme.accent_border : Theme.purple_border;
                     Image {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                         source: AppData.selected_is_video ? @image-url("../icons/video.svg") : @image-url("../icons/audio.svg");
-                        width: 18px;
-                        height: 18px;
-                        colorize: #ffffff;
+                        width: 15px;
+                        height: 15px;
+                        colorize: AppData.selected_is_video ? Theme.accent_lime : Theme.accent_purple;
                     }
                 }
 
@@ -138,11 +145,119 @@ export component PlayerTab inherits VerticalLayout {
                     alignment: center;
                     Text {
                         text: AppData.selected_file_name;
-                        font-size: 13.5px;
+                        font-size: Theme.font_section;
                         font-weight: 700;
                         color: Theme.text_primary;
                         overflow: elide;
                         vertical-alignment: center;
+                    }
+                }
+
+                // Active Trim Duration Badge (always cleanly visible, never clipped)
+                if AppData.has_active_trim : Rectangle {
+                    height: Theme.btn_height_sm;
+                    border-radius: Theme.radius_sm;
+                    background: Theme.amber_surface;
+                    border-width: 1px;
+                    border-color: Theme.amber_border;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 5px;
+                        alignment: center;
+
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: @image-url("../icons/scissors.svg");
+                                width: 11px;
+                                height: 11px;
+                                colorize: Theme.accent_amber;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: "Trim";
+                                font-size: Theme.font_badge;
+                                font-weight: 600;
+                                color: Theme.accent_amber;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: AppData.trim_duration_text;
+                                font-size: Theme.font_badge;
+                                font-weight: 700;
+                                font-family: Theme.font_mono;
+                                color: Theme.accent_amber;
+                            }
+                        }
+                    }
+                }
+
+                // Volume Meter Toggle Pill
+                meter_toggle_btn := Rectangle {
+                    height: Theme.btn_height_sm;
+                    border-radius: Theme.radius_sm;
+                    background: AppData.show_volume_meter ? Theme.accent_surface : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.btn_neutral_bg);
+                    border-width: 1px;
+                    border-color: AppData.show_volume_meter ? Theme.accent_border : Theme.btn_neutral_border;
+
+                    animate background { duration: 120ms; easing: ease-out; }
+                    animate border-color { duration: 120ms; easing: ease-out; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        // Mini VU Bars Graphic
+                        vu_icon_box := Rectangle {
+                            width: 11px;
+                            height: 13px;
+
+                            Rectangle {
+                                x: 0px;
+                                y: parent.height - self.height;
+                                width: 2.5px;
+                                height: 6px;
+                                border-radius: 1px;
+                                background: AppData.show_volume_meter ? Theme.meter_green : Theme.text_muted;
+                            }
+                            Rectangle {
+                                x: 4px;
+                                y: parent.height - self.height;
+                                width: 2.5px;
+                                height: 9.5px;
+                                border-radius: 1px;
+                                background: AppData.show_volume_meter ? Theme.meter_yellow : Theme.text_muted;
+                            }
+                            Rectangle {
+                                x: 8px;
+                                y: parent.height - self.height;
+                                width: 2.5px;
+                                height: 13px;
+                                border-radius: 1px;
+                                background: AppData.show_volume_meter ? Theme.meter_red : Theme.text_muted;
+                            }
+                        }
+
+                        Text {
+                            text: "Meter";
+                            font-size: Theme.font_badge;
+                            font-weight: 600;
+                            color: AppData.show_volume_meter ? Theme.accent_lime : Theme.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    meter_btn_ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { AppLogic.toggle_volume_meter(); }
                     }
                 }
             }
@@ -152,15 +267,12 @@ export component PlayerTab inherits VerticalLayout {
                 vertical-stretch: AppData.selected_is_video ? 3 : 2;
                 min-height: 100px;
                 border-radius: 8px;
-                background: #000000;
+                background: #050706;
                 border-width: 1px;
                 border-color: Theme.card_border;
                 clip: true;
 
                 HorizontalLayout {
-                    padding: 0px;
-                    spacing: 0px;
-
                     // Main Viewer Screen (Video canvas or Audio Waveform Studio)
                     Rectangle {
                         horizontal-stretch: 1;
@@ -214,11 +326,11 @@ export component PlayerTab inherits VerticalLayout {
 
                             // Loading indicator
                             if AppData.preview_frame_loading : Rectangle {
-                                background: #00000099;
+                                background: Theme.overlay_mask;
                                 Text {
                                     text: "Seeking frame...";
-                                    font-size: 12px;
-                                    color: #a1a1aa;
+                                    font-size: Theme.font_caption;
+                                    color: Theme.text_secondary;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -240,167 +352,147 @@ export component PlayerTab inherits VerticalLayout {
                             fade_in_text: AppData.audio_fade_in_text;
                             fade_out_text: AppData.audio_fade_out_text;
                             has_audio: AppData.selected_is_audio;
-                            scrub(val) => {
-                                AppLogic.player_scrub(val);
-                            }
-                            seek(val) => {
-                                AppLogic.player_seek(val);
-                            }
-                            in_point_dragged(val) => {
-                                AppLogic.set_in_point_from_timeline(val);
-                            }
-                            out_point_dragged(val) => {
-                                AppLogic.set_out_point_from_timeline(val);
-                            }
-                            fade_in_dragged(val) => {
-                                AppLogic.set_audio_fade_in(val);
-                            }
-                            fade_out_dragged(val) => {
-                                AppLogic.set_audio_fade_out(val);
-                            }
-                            fade_settled() => {
-                                AppLogic.audio_fade_settled();
-                            }
+                            scrub(val) => { AppLogic.player_scrub(val); }
+                            seek(val) => { AppLogic.player_seek(val); }
+                            in_point_dragged(val) => { AppLogic.set_in_point_from_timeline(val); }
+                            out_point_dragged(val) => { AppLogic.set_out_point_from_timeline(val); }
+                            fade_in_dragged(val) => { AppLogic.set_audio_fade_in(val); }
+                            fade_out_dragged(val) => { AppLogic.set_audio_fade_out(val); }
+                            fade_settled() => { AppLogic.audio_fade_settled(); }
                         }
                     }
 
-                    // Animated Expand/Collapse Volume Meter Container & Floating Card
+                    // Animated Expand/Collapse Studio Volume Meter Rail
                     meter_expand_container := Rectangle {
-                        width: AppData.show_volume_meter ? 66px : 0px;
+                        width: AppData.show_volume_meter ? 70px : 0px;
                         clip: true;
-                        animate width { duration: 250ms; easing: ease-out; }
+                        animate width { duration: 220ms; easing: ease-out; }
 
                         VerticalLayout {
                             alignment: end;
-                            padding-top: 8px;
-                            padding-bottom: 8px;
-                            padding-right: 8px;
-                            padding-left: 8px;
+                            padding: 7px;
 
                             VolumeMeter {
-                                width: 50px;
+                                width: 56px;
                                 height: 280px;
                                 level_l_db: AppData.audio_meter_l_db;
                                 level_r_db: AppData.audio_meter_r_db;
                                 peak_l_db: AppData.audio_meter_peak_l_db;
                                 peak_r_db: AppData.audio_meter_peak_r_db;
                                 opacity: AppData.show_volume_meter ? 1.0 : 0.0;
-                                animate opacity { duration: 200ms; easing: ease-out; }
+                                animate opacity { duration: 180ms; easing: ease-out; }
                             }
                         }
                     }
                 }
             }
 
-            // Visual Timeline Track
+            // Timeline Utility Row & Visual Timeline Track
             VerticalLayout {
                 spacing: 8px;
 
-                // Time Readouts Header Bar: PLAYHEAD / TOTAL on left, Volume in middle, TRIM on right
+                // Clean Unclipped Utility Bar: Timecode (left) · Volume & Zoom (right)
                 HorizontalLayout {
-                    spacing: 6px;
-                    alignment: center;
+                    spacing: 8px;
 
-                    // Left: Combined Playhead & Duration Pill
+                    // Playhead / Duration Readout Pill
                     Rectangle {
                         height: Theme.btn_height_sm;
-                        border-radius: 6px;
-                        background: Theme.card_secondary_bg;
+                        border-radius: Theme.radius_sm;
+                        background: Theme.input_bg;
                         border-width: 1px;
                         border-color: Theme.card_secondary_border;
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
+                            padding-left: 9px;
+                            padding-right: 9px;
                             spacing: 5px;
                             alignment: center;
-                            Text { text: AppData.player_time_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.accent_cyan; vertical-alignment: center; }
-                            Text { text: "/"; font-size: Theme.font_badge; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
-                            Text { text: AppData.player_duration_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.text_primary; vertical-alignment: center; }
+                            Text { text: AppData.player_time_text; font-size: Theme.font_caption; font-weight: 700; font-family: Theme.font_mono; color: Theme.accent_lime; vertical-alignment: center; }
+                            Text { text: "/"; font-size: Theme.font_badge; font-weight: 500; color: Theme.text_faint; vertical-alignment: center; }
+                            Text { text: AppData.player_duration_text; font-size: Theme.font_caption; font-weight: 600; font-family: Theme.font_mono; color: Theme.text_secondary; vertical-alignment: center; }
                         }
                     }
+
+                    Rectangle { horizontal-stretch: 1; }
 
                     // Volume Control Bar Pill
                     VolumeBar {
                         volume: AppData.player_volume;
                         is_muted: AppData.player_is_muted;
-                        volume_changed(val) => {
-                            AppLogic.player_volume_changed(val);
-                        }
-                        volume_settled(val) => {
-                            AppLogic.player_volume_settled(val);
-                        }
-                        toggle_mute() => {
-                            AppLogic.player_toggle_mute();
-                        }
+                        volume_changed(val) => { AppLogic.player_volume_changed(val); }
+                        volume_settled(val) => { AppLogic.player_volume_settled(val); }
+                        toggle_mute() => { AppLogic.player_toggle_mute(); }
                     }
 
-                    // Zoom Controls (for both audio waveform and video timeline)
+                    // Timeline Zoom Controls Pill
                     Rectangle {
                         height: Theme.btn_height_sm;
-                        border-radius: 6px;
-                        background: Theme.card_secondary_bg;
+                        border-radius: Theme.radius_sm;
+                        background: Theme.input_bg;
                         border-width: 1px;
                         border-color: Theme.card_secondary_border;
                         HorizontalLayout {
-                            padding-top: 4px;
-                            padding-bottom: 4px;
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 3px;
+                            padding-top: 3px;
+                            padding-bottom: 3px;
+                            padding-left: 7px;
+                            padding-right: 5px;
+                            spacing: 2px;
                             alignment: center;
 
-                            Text { text: "Zoom:"; font-size: Theme.font_badge; font-weight: 700; color: Theme.text_muted; vertical-alignment: center; }
+                            Text { text: "Zoom"; font-size: Theme.font_badge; font-weight: 600; color: Theme.text_muted; vertical-alignment: center; }
+
+                            Rectangle { width: 3px; }
 
                             Rectangle {
                                 width: 20px;
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzm_ta.has-hover ? Theme.control_hover : transparent;
-                                Text { text: "−"; font-size: Theme.font_body; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "−"; font-size: Theme.font_body; font-weight: 700; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzm_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = max(1.0, AppData.timeline_zoom - 0.5); } }
                             }
 
                             Rectangle {
-                                width: 26px;
+                                width: 25px;
                                 height: 20px;
                                 border-radius: 4px;
-                                background: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan.with-alpha(0.18) : (vz1_ta.has-hover ? Theme.control_hover : transparent);
+                                background: AppData.timeline_zoom <= 1.05 ? Theme.accent_surface : (vz1_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: AppData.timeline_zoom <= 1.05 ? 1px : 0px;
-                                border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "1x"; font-size: Theme.font_badge; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_border;
+                                Text { text: "1x"; font-size: Theme.font_badge; font-weight: 700; color: AppData.timeline_zoom <= 1.05 ? Theme.accent_lime : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz1_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 1.0; } }
                             }
 
                             Rectangle {
-                                width: 26px;
+                                width: 25px;
                                 height: 20px;
                                 border-radius: 4px;
-                                background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz2_ta.has-hover ? Theme.control_hover : transparent);
+                                background: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_surface : (vz2_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? 1px : 0px;
-                                border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "2x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_border;
+                                Text { text: "2x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 1.95 && AppData.timeline_zoom < 2.05) ? Theme.accent_lime : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz2_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 2.0; } }
                             }
 
                             Rectangle {
-                                width: 26px;
+                                width: 25px;
                                 height: 20px;
                                 border-radius: 4px;
-                                background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz4_ta.has-hover ? Theme.control_hover : transparent);
+                                background: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_surface : (vz4_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? 1px : 0px;
-                                border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "4x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_border;
+                                Text { text: "4x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 3.95 && AppData.timeline_zoom < 4.05) ? Theme.accent_lime : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz4_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 4.0; } }
                             }
 
                             Rectangle {
-                                width: 26px;
+                                width: 25px;
                                 height: 20px;
                                 border-radius: 4px;
-                                background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan.with-alpha(0.18) : (vz8_ta.has-hover ? Theme.control_hover : transparent);
+                                background: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_surface : (vz8_ta.has-hover ? Theme.control_hover : transparent);
                                 border-width: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? 1px : 0px;
-                                border-color: Theme.accent_cyan.with-alpha(0.5);
-                                Text { text: "8x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_cyan : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
+                                border-color: Theme.accent_border;
+                                Text { text: "8x"; font-size: Theme.font_badge; font-weight: 700; color: (AppData.timeline_zoom > 7.95 && AppData.timeline_zoom < 8.05) ? Theme.accent_lime : Theme.text_muted; horizontal-alignment: center; vertical-alignment: center; }
                                 vz8_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = 8.0; } }
                             }
 
@@ -409,7 +501,7 @@ export component PlayerTab inherits VerticalLayout {
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzp_ta.has-hover ? Theme.control_hover : transparent;
-                                Text { text: "+"; font-size: Theme.font_body; font-weight: 800; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "+"; font-size: Theme.font_body; font-weight: 700; color: Theme.text_secondary; horizontal-alignment: center; vertical-alignment: center; }
                                 vzp_ta := TouchArea { mouse-cursor: pointer; clicked => { AppData.timeline_zoom = min(8.0, AppData.timeline_zoom + 0.5); } }
                             }
 
@@ -418,119 +510,11 @@ export component PlayerTab inherits VerticalLayout {
                                 height: 20px;
                                 border-radius: 4px;
                                 background: vzc_ta.has-hover ? Theme.control_hover : transparent;
-                                Text { text: "⊙"; font-size: 12px; font-weight: 800; color: Theme.accent_cyan; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "⊙"; font-size: 12px; font-weight: 700; color: Theme.accent_lime; horizontal-alignment: center; vertical-alignment: center; }
                                 vzc_ta := TouchArea {
                                     mouse-cursor: pointer;
-                                    clicked => {
-                                        AppData.center_timeline_trigger += 1;
-                                    }
+                                    clicked => { AppData.center_timeline_trigger += 1; }
                                 }
-                            }
-                        }
-                    }
-
-                    // Volume Meter Toggle Button
-                    meter_toggle_btn := Rectangle {
-                        height: Theme.btn_height_sm;
-                        border-radius: 6px;
-                        background: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.18) : (meter_btn_ta.has-hover ? Theme.control_hover : Theme.card_secondary_bg);
-                        border-width: 1px;
-                        border-color: AppData.show_volume_meter ? Theme.accent_cyan.with-alpha(0.5) : Theme.card_secondary_border;
-
-                        animate background { duration: 150ms; }
-                        animate border-color { duration: 150ms; }
-
-                        HorizontalLayout {
-                            padding-top: 4px;
-                            padding-bottom: 4px;
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 5px;
-                            alignment: center;
-
-                            // Mini VU / Volume Meter Graphic (3 colored bars rising from bottom baseline)
-                            vu_icon_box := Rectangle {
-                                width: 12px;
-                                height: 14px;
-
-                                // Green Bar (lowest, left)
-                                Rectangle {
-                                    x: 0px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 7px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? #22c55e : Theme.text_muted;
-                                }
-
-                                // Yellow Bar (middle, center)
-                                Rectangle {
-                                    x: 4.5px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 10.5px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? #eab308 : Theme.text_muted;
-                                }
-
-                                // Red Bar (tallest, right)
-                                Rectangle {
-                                    x: 9px;
-                                    y: parent.height - self.height;
-                                    width: 2.5px;
-                                    height: 14px;
-                                    border-radius: 1px;
-                                    background: AppData.show_volume_meter ? #ef4444 : Theme.text_muted;
-                                }
-                            }
-
-                            Text {
-                                text: "Meter";
-                                font-size: Theme.font_badge;
-                                font-weight: 700;
-                                color: AppData.show_volume_meter ? Theme.accent_cyan : Theme.text_muted;
-                                vertical-alignment: center;
-                            }
-                        }
-
-                        meter_btn_ta := TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => {
-                                AppLogic.toggle_volume_meter();
-                            }
-                        }
-                    }
-
-                    Rectangle { horizontal-stretch: 1; }
-
-                    // Right: Amber Trim Pill (when active)
-                    if AppData.has_active_trim : Rectangle {
-                        height: Theme.btn_height_sm;
-                        border-radius: 6px;
-                        background: Theme.accent_amber.with-alpha(0.18);
-                        border-width: 1px;
-                        border-color: Theme.accent_amber;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
-                            alignment: center;
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("../icons/scissors.svg");
-                                    width: 12px;
-                                    height: 12px;
-                                    colorize: Theme.accent_amber;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text { text: "Trim:"; font-size: Theme.font_badge; font-weight: 700; color: Theme.accent_amber; }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text { text: AppData.trim_duration_text; font-size: Theme.font_caption; font-weight: 800; font-family: Theme.font_mono; color: Theme.accent_amber; }
                             }
                         }
                     }
@@ -551,27 +535,13 @@ export component PlayerTab inherits VerticalLayout {
                     fade_in_text: AppData.audio_fade_in_text;
                     fade_out_text: AppData.audio_fade_out_text;
                     has_audio: AppData.selected_is_audio;
-                    scrub(val) => {
-                        AppLogic.player_scrub(val);
-                    }
-                    seek(val) => {
-                        AppLogic.player_seek(val);
-                    }
-                    in_point_dragged(val) => {
-                        AppLogic.set_in_point_from_timeline(val);
-                    }
-                    out_point_dragged(val) => {
-                        AppLogic.set_out_point_from_timeline(val);
-                    }
-                    fade_in_dragged(val) => {
-                        AppLogic.set_audio_fade_in(val);
-                    }
-                    fade_out_dragged(val) => {
-                        AppLogic.set_audio_fade_out(val);
-                    }
-                    fade_settled() => {
-                        AppLogic.audio_fade_settled();
-                    }
+                    scrub(val) => { AppLogic.player_scrub(val); }
+                    seek(val) => { AppLogic.player_seek(val); }
+                    in_point_dragged(val) => { AppLogic.set_in_point_from_timeline(val); }
+                    out_point_dragged(val) => { AppLogic.set_out_point_from_timeline(val); }
+                    fade_in_dragged(val) => { AppLogic.set_audio_fade_in(val); }
+                    fade_out_dragged(val) => { AppLogic.set_audio_fade_out(val); }
+                    fade_settled() => { AppLogic.audio_fade_settled(); }
                 }
             }
 
@@ -585,15 +555,14 @@ export component PlayerTab inherits VerticalLayout {
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
-                    icon_size: 13px;
                     text: "-1s";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.player_step(-1.0); }
                 }
@@ -605,30 +574,31 @@ export component PlayerTab inherits VerticalLayout {
                     icon_size: 12px;
                     text: "-0.1s";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.player_step(-0.1); }
                 }
 
-                // Play / Pause Button (Neutral active when playing, Lime when paused)
+                // Primary Transport CTA: Play / Pause
                 ActionButton {
-                    width: 88px;
+                    width: 92px;
                     height: Theme.btn_height_md;
                     title: AppData.player_is_playing ? "Pause" : "Play";
                     icon_source: AppData.player_is_playing ? @image-url("../icons/pause.svg") : @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: AppData.player_is_playing ? #24242f : Theme.accent_primary;
-                    hover_color: AppData.player_is_playing ? #30303e : Theme.accent_primary_hover;
-                    text_color: AppData.player_is_playing ? Theme.accent_cyan : #ffffff;
-                    border_col: AppData.player_is_playing ? Theme.accent_cyan.with-alpha(0.55) : #a3e63577;
-                    hover_border_col: #a3e635aa;
-                    normal_border_width: 1px;
+                    fill_color: AppData.player_is_playing ? Theme.accent_surface : Theme.accent_primary;
+                    hover_color: AppData.player_is_playing ? Theme.accent_surface_hover : Theme.accent_primary_hover;
+                    pressed_color: AppData.player_is_playing ? Theme.control_pressed : Theme.accent_primary_pressed;
+                    text_color: AppData.player_is_playing ? Theme.accent_lime : Theme.text_on_accent;
+                    border_col: AppData.player_is_playing ? Theme.accent_border : transparent;
+                    hover_border_col: AppData.player_is_playing ? Theme.accent_primary : transparent;
+                    normal_border_width: AppData.player_is_playing ? 1px : 0px;
                     font_size: Theme.font_caption;
                     clicked => { AppLogic.player_play_pause(); }
                 }
@@ -638,13 +608,12 @@ export component PlayerTab inherits VerticalLayout {
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/stop.svg");
                     has_icon: true;
-                    icon_size: 13px;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.player_stop(); }
                 }
@@ -657,12 +626,12 @@ export component PlayerTab inherits VerticalLayout {
                     icon_size: 12px;
                     text: "+0.1s";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.player_step(0.1); }
                 }
@@ -671,15 +640,14 @@ export component PlayerTab inherits VerticalLayout {
                     btn_height: Theme.btn_height_md;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
-                    icon_size: 13px;
                     text: "+1s";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.player_step(1.0); }
                 }
@@ -694,62 +662,62 @@ export component PlayerTab inherits VerticalLayout {
                     width: 72px;
                     height: Theme.btn_height_sm;
                     title: "[ Set In";
-                    fill_color: #2a2114;
-                    hover_color: #3d2e19;
-                    text_color: #fbbf24;
-                    border_col: Theme.accent_amber.with-alpha(0.5);
-                    hover_border_col: Theme.accent_amber.with-alpha(0.85);
+                    fill_color: Theme.amber_surface;
+                    hover_color: Theme.amber_surface_hover;
+                    text_color: Theme.accent_amber;
+                    border_col: Theme.amber_border;
+                    hover_border_col: Theme.accent_amber;
                     normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.set_in_point_current(); }
                 }
 
                 ActionButton {
-                    width: 74px;
+                    width: 76px;
                     height: Theme.btn_height_sm;
                     title: "Set Out ]";
-                    fill_color: #2a2114;
-                    hover_color: #3d2e19;
-                    text_color: #fbbf24;
-                    border_col: Theme.accent_amber.with-alpha(0.5);
-                    hover_border_col: Theme.accent_amber.with-alpha(0.85);
+                    fill_color: Theme.amber_surface;
+                    hover_color: Theme.amber_surface_hover;
+                    text_color: Theme.accent_amber;
+                    border_col: Theme.amber_border;
+                    hover_border_col: Theme.accent_amber;
                     normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.set_out_point_current(); }
                 }
 
                 IconButton {
-                    btn_width: 46px;
+                    btn_width: 48px;
                     btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-left.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "In";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.jump_to_in_point(); }
                 }
 
                 IconButton {
-                    btn_width: 52px;
+                    btn_width: 54px;
                     btn_height: Theme.btn_height_sm;
                     icon_source: @image-url("../icons/chevrons-right.svg");
                     has_icon: true;
                     icon_size: 11px;
                     text: "Out";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #2e2e3b;
-                    pressed_bg: #393948;
-                    normal_border: #383848;
-                    hover_border: #525268;
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.btn_neutral_hover;
+                    pressed_bg: Theme.btn_neutral_pressed;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.input_hover_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.jump_to_out_point(); }
                 }
@@ -761,11 +729,11 @@ export component PlayerTab inherits VerticalLayout {
                     icon_source: @image-url("../icons/play.svg");
                     has_icon: true;
                     icon_size: 10px;
-                    fill_color: #112922;
-                    hover_color: #183d32;
-                    text_color: #34d399;
-                    border_col: Theme.accent_emerald.with-alpha(0.5);
-                    hover_border_col: Theme.accent_emerald.with-alpha(0.85);
+                    fill_color: Theme.emerald_surface;
+                    hover_color: Theme.emerald_surface_hover;
+                    text_color: Theme.accent_green;
+                    border_col: Theme.emerald_border;
+                    hover_border_col: Theme.accent_green;
                     normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.play_trimmed_range(); }
@@ -779,12 +747,12 @@ export component PlayerTab inherits VerticalLayout {
                     icon_size: 11px;
                     text: "Reset";
                     font_size: Theme.font_badge;
-                    text_color: Theme.text_primary;
-                    normal_bg: #22222c;
-                    hover_bg: #352328;
-                    pressed_bg: #442930;
-                    normal_border: #383848;
-                    hover_border: Theme.accent_red.with-alpha(0.6);
+                    text_color: Theme.btn_neutral_text;
+                    normal_bg: Theme.btn_neutral_bg;
+                    hover_bg: Theme.red_surface;
+                    pressed_bg: Theme.red_surface_hover;
+                    normal_border: Theme.btn_neutral_border;
+                    hover_border: Theme.red_border;
                     normal_border_width: 1px;
                     clicked => { AppLogic.clear_trim_points(); }
                 }
@@ -796,36 +764,38 @@ export component PlayerTab inherits VerticalLayout {
                 alignment: center;
 
                 Text {
-                    text: "In:";
+                    text: "In";
                     font-size: Theme.font_badge;
                     font-weight: 700;
                     color: Theme.accent_amber;
                     vertical-alignment: center;
                 }
 
-                LineEdit {
-                    width: 95px;
+                TextField {
+                    width: 96px;
                     height: Theme.btn_height_sm;
-                    font-size: Theme.font_badge;
+                    font_size: Theme.font_badge;
+                    font_family: Theme.font_mono;
                     text <=> AppData.in_point;
-                    placeholder-text: "00:00:00.000";
+                    placeholder: "00:00:00.000";
                     edited(txt) => { AppLogic.in_point_text_changed(txt); }
                 }
 
                 Text {
-                    text: "Out:";
+                    text: "Out";
                     font-size: Theme.font_badge;
                     font-weight: 700;
                     color: Theme.accent_amber;
                     vertical-alignment: center;
                 }
 
-                LineEdit {
-                    width: 95px;
+                TextField {
+                    width: 96px;
                     height: Theme.btn_height_sm;
-                    font-size: Theme.font_badge;
+                    font_size: Theme.font_badge;
+                    font_family: Theme.font_mono;
                     text <=> AppData.out_point;
-                    placeholder-text: "00:00:00.000";
+                    placeholder: "00:00:00.000";
                     edited(txt) => { AppLogic.out_point_text_changed(txt); }
                 }
 
@@ -838,11 +808,11 @@ export component PlayerTab inherits VerticalLayout {
                     icon_source: @image-url("../icons/scissors.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: AppData.has_active_trim ? Theme.accent_emerald : Theme.control_bg;
-                    hover_color: AppData.has_active_trim ? Theme.accent_emerald_hover : Theme.control_bg;
-                    text_color: AppData.has_active_trim ? #ffffff : Theme.text_muted;
-                    border_col: AppData.has_active_trim ? #34d39999 : #32323e;
-                    hover_border_col: #6ee7b7cc;
+                    fill_color: AppData.has_active_trim ? Theme.emerald_surface : Theme.card_subtle_bg;
+                    hover_color: AppData.has_active_trim ? Theme.emerald_surface_hover : Theme.card_subtle_bg;
+                    text_color: AppData.has_active_trim ? Theme.accent_green : Theme.text_faint;
+                    border_col: AppData.has_active_trim ? Theme.emerald_border : Theme.card_border;
+                    hover_border_col: Theme.accent_green;
                     normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     is_disabled: !AppData.has_active_trim;
@@ -850,17 +820,17 @@ export component PlayerTab inherits VerticalLayout {
                 }
 
                 ActionButton {
-                    width: 120px;
+                    width: 118px;
                     height: Theme.btn_height_sm;
                     title: "Codec Settings";
                     icon_source: @image-url("../icons/settings.svg");
                     has_icon: true;
                     icon_size: 12px;
-                    fill_color: #20261b;
-                    hover_color: #2b3522;
-                    text_color: Theme.accent_cyan;
-                    border_col: Theme.accent_cyan.with-alpha(0.45);
-                    hover_border_col: Theme.accent_cyan.with-alpha(0.8);
+                    fill_color: Theme.btn_neutral_bg;
+                    hover_color: Theme.btn_neutral_hover;
+                    text_color: Theme.btn_neutral_text;
+                    border_col: Theme.btn_neutral_border;
+                    hover_border_col: Theme.input_hover_border;
                     normal_border_width: 1px;
                     font_size: Theme.font_badge;
                     clicked => { AppLogic.switch_tab(2); }

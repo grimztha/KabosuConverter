@@ -28,16 +28,15 @@ export component TimelineScrollBar inherits Rectangle {
     property <length> max_travel: max(0px, root.width - self.thumb_w);
     property <length> thumb_x: self.max_travel * self.scroll_ratio;
 
-    // Overview Minimap Elements on the Scrollbar Track:
-    // Active Trim Region Indicator (amber highlight)
+    // Overview Minimap: Active Trim Region Indicator (Yuzu Gold)
     if root.has_trim : Rectangle {
         x: max(0px, root.width * root.in_point_norm);
         width: max(2px, root.width * (root.out_point_norm - root.in_point_norm));
         height: 100%;
-        background: Theme.trim_out_marker.with-alpha(0.2);
+        background: Theme.trim_out_marker.with-alpha(0.22);
     }
 
-    // Current Playhead Position Indicator (subtle vertical green needle)
+    // Current Playhead Position Indicator
     Rectangle {
         property <float> pnorm: root.duration > 0.0 ? (root.current_time / root.duration).clamp(0.0, 1.0) : 0.0;
         x: max(0px, min(root.width - 2px, (root.width - 2px) * self.pnorm));
@@ -45,23 +44,22 @@ export component TimelineScrollBar inherits Rectangle {
         width: 2px;
         height: root.height - 2px;
         border-radius: 1px;
-        background: Theme.trim_in_marker.with-alpha(0.53);
+        background: Theme.playhead_marker.with-alpha(0.65);
     }
 
-    // Draggable Thumb Handle representing the current viewport
+    // Draggable Thumb Handle
     thumb := Rectangle {
         x: root.thumb_x;
         y: 1.5px;
         width: root.thumb_w;
         height: root.height - 3px;
         border-radius: 3px;
-        background: sb_ta.pressed ? Theme.accent_cyan : (sb_ta.has-hover ? Theme.control_hover : Theme.control_bg);
+        background: sb_ta.pressed ? Theme.accent_primary : (sb_ta.has-hover ? Theme.control_hover : Theme.control_bg);
         border-width: 1px;
-        border-color: sb_ta.pressed ? Theme.accent_cyan.brighter(0.2) : (sb_ta.has-hover ? Theme.card_border : Theme.card_secondary_border);
+        border-color: sb_ta.pressed ? Theme.accent_lime : (sb_ta.has-hover ? Theme.input_hover_border : Theme.card_secondary_border);
 
         animate background, border-color { duration: 120ms; }
 
-        // Center grip dots on the thumb when wide enough
         if root.thumb_w > 36px : HorizontalLayout {
             alignment: center;
             spacing: 3px;
@@ -69,7 +67,7 @@ export component TimelineScrollBar inherits Rectangle {
                 width: 1.5px;
                 height: 5px;
                 border-radius: 0.5px;
-                background: sb_ta.pressed ? Theme.accent_primary_hover : (sb_ta.has-hover ? Theme.text_muted : Theme.card_border);
+                background: sb_ta.pressed ? Theme.text_on_accent : (sb_ta.has-hover ? Theme.text_muted : Theme.text_faint);
             }
         }
     }

@@ -1,7 +1,7 @@
-use std::path::Path;
-use std::process::Command;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VideoStreamInfo {
@@ -56,8 +56,14 @@ impl MediaMetadata {
     }
 
     pub fn codecs_summary(&self) -> String {
-        let v_codec = self.primary_video().map(|v| v.codec.as_str()).unwrap_or("none");
-        let a_codec = self.primary_audio().map(|a| a.codec.as_str()).unwrap_or("none");
+        let v_codec = self
+            .primary_video()
+            .map(|v| v.codec.as_str())
+            .unwrap_or("none");
+        let a_codec = self
+            .primary_audio()
+            .map(|a| a.codec.as_str())
+            .unwrap_or("none");
         format!("V: {}, A: {}", v_codec, a_codec)
     }
 
@@ -123,21 +129,28 @@ fn parse_fraction(s: &str) -> Option<f64> {
 }
 
 /// Probes media file metadata using ffprobe.
-pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) -> Result<MediaMetadata> {
+pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(
+    file_path: P,
+    ffprobe_bin: B,
+) -> Result<MediaMetadata> {
     let path_ref = file_path.as_ref();
     crate::sanitize::validate_path(path_ref)?;
 
     let file_path_str = path_ref.to_string_lossy().to_string();
-    let file_name = path_ref.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let file_name = path_ref
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
 
-    let file_size_bytes = std::fs::metadata(path_ref)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size_bytes = std::fs::metadata(path_ref).map(|m| m.len()).unwrap_or(0);
 
     let mut cmd = Command::new(ffprobe_bin.as_ref());
     cmd.args([
-        "-v", "quiet",
-        "-print_format", "json",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_format",
         "-show_streams",
         "--",
@@ -185,7 +198,10 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
     if let Some(streams) = parsed["streams"].as_array() {
         for stream in streams {
             let codec_type = stream["codec_type"].as_str().unwrap_or("");
-            let codec_name = stream["codec_name"].as_str().unwrap_or("unknown").to_string();
+            let codec_name = stream["codec_name"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_string();
 
             match codec_type {
                 "video" => {
@@ -238,7 +254,10 @@ pub fn probe_file<P: AsRef<Path>, B: AsRef<Path>>(file_path: P, ffprobe_bin: B) 
                         .unwrap_or(48000) as u32;
 
                     let channels = stream["channels"].as_u64().unwrap_or(2) as u32;
-                    let channel_layout = stream["channel_layout"].as_str().unwrap_or("stereo").to_string();
+                    let channel_layout = stream["channel_layout"]
+                        .as_str()
+                        .unwrap_or("stereo")
+                        .to_string();
                     let bitrate_kbps = stream["bit_rate"]
                         .as_str()
                         .and_then(|s| s.parse::<u64>().ok())

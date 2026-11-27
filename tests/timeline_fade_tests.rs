@@ -59,7 +59,8 @@ fn test_timeline_fade_corner_drag_and_clamping() {
         let w = win.as_weak();
         win.on_fade_in_dragged(move |raw| {
             if let Some(win) = w.upgrade() {
-                let trim_len = (win.get_out_point_norm() - win.get_in_point_norm()) * win.get_duration();
+                let trim_len =
+                    (win.get_out_point_norm() - win.get_in_point_norm()) * win.get_duration();
                 let max_in = (trim_len - win.get_fade_out_sec()).max(0.0);
                 let val = if raw < 0.03 {
                     0.0
@@ -75,7 +76,8 @@ fn test_timeline_fade_corner_drag_and_clamping() {
         let w = win.as_weak();
         win.on_fade_out_dragged(move |raw| {
             if let Some(win) = w.upgrade() {
-                let trim_len = (win.get_out_point_norm() - win.get_in_point_norm()) * win.get_duration();
+                let trim_len =
+                    (win.get_out_point_norm() - win.get_in_point_norm()) * win.get_duration();
                 let max_out = (trim_len - win.get_fade_in_sec()).max(0.0);
                 let val = if raw < 0.03 {
                     0.0
@@ -111,7 +113,11 @@ fn test_timeline_fade_corner_drag_and_clamping() {
         position: LogicalPosition::new(95.0, 18.0),
         button: PointerEventButton::Left,
     });
-    assert_eq!(win.get_fade_in_sec(), 0.0, "Fade handles must stay disabled when has_trim is false");
+    assert_eq!(
+        win.get_fade_in_sec(),
+        0.0,
+        "Fade handles must stay disabled when has_trim is false"
+    );
     assert_eq!(*settled_count.borrow(), 0);
 
     // Enable trim highlight section so fade corner handles appear

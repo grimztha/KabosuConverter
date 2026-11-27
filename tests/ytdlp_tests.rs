@@ -1,6 +1,6 @@
 use kabosu_converter::ytdlp::{
-    build_output_template, detect_version, discover_media, find_ytdlp_binary, sanitize_filename_stem,
-    DownloadFormatOption, YtDlpFormatItem, YtDlpMediaInfo,
+    build_output_template, detect_version, discover_media, find_ytdlp_binary,
+    sanitize_filename_stem, DownloadFormatOption, YtDlpFormatItem, YtDlpMediaInfo,
 };
 
 #[test]
@@ -8,7 +8,10 @@ fn test_ytdlp_binary_locator() {
     if let Some(path) = find_ytdlp_binary() {
         assert!(path.is_file(), "Located yt-dlp path must be a valid file");
         let path_str = path.to_string_lossy().to_lowercase();
-        assert!(path_str.contains("kabosu") || path_str.contains("another_encoder"), "yt-dlp must be located inside the project root");
+        assert!(
+            path_str.contains("kabosu") || path_str.contains("another_encoder"),
+            "yt-dlp must be located inside the project root"
+        );
     }
 }
 
@@ -86,23 +89,48 @@ fn test_ytdlp_format_presets_structure() {
 fn test_build_output_template_and_sanitization() {
     // 1. None or empty string defaults to standard template
     assert_eq!(build_output_template(None), "%(title)s [%(id)s].%(ext)s");
-    assert_eq!(build_output_template(Some("")), "%(title)s [%(id)s].%(ext)s");
-    assert_eq!(build_output_template(Some("   ")), "%(title)s [%(id)s].%(ext)s");
+    assert_eq!(
+        build_output_template(Some("")),
+        "%(title)s [%(id)s].%(ext)s"
+    );
+    assert_eq!(
+        build_output_template(Some("   ")),
+        "%(title)s [%(id)s].%(ext)s"
+    );
 
     // 2. Custom filename without extension
-    assert_eq!(build_output_template(Some("My Vacation Video")), "My Vacation Video.%(ext)s");
+    assert_eq!(
+        build_output_template(Some("My Vacation Video")),
+        "My Vacation Video.%(ext)s"
+    );
 
     // 3. Custom filename with extension (extension stripped so %(ext)s can handle dynamically)
-    assert_eq!(build_output_template(Some("My Podcast.mp3")), "My Podcast.%(ext)s");
-    assert_eq!(build_output_template(Some("4k_gameplay.mp4")), "4k_gameplay.%(ext)s");
+    assert_eq!(
+        build_output_template(Some("My Podcast.mp3")),
+        "My Podcast.%(ext)s"
+    );
+    assert_eq!(
+        build_output_template(Some("4k_gameplay.mp4")),
+        "4k_gameplay.%(ext)s"
+    );
 
     // 4. Custom filename with Windows forbidden characters: \ / : * ? " < > |
-    let template = build_output_template(Some("Illegal: Char * Test? <World> | Cool / Slanted\\Name"));
-    assert_eq!(template, "Illegal_ Char _ Test_ _World_ _ Cool _ Slanted_Name.%(ext)s");
+    let template =
+        build_output_template(Some("Illegal: Char * Test? <World> | Cool / Slanted\\Name"));
+    assert_eq!(
+        template,
+        "Illegal_ Char _ Test_ _World_ _ Cool _ Slanted_Name.%(ext)s"
+    );
 
     // 5. Explicit %(ext)s preserved and forbidden characters sanitized
-    assert_eq!(build_output_template(Some("custom_pattern_%(id)s.%(ext)s")), "custom_pattern_%(id)s.%(ext)s");
-    assert_eq!(build_output_template(Some("My*Video?Title:Part1.%(ext)s")), "My_Video_Title_Part1.%(ext)s");
+    assert_eq!(
+        build_output_template(Some("custom_pattern_%(id)s.%(ext)s")),
+        "custom_pattern_%(id)s.%(ext)s"
+    );
+    assert_eq!(
+        build_output_template(Some("My*Video?Title:Part1.%(ext)s")),
+        "My_Video_Title_Part1.%(ext)s"
+    );
 
     // 6. Sanitization edge cases
     assert_eq!(sanitize_filename_stem("   ...   "), "downloaded_media");
@@ -116,33 +144,54 @@ fn test_ytdlp_url_validation_security() {
     // 1. Empty or whitespace URL
     let empty_res = discover_media(&bin, "");
     assert!(empty_res.is_err());
-    assert!(empty_res.unwrap_err().to_string().contains("cannot be empty"));
+    assert!(empty_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot be empty"));
 
     let whitespace_res = discover_media(&bin, "   \t\n  ");
     assert!(whitespace_res.is_err());
-    assert!(whitespace_res.unwrap_err().to_string().contains("cannot be empty"));
+    assert!(whitespace_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot be empty"));
 
     // 2. CLI flag injection attempts (CWE-88)
     let flag_res = discover_media(&bin, "--help");
     assert!(flag_res.is_err());
-    assert!(flag_res.unwrap_err().to_string().contains("cannot begin with a command flag"));
+    assert!(flag_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot begin with a command flag"));
 
     let exec_res = discover_media(&bin, "--exec id");
     assert!(exec_res.is_err());
-    assert!(exec_res.unwrap_err().to_string().contains("cannot begin with a command flag"));
+    assert!(exec_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot begin with a command flag"));
 
     let single_flag_res = discover_media(&bin, "-o evil.bat");
     assert!(single_flag_res.is_err());
-    assert!(single_flag_res.unwrap_err().to_string().contains("cannot begin with a command flag"));
+    assert!(single_flag_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot begin with a command flag"));
 
     // 3. Control character and null byte rejection
     let null_res = discover_media(&bin, "https://example.com/video\0.mp4");
     assert!(null_res.is_err());
-    assert!(null_res.unwrap_err().to_string().contains("cannot contain control characters"));
+    assert!(null_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot contain control characters"));
 
     let newline_res = discover_media(&bin, "https://example.com/video\n--exec=calc");
     assert!(newline_res.is_err());
-    assert!(newline_res.unwrap_err().to_string().contains("cannot contain control characters"));
+    assert!(newline_res
+        .unwrap_err()
+        .to_string()
+        .contains("cannot contain control characters"));
 }
 
 #[test]
@@ -153,21 +202,78 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
     let dest_dir = Path::new("C:\\Media\\Downloads");
 
     // 1. yt-dlp logging tags must NOT be parsed as filepaths
-    assert_eq!(parse_downloaded_filepath("[download] Destination: video.mp4", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[download]  45.0% of 100.00MiB at 10.00MiB/s ETA 00:05", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[info] dQw4w9WgXcQ: Downloading webpage", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[youtube] Extracting URL: https://...", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[Merger] Merging formats into \"out.mp4\"", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[ExtractAudio] Destination: out.mp3", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[FixupM3u8] Fixing...", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[ffmpeg] Fixing container in \"out.mp4\"", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[youtube] [jsc:node] Solving JS challenges using node", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[jsc:deno] Solving JS challenge v2.3.0", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("[twitter] Extracting URL: https://x.com/user/status/123", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("Deleting original file C:\\Media\\Downloads\\video.f395.mp4 (pass -k to keep)", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("WARNING: [youtube] Some warning about file.js", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("ERROR: Unable to extract video.mp4", dest_dir), None);
-    assert_eq!(parse_downloaded_filepath("download:50.0%|10.0MiB/s|00:05|50.0MiB", dest_dir), None);
+    assert_eq!(
+        parse_downloaded_filepath("[download] Destination: video.mp4", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath(
+            "[download]  45.0% of 100.00MiB at 10.00MiB/s ETA 00:05",
+            dest_dir
+        ),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[info] dQw4w9WgXcQ: Downloading webpage", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[youtube] Extracting URL: https://...", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[Merger] Merging formats into \"out.mp4\"", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[ExtractAudio] Destination: out.mp3", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[FixupM3u8] Fixing...", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[ffmpeg] Fixing container in \"out.mp4\"", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath(
+            "[youtube] [jsc:node] Solving JS challenges using node",
+            dest_dir
+        ),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("[jsc:deno] Solving JS challenge v2.3.0", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath(
+            "[twitter] Extracting URL: https://x.com/user/status/123",
+            dest_dir
+        ),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath(
+            "Deleting original file C:\\Media\\Downloads\\video.f395.mp4 (pass -k to keep)",
+            dest_dir
+        ),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("WARNING: [youtube] Some warning about file.js", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("ERROR: Unable to extract video.mp4", dest_dir),
+        None
+    );
+    assert_eq!(
+        parse_downloaded_filepath("download:50.0%|10.0MiB/s|00:05|50.0MiB", dest_dir),
+        None
+    );
     assert_eq!(parse_downloaded_filepath("", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("   ", dest_dir), None);
 
@@ -182,12 +288,18 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
     } else {
         PathBuf::from("/media/[youtube] Video Title.mp4")
     };
-    assert_eq!(parse_downloaded_filepath(sentinel_abs, dest_dir), Some(expected_sentinel));
+    assert_eq!(
+        parse_downloaded_filepath(sentinel_abs, dest_dir),
+        Some(expected_sentinel)
+    );
     assert_eq!(
         parse_downloaded_filepath("KABOSU_FILEPATH:[youtube] Relative Title.mp4", dest_dir),
         Some(dest_dir.join("[youtube] Relative Title.mp4"))
     );
-    assert_eq!(parse_downloaded_filepath("KABOSU_FILEPATH:   ", dest_dir), None);
+    assert_eq!(
+        parse_downloaded_filepath("KABOSU_FILEPATH:   ", dest_dir),
+        None
+    );
 
     // 2. Relative filename starting with brackets (e.g. [1080p] Video Title.mp4)
     let bracket_relative = "[1080p] Video Title [dQw4w9WgXcQ].mp4";
@@ -205,7 +317,10 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
 
     // 4. Standard clean filenames
     let normal_rel = "Rick_Astley_Never_Gonna_Give_You_Up.mp4";
-    assert_eq!(parse_downloaded_filepath(normal_rel, dest_dir), Some(dest_dir.join(normal_rel)));
+    assert_eq!(
+        parse_downloaded_filepath(normal_rel, dest_dir),
+        Some(dest_dir.join(normal_rel))
+    );
 }
 
 #[test]
@@ -213,21 +328,24 @@ fn test_parse_progress_line_ytdlp_2026_format() {
     use kabosu_converter::ytdlp::parse_progress_line;
 
     // Standard yt-dlp 2026.11.23 progress line with exact total bytes
-    let p = parse_progress_line("download: 28.8%| 899.38KiB/s|00:00| 218.53KiB").expect("valid progress");
+    let p = parse_progress_line("download: 28.8%| 899.38KiB/s|00:00| 218.53KiB")
+        .expect("valid progress");
     assert!((p.percent - 28.8).abs() < 0.01);
     assert_eq!(p.speed, "899.38KiB/s");
     assert_eq!(p.eta, "00:00");
     assert_eq!(p.size, "218.53KiB");
 
     // Initial chunk with Unknown speed/ETA should clear sentinel values so UI doesn't flash garbage
-    let p_unknown = parse_progress_line("download:  0.4%| Unknown B/s|Unknown| 246.27KiB").expect("valid progress");
+    let p_unknown = parse_progress_line("download:  0.4%| Unknown B/s|Unknown| 246.27KiB")
+        .expect("valid progress");
     assert!((p_unknown.percent - 0.4).abs() < 0.01);
     assert!(p_unknown.speed.is_empty());
     assert!(p_unknown.eta.is_empty());
     assert_eq!(p_unknown.size, "246.27KiB");
 
     // Final 100% line with NA ETA
-    let p_done = parse_progress_line("download:100.0%|482.16KiB/s|NA| 246.27KiB").expect("valid progress");
+    let p_done =
+        parse_progress_line("download:100.0%|482.16KiB/s|NA| 246.27KiB").expect("valid progress");
     assert!((p_done.percent - 100.0).abs() < 0.01);
     assert_eq!(p_done.speed, "482.16KiB/s");
     assert!(p_done.eta.is_empty());

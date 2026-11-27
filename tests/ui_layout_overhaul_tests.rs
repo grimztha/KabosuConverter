@@ -165,15 +165,28 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert!(font_section >= 14.0, "Section font size must be >= 14px");
     assert!(font_body >= 13.0, "Body font size must be >= 13px");
     assert!(font_caption >= 12.0, "Caption font size must be >= 12px");
-    assert!(font_badge >= 11.0, "Badge floor must be >= 11px to guarantee legibility");
+    assert!(
+        font_badge >= 11.0,
+        "Badge floor must be >= 11px to guarantee legibility"
+    );
 
-    assert!(font_title > font_section, "Title must be larger than section");
+    assert!(
+        font_title > font_section,
+        "Title must be larger than section"
+    );
     assert!(font_section > font_body, "Section must be larger than body");
     assert!(font_body > font_caption, "Body must be larger than caption");
-    assert!(font_caption > font_badge, "Caption must be larger than badge");
+    assert!(
+        font_caption > font_badge,
+        "Caption must be larger than badge"
+    );
 
     let mono = helper.get_theme_font_mono();
-    assert_eq!(mono.as_str(), "Consolas", "Monospace font must be Consolas for numerical telemetry");
+    assert_eq!(
+        mono.as_str(),
+        "Consolas",
+        "Monospace font must be Consolas for numerical telemetry"
+    );
 
     // 2. Standardized Button Heights
     let btn_sm = helper.get_theme_btn_height_sm();
@@ -183,7 +196,10 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert_eq!(btn_sm, 28.0, "Small button height tier must be 28px");
     assert_eq!(btn_md, 34.0, "Medium button height tier must be 34px");
     assert_eq!(btn_lg, 40.0, "Large button height tier must be 40px");
-    assert!(btn_sm < btn_md && btn_md < btn_lg, "Button heights must be strictly tiered");
+    assert!(
+        btn_sm < btn_md && btn_md < btn_lg,
+        "Button heights must be strictly tiered"
+    );
 
     // 3. Concentric Radii Geometry
     let r_sm = helper.get_theme_radius_sm();
@@ -197,7 +213,11 @@ fn test_ui_layout_overhaul_lifecycle() {
     let inner_r = helper.get_inner_item_radius();
     let padding = helper.get_container_padding();
     let outer_r = helper.get_concentric_outer_radius();
-    assert_eq!(outer_r, inner_r + padding, "Outer radius must equal inner radius plus padding");
+    assert_eq!(
+        outer_r,
+        inner_r + padding,
+        "Outer radius must equal inner radius plus padding"
+    );
     assert_eq!(outer_r, r_lg);
 
     // 4. Neutral Dark-Grey Body + Kabosu/Yuzu Citrus Accents & Real WCAG 2.1 Contrast Verification
@@ -223,45 +243,112 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert_eq!(focus_ring.alpha(), 255);
 
     // Pure neutral dark & dark-grey body check (no green wash across app surfaces)
-    assert!(app_bg.green() <= app_bg.red() + 2, "app_bg must remain neutral dark without green tint");
-    assert!(panel_bg.green() <= panel_bg.red() + 2, "panel_bg must remain neutral dark grey without green tint");
-    assert!(card_bg.green() <= card_bg.red() + 2, "card_bg must remain neutral dark grey without green tint");
+    assert!(
+        app_bg.green() <= app_bg.red() + 2,
+        "app_bg must remain neutral dark without green tint"
+    );
+    assert!(
+        panel_bg.green() <= panel_bg.red() + 2,
+        "panel_bg must remain neutral dark grey without green tint"
+    );
+    assert!(
+        card_bg.green() <= card_bg.red() + 2,
+        "card_bg must remain neutral dark grey without green tint"
+    );
 
     // Kabosu green headings & buttons + Yuzu yellow & citrus orange complements
-    assert!(text_heading.green() > text_heading.red() && text_heading.green() > text_heading.blue(),
-        "Main text_heading must use the Kabosu green palette");
-    assert!(accent_primary.green() > accent_primary.red() && accent_primary.green() > accent_primary.blue(),
-        "Kabosu accent_primary must be green-dominant");
-    assert!(accent_lime.green() > accent_lime.red() && accent_lime.green() > accent_lime.blue(),
-        "Kabosu accent_lime must be green-dominant");
-    assert!(accent_yuzu.red() > 200 && accent_yuzu.green() > 180 && accent_yuzu.blue() < 120,
-        "accent_yuzu must be a warm yuzu yellow");
-    assert!(accent_orange.red() > 200 && accent_orange.green() > 100 && accent_orange.blue() < 90,
-        "accent_orange must be a warm citrus orange");
+    assert!(
+        text_heading.green() > text_heading.red() && text_heading.green() > text_heading.blue(),
+        "Main text_heading must use the Kabosu green palette"
+    );
+    assert!(
+        accent_primary.green() > accent_primary.red()
+            && accent_primary.green() > accent_primary.blue(),
+        "Kabosu accent_primary must be green-dominant"
+    );
+    assert!(
+        accent_lime.green() > accent_lime.red() && accent_lime.green() > accent_lime.blue(),
+        "Kabosu accent_lime must be green-dominant"
+    );
+    assert!(
+        accent_yuzu.red() > 200 && accent_yuzu.green() > 180 && accent_yuzu.blue() < 120,
+        "accent_yuzu must be a warm yuzu yellow"
+    );
+    assert!(
+        accent_orange.red() > 200 && accent_orange.green() > 100 && accent_orange.blue() < 90,
+        "accent_orange must be a warm citrus orange"
+    );
 
     // Crisp white primary/secondary/description text on neutral dark grey
-    assert!(text_primary.red() >= 250 && text_primary.green() >= 250 && text_primary.blue() >= 250,
-        "text_primary must be crisp white");
-    assert!(contrast_ratio(text_heading, card_bg) >= 7.0, "text_heading on card_bg must pass WCAG AAA (7:1)");
-    assert!(contrast_ratio(text_muted, card_bg) >= 10.0, "white/soft-white minor text_muted must exceed 10:1 on card_bg");
+    assert!(
+        text_primary.red() >= 250 && text_primary.green() >= 250 && text_primary.blue() >= 250,
+        "text_primary must be crisp white"
+    );
+    assert!(
+        contrast_ratio(text_heading, card_bg) >= 7.0,
+        "text_heading on card_bg must pass WCAG AAA (7:1)"
+    );
+    assert!(
+        contrast_ratio(text_muted, card_bg) >= 10.0,
+        "white/soft-white minor text_muted must exceed 10:1 on card_bg"
+    );
 
     // Botanical dark surfaces stay genuinely dark with clear elevation steps
-    assert!(relative_luminance(app_bg) < relative_luminance(card_bg), "card_bg must elevate above app_bg");
-    assert!(relative_luminance(card_bg) < relative_luminance(card_sec), "card_secondary_bg must elevate above card_bg");
-    assert!(relative_luminance(input_bg) < relative_luminance(card_bg), "input_bg must sit recessed below card_bg");
+    assert!(
+        relative_luminance(app_bg) < relative_luminance(card_bg),
+        "card_bg must elevate above app_bg"
+    );
+    assert!(
+        relative_luminance(card_bg) < relative_luminance(card_sec),
+        "card_secondary_bg must elevate above card_bg"
+    );
+    assert!(
+        relative_luminance(input_bg) < relative_luminance(card_bg),
+        "input_bg must sit recessed below card_bg"
+    );
 
     // Maintain legacy muted channel floor + exact WCAG AA (>= 4.5:1) assertions
-    assert!(text_muted.red() >= 150, "text_muted red channel must be >= 150");
-    assert!(text_muted.green() >= 150, "text_muted green channel must be >= 150");
-    assert!(text_muted.blue() >= 160, "text_muted blue channel must be >= 160");
+    assert!(
+        text_muted.red() >= 150,
+        "text_muted red channel must be >= 150"
+    );
+    assert!(
+        text_muted.green() >= 150,
+        "text_muted green channel must be >= 150"
+    );
+    assert!(
+        text_muted.blue() >= 160,
+        "text_muted blue channel must be >= 160"
+    );
 
-    assert!(contrast_ratio(text_primary, card_bg) >= 12.0, "text_primary on card_bg must exceed 12:1");
-    assert!(contrast_ratio(text_secondary, card_bg) >= 7.0, "text_secondary on card_bg must pass WCAG AAA (7:1)");
-    assert!(contrast_ratio(text_muted, card_bg) >= 4.5, "text_muted on card_bg must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(text_muted, card_sec) >= 4.5, "text_muted on card_secondary_bg must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(text_primary, input_bg) >= 12.0, "text_primary on input_bg must exceed 12:1");
-    assert!(contrast_ratio(text_on_accent, accent_primary) >= 7.0, "text_on_accent on Kabosu primary button must pass WCAG AAA (7:1)");
-    assert!(contrast_ratio(accent_lime, accent_surface) >= 7.0, "accent_lime on accent_surface must pass WCAG AAA (7:1)");
+    assert!(
+        contrast_ratio(text_primary, card_bg) >= 12.0,
+        "text_primary on card_bg must exceed 12:1"
+    );
+    assert!(
+        contrast_ratio(text_secondary, card_bg) >= 7.0,
+        "text_secondary on card_bg must pass WCAG AAA (7:1)"
+    );
+    assert!(
+        contrast_ratio(text_muted, card_bg) >= 4.5,
+        "text_muted on card_bg must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(text_muted, card_sec) >= 4.5,
+        "text_muted on card_secondary_bg must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(text_primary, input_bg) >= 12.0,
+        "text_primary on input_bg must exceed 12:1"
+    );
+    assert!(
+        contrast_ratio(text_on_accent, accent_primary) >= 7.0,
+        "text_on_accent on Kabosu primary button must pass WCAG AAA (7:1)"
+    );
+    assert!(
+        contrast_ratio(accent_lime, accent_surface) >= 7.0,
+        "accent_lime on accent_surface must pass WCAG AAA (7:1)"
+    );
 
     let emerald = helper.get_theme_accent_emerald();
     let green = helper.get_theme_accent_green();
@@ -275,16 +362,37 @@ fn test_ui_layout_overhaul_lifecycle() {
     let purple = helper.get_theme_accent_purple();
     let purple_surface = helper.get_theme_purple_surface();
 
-    assert!(emerald.green() > emerald.red(), "Emerald status must have green > red");
-    assert!(amber.red() > amber.blue(), "Amber status must have red > blue");
+    assert!(
+        emerald.green() > emerald.red(),
+        "Emerald status must have green > red"
+    );
+    assert!(
+        amber.red() > amber.blue(),
+        "Amber status must have red > blue"
+    );
     assert!(red.red() > red.green(), "Red status must have red dominant");
 
     let pure_white = slint::Color::from_rgb_u8(255, 255, 255);
-    assert!(contrast_ratio(pure_white, red_solid) >= 4.5, "white on accent_red_solid must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(red_text, red_surface) >= 4.5, "accent_red_text on red_surface must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(amber, amber_surface) >= 4.5, "accent_amber on amber_surface must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(green, emerald_surface) >= 4.5, "accent_green on emerald_surface must pass WCAG AA (4.5:1)");
-    assert!(contrast_ratio(purple, purple_surface) >= 4.5, "accent_purple on purple_surface must pass WCAG AA (4.5:1)");
+    assert!(
+        contrast_ratio(pure_white, red_solid) >= 4.5,
+        "white on accent_red_solid must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(red_text, red_surface) >= 4.5,
+        "accent_red_text on red_surface must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(amber, amber_surface) >= 4.5,
+        "accent_amber on amber_surface must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(green, emerald_surface) >= 4.5,
+        "accent_green on emerald_surface must pass WCAG AA (4.5:1)"
+    );
+    assert!(
+        contrast_ratio(purple, purple_surface) >= 4.5,
+        "accent_purple on purple_surface must pass WCAG AA (4.5:1)"
+    );
 
     // 5. Responsive Layout & Queue Collapse Space Reclamation
     helper.set_queue_expanded(true);
@@ -295,15 +403,24 @@ fn test_ui_layout_overhaul_lifecycle() {
 
     assert_eq!(queue_w, 300.0);
     assert_eq!(edit_w, 320.0);
-    assert_eq!(player_w, 340.0, "Player width when both panels expanded at 960px window is 340px");
+    assert_eq!(
+        player_w, 340.0,
+        "Player width when both panels expanded at 960px window is 340px"
+    );
 
     helper.set_queue_expanded(false);
     let collapsed_queue_w = helper.get_computed_queue_width();
     let reclaimed_player_w = helper.get_computed_player_available_width();
 
     assert_eq!(collapsed_queue_w, 38.0, "Collapsed queue width is 38px");
-    assert_eq!(reclaimed_player_w, 602.0, "Collapsing queue reclaims 262px, giving 602px of room");
-    assert!(reclaimed_player_w >= 500.0, "Reclaimed player width allows trimming controls to fit without clipping");
+    assert_eq!(
+        reclaimed_player_w, 602.0,
+        "Collapsing queue reclaims 262px, giving 602px of room"
+    );
+    assert!(
+        reclaimed_player_w >= 500.0,
+        "Reclaimed player width allows trimming controls to fit without clipping"
+    );
 
     // 6. Themed Component Contract Verification (TextField, SelectBox, RangeSlider, VolumeMeter)
     assert_eq!(helper.get_field_text().as_str(), "hello");
@@ -319,7 +436,10 @@ fn test_ui_layout_overhaul_lifecycle() {
     assert!((helper.get_slider_val() + 6.0).abs() < 0.001);
 
     // VolumeMeter width must be >= 56px so full "-60" dB labels render without truncation
-    assert!(helper.get_meter_width() >= 56.0, "VolumeMeter width must be >= 56px to prevent dB label clipping");
+    assert!(
+        helper.get_meter_width() >= 56.0,
+        "VolumeMeter width must be >= 56px to prevent dB label clipping"
+    );
 
     // 7. Source-Level Layout & Dark-Theme Integrity Guards
     let main_src = std::fs::read_to_string("src/ui/main.slint").expect("read main.slint");
@@ -328,20 +448,47 @@ fn test_ui_layout_overhaul_lifecycle() {
         "MainWindow must initialize dark Palette.color-scheme so native fallbacks never render light"
     );
 
-    let transcoder_src = std::fs::read_to_string("src/ui/views/transcoder_tab.slint").expect("read transcoder_tab");
-    assert!(!transcoder_src.contains("Rectangle { height: 1px;"), "Transcoder tab must not contain redundant 1px divider lines");
+    let transcoder_src =
+        std::fs::read_to_string("src/ui/views/transcoder_tab.slint").expect("read transcoder_tab");
+    assert!(
+        !transcoder_src.contains("Rectangle { height: 1px;"),
+        "Transcoder tab must not contain redundant 1px divider lines"
+    );
 
-    let edit_panel_src = std::fs::read_to_string("src/ui/views/edit_panel.slint").expect("read edit_panel");
-    assert!(edit_panel_src.contains("horizontal-stretch: 0;"), "EditPanel must specify horizontal-stretch: 0 to avoid being squeezed or stretched");
-    assert!(edit_panel_src.contains("width: 100%;"), "EditPanel ScrollView VerticalLayout must have width: 100% to prevent child overflow");
-    assert!(edit_panel_src.contains("padding-right: 12px;"), "EditPanel ScrollView VerticalLayout must provide right padding gutter for scrollbar");
+    let edit_panel_src =
+        std::fs::read_to_string("src/ui/views/edit_panel.slint").expect("read edit_panel");
+    assert!(
+        edit_panel_src.contains("horizontal-stretch: 0;"),
+        "EditPanel must specify horizontal-stretch: 0 to avoid being squeezed or stretched"
+    );
+    assert!(
+        edit_panel_src.contains("width: 100%;"),
+        "EditPanel ScrollView VerticalLayout must have width: 100% to prevent child overflow"
+    );
+    assert!(
+        edit_panel_src.contains("padding-right: 12px;"),
+        "EditPanel ScrollView VerticalLayout must provide right padding gutter for scrollbar"
+    );
 
-    assert!(edit_panel_src.contains("Quick Preset dB Scale (-12dB to +12dB)"), "Audio gain dB presets must be organized in a compact scale");
-    assert!(edit_panel_src.contains("Fine-Tuning Step Nudge (-1.0 dB / +1.0 dB)"), "Audio gain fine tuning must be organized with compact stepper buttons");
-    assert!(edit_panel_src.contains("width: 68px;"), "Fine-tuning buttons must have reduced, fixed width rather than stretching");
+    assert!(
+        edit_panel_src.contains("Quick Preset dB Scale (-12dB to +12dB)"),
+        "Audio gain dB presets must be organized in a compact scale"
+    );
+    assert!(
+        edit_panel_src.contains("Fine-Tuning Step Nudge (-1.0 dB / +1.0 dB)"),
+        "Audio gain fine tuning must be organized with compact stepper buttons"
+    );
+    assert!(
+        edit_panel_src.contains("width: 68px;"),
+        "Fine-tuning buttons must have reduced, fixed width rather than stretching"
+    );
 
-    let action_btn_src = std::fs::read_to_string("src/ui/components/action_button.slint").expect("read action_button");
-    assert!(action_btn_src.contains("overflow: elide;"), "ActionButton text must have overflow: elide to prevent layout blowouts");
+    let action_btn_src = std::fs::read_to_string("src/ui/components/action_button.slint")
+        .expect("read action_button");
+    assert!(
+        action_btn_src.contains("overflow: elide;"),
+        "ActionButton text must have overflow: elide to prevent layout blowouts"
+    );
 
     // Guard against un-themed light-mode native widgets leaking back into any view
     for view_path in [
@@ -354,7 +501,9 @@ fn test_ui_layout_overhaul_lifecycle() {
         let src = std::fs::read_to_string(view_path).expect("read view slint file");
         for line in src.lines().filter(|l| l.contains("std-widgets.slint")) {
             assert!(
-                !line.contains("LineEdit") && !line.contains("ComboBox") && !line.contains("Slider"),
+                !line.contains("LineEdit")
+                    && !line.contains("ComboBox")
+                    && !line.contains("Slider"),
                 "{} must not import un-themed std-widgets ({})",
                 view_path,
                 line.trim()

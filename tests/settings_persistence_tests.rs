@@ -1,8 +1,8 @@
 mod common;
-use tempfile::tempdir;
-use slint::ComponentHandle;
 use kabosu_converter::ffmpeg::{AudioCodecChoice, HwAccel, VideoCodec};
 use kabosu_converter::settings::AppSettings;
+use slint::ComponentHandle;
+use tempfile::tempdir;
 
 slint::include_modules!();
 
@@ -48,11 +48,15 @@ fn test_settings_disk_save_and_reload_roundtrip() {
     std::fs::write(&settings_file, &json_content).expect("Must write settings file");
 
     // Reload from disk
-    let reloaded_content = std::fs::read_to_string(&settings_file).expect("Must read settings file");
+    let reloaded_content =
+        std::fs::read_to_string(&settings_file).expect("Must read settings file");
     let reloaded: AppSettings = serde_json::from_str(&reloaded_content).expect("Must deserialize");
 
     assert_eq!(reloaded.default_output_dir.as_deref(), Some("D:/Exports"));
-    assert_eq!(reloaded.default_ytdlp_output_dir.as_deref(), Some("D:/Downloads"));
+    assert_eq!(
+        reloaded.default_ytdlp_output_dir.as_deref(),
+        Some("D:/Downloads")
+    );
     assert_eq!(reloaded.default_video_codec, VideoCodec::AV1);
     assert_eq!(reloaded.default_function_index, 2);
     assert_eq!(reloaded.default_hw_accel, HwAccel::Nvenc);

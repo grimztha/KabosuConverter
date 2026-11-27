@@ -104,41 +104,56 @@ impl PlatformInfo {
             (TargetOS::Windows, TargetArch::X86_64) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp.exe",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+                download_url:
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
                 asset_filename: "yt-dlp.exe",
-                checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
+                checksum_url: Some(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+                ),
                 format: ArchiveFormat::RawExecutable,
             },
             (TargetOS::Windows, TargetArch::Aarch64) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp.exe",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_arm64.exe",
+                download_url:
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_arm64.exe",
                 asset_filename: "yt-dlp_arm64.exe",
-                checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
+                checksum_url: Some(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+                ),
                 format: ArchiveFormat::RawExecutable,
             },
             (TargetOS::MacOS, _) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
+                download_url:
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
                 asset_filename: "yt-dlp_macos",
-                checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
+                checksum_url: Some(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+                ),
                 format: ArchiveFormat::RawExecutable,
             },
             (TargetOS::Linux, TargetArch::X86_64) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
+                download_url:
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
                 asset_filename: "yt-dlp_linux",
-                checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
+                checksum_url: Some(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+                ),
                 format: ArchiveFormat::RawExecutable,
             },
             (TargetOS::Linux, TargetArch::Aarch64) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64",
+                download_url:
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64",
                 asset_filename: "yt-dlp_linux_aarch64",
-                checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
+                checksum_url: Some(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
+                ),
                 format: ArchiveFormat::RawExecutable,
             },
         }

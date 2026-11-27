@@ -1,10 +1,10 @@
+use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
+use crate::sanitize::validate_path;
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use anyhow::{Context, Result};
-use crate::ffmpeg::{FFmpegCommandBuilder, VideoRotation};
-use crate::sanitize::validate_path;
 
 pub use crate::sanitize::parse_timecode_to_seconds;
 
@@ -54,13 +54,12 @@ pub fn compute_letterbox_viewport(eff_width: u32, eff_height: u32) -> (f32, f32,
 }
 
 fn build_preview_vf_chain(rotation: VideoRotation, flip_h: bool, flip_v: bool) -> String {
-    let mut filters = FFmpegCommandBuilder::build_transform_and_crop_filters(
-        rotation,
-        flip_h,
-        flip_v,
-        None,
+    let mut filters =
+        FFmpegCommandBuilder::build_transform_and_crop_filters(rotation, flip_h, flip_v, None);
+    filters.push(
+        "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black"
+            .to_string(),
     );
-    filters.push("scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black".to_string());
     filters.join(",")
 }
 
@@ -77,10 +76,14 @@ pub fn extract_frame<P: AsRef<Path>, B: AsRef<Path>>(
     let mut cmd = Command::new(ffmpeg_bin.as_ref());
     push_accurate_seek_input(&mut cmd, media_path, time_seconds);
     cmd.args([
-        "-frames:v", "1",
-        "-q:v", "2",
-        "-vf", "scale='min(640,iw)':-2",
-        "-update", "1",
+        "-frames:v",
+        "1",
+        "-q:v",
+        "2",
+        "-vf",
+        "scale='min(640,iw)':-2",
+        "-update",
+        "1",
         "-y",
     ]);
     cmd.arg(out_img_path.as_ref());
@@ -123,7 +126,8 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
         .file_name()
         .unwrap_or_default()
         .to_string_lossy();
-    cmd.arg("-window_title").arg(format!("Preview — {}", file_name));
+    cmd.arg("-window_title")
+        .arg(format!("Preview — {}", file_name));
 
     if audio_only {
         // Show visualizer window for audio
@@ -135,7 +139,9 @@ pub fn spawn_ffplay<B: AsRef<Path>>(
 
     crate::set_no_window(&mut cmd);
 
-    let child = cmd.spawn().context("Failed to spawn ffplay preview player")?;
+    let child = cmd
+        .spawn()
+        .context("Failed to spawn ffplay preview player")?;
     Ok(child)
 }
 
@@ -171,11 +177,17 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     cmd.args(["-threads", "2"]);
     push_accurate_seek_input(&mut cmd, media_path, time_seconds);
     cmd.args([
-        "-vf", &vf_chain,
-        "-frames:v", "1",
-        "-f", "rawvideo",
-        "-pix_fmt", "rgba",
-        "-an", "-sn", "-dn",
+        "-vf",
+        &vf_chain,
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "-an",
+        "-sn",
+        "-dn",
         "pipe:1",
     ]);
 
@@ -186,7 +198,11 @@ pub fn extract_frame_rgba_transformed<B: AsRef<Path>>(
     let mut output = crate::ffmpeg::spawn_with_output(cmd, "ffmpeg")?;
     let expected = 640 * 360 * 4;
     if output.stdout.len() < expected {
-        anyhow::bail!("Incomplete raw frame: got {} vs expected {}", output.stdout.len(), expected);
+        anyhow::bail!(
+            "Incomplete raw frame: got {} vs expected {}",
+            output.stdout.len(),
+            expected
+        );
     }
 
     output.stdout.truncate(expected);
@@ -245,11 +261,7 @@ pub fn spawn_playback_stream_transformed_with_duration<B: AsRef<Path>>(
     let vf_chain = build_preview_vf_chain(rotation, flip_h, flip_v);
     push_accurate_seek_input(&mut cmd, media_path, start_seconds);
     cmd.args([
-        "-vf", &vf_chain,
-        "-f", "rawvideo",
-        "-pix_fmt", "rgba",
-        "-r", "24",
-        "-an", "-sn",
+        "-vf", &vf_chain, "-f", "rawvideo", "-pix_fmt", "rgba", "-r", "24", "-an", "-sn",
     ]);
     if let Some(dur) = duration.filter(|d| d.is_finite() && *d > 0.0) {
         cmd.arg("-t").arg(format!("{:.3}", dur));
@@ -262,7 +274,9 @@ pub fn spawn_playback_stream_transformed_with_duration<B: AsRef<Path>>(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let child = cmd.spawn().context("Failed to spawn ffmpeg playback stream")?;
+    let child = cmd
+        .spawn()
+        .context("Failed to spawn ffmpeg playback stream")?;
     Ok(child)
 }
 
@@ -522,7 +536,10 @@ pub fn spawn_audio_playback_with_fade<B: AsRef<Path>>(
 
     let mut af_filters = Vec::new();
     if let Some(lufs) = normalize.filter(|v| v.is_finite()) {
-        af_filters.push(format!("loudnorm=I={:.1}:TP=-1.5:LRA=11", lufs.clamp(-70.0, -5.0)));
+        af_filters.push(format!(
+            "loudnorm=I={:.1}:TP=-1.5:LRA=11",
+            lufs.clamp(-70.0, -5.0)
+        ));
     }
     if let Some(gain) = gain_db.filter(|v| v.is_finite() && v.abs() > 0.05) {
         af_filters.push(format!("volume={:.1}dB", gain.clamp(-60.0, 60.0)));
@@ -535,7 +552,9 @@ pub fn spawn_audio_playback_with_fade<B: AsRef<Path>>(
     // measure peak level per channel, and stream to stdout via ametadata
     af_filters.push("aformat=channel_layouts=stereo".to_string());
     af_filters.push("asetnsamples=n=2048".to_string());
-    af_filters.push("astats=metadata=1:reset=1:measure_perchannel=Peak_level:measure_overall=none".to_string());
+    af_filters.push(
+        "astats=metadata=1:reset=1:measure_perchannel=Peak_level:measure_overall=none".to_string(),
+    );
     af_filters.push("ametadata=mode=print:file=-:direct=1".to_string());
 
     cmd.arg("-af").arg(af_filters.join(","));
@@ -557,7 +576,9 @@ pub fn spawn_audio_playback_with_fade<B: AsRef<Path>>(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let mut child = cmd.spawn().context("Failed to spawn audio playback via ffplay")?;
+    let mut child = cmd
+        .spawn()
+        .context("Failed to spawn audio playback via ffplay")?;
     let master_clock = Arc::new(AtomicU64::new(u64::MAX));
     let meter_levels = Arc::new(Mutex::new((-60.0f32, -60.0f32)));
 
@@ -639,7 +660,11 @@ pub fn extract_waveform_rgba<B: AsRef<Path>>(
         .and_then(|pixels| pixels.checked_mul(4))
         .context("Waveform dimensions overflow buffer size")?;
     if output.stdout.len() < expected {
-        anyhow::bail!("Incomplete waveform data: got {} vs expected {}", output.stdout.len(), expected);
+        anyhow::bail!(
+            "Incomplete waveform data: got {} vs expected {}",
+            output.stdout.len(),
+            expected
+        );
     }
 
     output.stdout.truncate(expected);

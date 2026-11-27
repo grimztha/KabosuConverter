@@ -1,9 +1,9 @@
-use std::path::Path;
 use kabosu_converter::ffmpeg::{
-    FFmpegCommandBuilder, EncodeJobConfig, EncoderFunction, VideoCodec, HwAccel,
-    RateControlMode, AudioCodecChoice, ProResProfile, format_duration_hms, FFmpegBinaries,
-    VideoRotation, ResolutionPreset, parse_ffmpeg_version
+    format_duration_hms, parse_ffmpeg_version, AudioCodecChoice, EncodeJobConfig, EncoderFunction,
+    FFmpegBinaries, FFmpegCommandBuilder, HwAccel, ProResProfile, RateControlMode,
+    ResolutionPreset, VideoCodec, VideoRotation,
 };
+use std::path::Path;
 
 #[test]
 fn test_duration_formatting() {
@@ -172,17 +172,43 @@ fn test_audio_normalization_command() {
 #[test]
 fn test_binary_locator_workspace() {
     if let Ok(binaries) = FFmpegBinaries::locate() {
-        assert!(binaries.ffmpeg.exists(), "ffmpeg binary must exist in project root");
-        assert!(binaries.ffprobe.exists(), "ffprobe binary must exist in project root");
-        assert!(binaries.ffplay.is_some(), "ffplay binary must be found in project root");
-        assert!(binaries.ffplay.as_ref().unwrap().exists(), "ffplay binary must exist");
+        assert!(
+            binaries.ffmpeg.exists(),
+            "ffmpeg binary must exist in project root"
+        );
+        assert!(
+            binaries.ffprobe.exists(),
+            "ffprobe binary must exist in project root"
+        );
+        assert!(
+            binaries.ffplay.is_some(),
+            "ffplay binary must be found in project root"
+        );
+        assert!(
+            binaries.ffplay.as_ref().unwrap().exists(),
+            "ffplay binary must exist"
+        );
 
         let ffmpeg_str = binaries.ffmpeg.to_string_lossy().to_lowercase();
         let ffprobe_str = binaries.ffprobe.to_string_lossy().to_lowercase();
-        let ffplay_str = binaries.ffplay.as_ref().unwrap().to_string_lossy().to_lowercase();
-        assert!(ffmpeg_str.contains("kabosu") || ffmpeg_str.contains("another_encoder"), "ffmpeg must be in project root");
-        assert!(ffprobe_str.contains("kabosu") || ffprobe_str.contains("another_encoder"), "ffprobe must be in project root");
-        assert!(ffplay_str.contains("kabosu") || ffplay_str.contains("another_encoder"), "ffplay must be in project root");
+        let ffplay_str = binaries
+            .ffplay
+            .as_ref()
+            .unwrap()
+            .to_string_lossy()
+            .to_lowercase();
+        assert!(
+            ffmpeg_str.contains("kabosu") || ffmpeg_str.contains("another_encoder"),
+            "ffmpeg must be in project root"
+        );
+        assert!(
+            ffprobe_str.contains("kabosu") || ffprobe_str.contains("another_encoder"),
+            "ffprobe must be in project root"
+        );
+        assert!(
+            ffplay_str.contains("kabosu") || ffplay_str.contains("another_encoder"),
+            "ffplay must be in project root"
+        );
     }
 }
 
@@ -190,13 +216,13 @@ fn test_binary_locator_workspace() {
 fn test_live_probe_synthetic() {
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let synth = Path::new("test_synthetic.mp4");
-    if synth.exists() {
-        let meta = kabosu_converter::ffmpeg::probe_file(synth, &binaries.ffprobe).unwrap();
-        assert_eq!(meta.primary_video().unwrap().width, 1280);
-        assert_eq!(meta.primary_video().unwrap().height, 720);
-        assert_eq!(meta.primary_video().unwrap().codec, "h264");
-        assert_eq!(meta.primary_audio().unwrap().codec, "aac");
-        assert!(meta.duration_seconds >= 2.9);
+        if synth.exists() {
+            let meta = kabosu_converter::ffmpeg::probe_file(synth, &binaries.ffprobe).unwrap();
+            assert_eq!(meta.primary_video().unwrap().width, 1280);
+            assert_eq!(meta.primary_video().unwrap().height, 720);
+            assert_eq!(meta.primary_video().unwrap().codec, "h264");
+            assert_eq!(meta.primary_audio().unwrap().codec, "aac");
+            assert!(meta.duration_seconds >= 2.9);
         }
     }
 }
@@ -205,42 +231,42 @@ fn test_live_probe_synthetic() {
 fn test_live_transcode_synthetic_hevc() {
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let synth = Path::new("test_synthetic.mp4");
-    if synth.exists() {
-        let out = Path::new("test_synthetic_hevc.mp4");
-        if out.exists() {
+        if synth.exists() {
+            let out = Path::new("test_synthetic_hevc.mp4");
+            if out.exists() {
+                let _ = std::fs::remove_file(out);
+            }
+
+            let config = EncodeJobConfig {
+                function: EncoderFunction::Transcode,
+                input_path: synth.to_string_lossy().to_string(),
+                output_path: out.to_string_lossy().to_string(),
+                video_codec: VideoCodec::H265,
+                crf: 28,
+                preset: "ultrafast".to_string(),
+                audio_codec: AudioCodecChoice::AAC,
+                ..Default::default()
+            };
+
+            let cmd = FFmpegCommandBuilder::build(&config, &binaries.ffmpeg);
+            let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+            let mut progress_count = 0;
+            let res = kabosu_converter::ffmpeg::FFmpegRunner::run_with_progress(
+                &cmd,
+                3.0,
+                cancel,
+                |_p| {
+                    progress_count += 1;
+                },
+                |_l| {},
+            );
+
+            assert!(res.is_ok(), "Live transcode should succeed: {:?}", res);
+            assert!(out.exists(), "Output file must be created");
+            assert!(progress_count > 0, "Progress events must have fired");
+
             let _ = std::fs::remove_file(out);
-        }
-
-        let config = EncodeJobConfig {
-            function: EncoderFunction::Transcode,
-            input_path: synth.to_string_lossy().to_string(),
-            output_path: out.to_string_lossy().to_string(),
-            video_codec: VideoCodec::H265,
-            crf: 28,
-            preset: "ultrafast".to_string(),
-            audio_codec: AudioCodecChoice::AAC,
-            ..Default::default()
-        };
-
-        let cmd = FFmpegCommandBuilder::build(&config, &binaries.ffmpeg);
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-        let mut progress_count = 0;
-        let res = kabosu_converter::ffmpeg::FFmpegRunner::run_with_progress(
-            &cmd,
-            3.0,
-            cancel,
-            |_p| {
-                progress_count += 1;
-            },
-            |_l| {},
-        );
-
-        assert!(res.is_ok(), "Live transcode should succeed: {:?}", res);
-        assert!(out.exists(), "Output file must be created");
-        assert!(progress_count > 0, "Progress events must have fired");
-
-        let _ = std::fs::remove_file(out);
         }
     }
 }
@@ -264,18 +290,21 @@ fn test_extract_frame_preview() {
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let synth = Path::new("test_synthetic.mp4");
-    if synth.exists() {
-        let out_img = Path::new("test_preview_thumb.jpg");
-        if out_img.exists() {
+        if synth.exists() {
+            let out_img = Path::new("test_preview_thumb.jpg");
+            if out_img.exists() {
+                let _ = std::fs::remove_file(out_img);
+            }
+
+            let res = extract_frame(&binaries.ffmpeg, &synth.to_string_lossy(), 1.0, out_img);
+            assert!(res.is_ok(), "Frame extraction should succeed: {:?}", res);
+            assert!(out_img.exists(), "Extracted preview image should exist");
+            assert!(
+                out_img.metadata().unwrap().len() > 100,
+                "Image should contain byte data"
+            );
+
             let _ = std::fs::remove_file(out_img);
-        }
-
-        let res = extract_frame(&binaries.ffmpeg, &synth.to_string_lossy(), 1.0, out_img);
-        assert!(res.is_ok(), "Frame extraction should succeed: {:?}", res);
-        assert!(out_img.exists(), "Extracted preview image should exist");
-        assert!(out_img.metadata().unwrap().len() > 100, "Image should contain byte data");
-
-        let _ = std::fs::remove_file(out_img);
         }
     }
 }
@@ -296,10 +325,19 @@ fn test_waveform_rgba_extraction() {
         }
         if let Ok(status) = cmd.status() {
             if status.success() {
-                let res = extract_waveform_rgba(&binaries.ffmpeg, &test_wav.to_string_lossy(), 400, 30);
-                assert!(res.is_ok(), "Waveform extraction should succeed: {:?}", res.err());
+                let res =
+                    extract_waveform_rgba(&binaries.ffmpeg, &test_wav.to_string_lossy(), 400, 30);
+                assert!(
+                    res.is_ok(),
+                    "Waveform extraction should succeed: {:?}",
+                    res.err()
+                );
                 let bytes = res.unwrap();
-                assert_eq!(bytes.len(), 400 * 30 * 4, "Waveform RGBA buffer must be width*height*4");
+                assert_eq!(
+                    bytes.len(),
+                    400 * 30 * 4,
+                    "Waveform RGBA buffer must be width*height*4"
+                );
                 let _ = std::fs::remove_file(test_wav);
             }
         }
@@ -323,8 +361,19 @@ fn test_audio_playback_spawning() {
             }
             if let Ok(status) = cmd.status() {
                 if status.success() {
-                    let child = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.2), 80, Some(3.0), Some(-16.0));
-                    assert!(child.is_ok(), "spawn_audio_playback with gain and normalization filters should succeed");
+                    let child = spawn_audio_playback(
+                        ffplay,
+                        &test_wav.to_string_lossy(),
+                        0.0,
+                        Some(0.2),
+                        80,
+                        Some(3.0),
+                        Some(-16.0),
+                    );
+                    assert!(
+                        child.is_ok(),
+                        "spawn_audio_playback with gain and normalization filters should succeed"
+                    );
                     if let Ok(mut c) = child {
                         let _ = c.kill();
                     }
@@ -371,9 +420,9 @@ fn test_parse_ffplay_pts() {
 #[test]
 fn test_ffplay_clock_reader_and_session() {
     use kabosu_converter::ffmpeg::preview::read_ffplay_clock;
+    use std::io::Cursor;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
-    use std::io::Cursor;
 
     let simulated_stderr = b"ffplay version ...\r\n\
                              nan M-A:    nan fd=   0\r\
@@ -388,7 +437,11 @@ fn test_ffplay_clock_reader_and_session() {
     let final_val = clock.load(Ordering::Acquire);
     assert_ne!(final_val, u64::MAX);
     let pts = (final_val as f64) / 1_000_000.0;
-    assert!((pts - 0.25).abs() < 1e-4, "Clock should have updated to 0.25s, got: {}", pts);
+    assert!(
+        (pts - 0.25).abs() < 1e-4,
+        "Clock should have updated to 0.25s, got: {}",
+        pts
+    );
 }
 
 #[test]
@@ -408,8 +461,16 @@ fn test_live_audio_clock_tracking() {
             }
             if let Ok(status) = cmd.status() {
                 if status.success() {
-                    let mut session = spawn_audio_playback(ffplay, &test_wav.to_string_lossy(), 0.0, Some(0.6), 80, None, None)
-                        .expect("spawn_audio_playback should succeed");
+                    let mut session = spawn_audio_playback(
+                        ffplay,
+                        &test_wav.to_string_lossy(),
+                        0.0,
+                        Some(0.6),
+                        80,
+                        None,
+                        None,
+                    )
+                    .expect("spawn_audio_playback should succeed");
 
                     // Wait up to 600ms for ffplay to initialize and produce master clock PTS
                     let start = std::time::Instant::now();
@@ -422,7 +483,10 @@ fn test_live_audio_clock_tracking() {
                         }
                         std::thread::sleep(std::time::Duration::from_millis(20));
                     }
-                    assert!(saw_pts, "Live ffplay audio session should update master clock with real-time PTS");
+                    assert!(
+                        saw_pts,
+                        "Live ffplay audio session should update master clock with real-time PTS"
+                    );
 
                     let _ = session.kill();
                     let _ = std::fs::remove_file(test_wav);
@@ -434,7 +498,9 @@ fn test_live_audio_clock_tracking() {
 
 #[test]
 fn test_av_sync_master_clock_playback() {
-    use kabosu_converter::ffmpeg::{spawn_audio_playback, spawn_playback_stream_transformed, VideoRotation, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{
+        spawn_audio_playback, spawn_playback_stream_transformed, FFmpegBinaries, VideoRotation,
+    };
     use std::io::Read;
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
@@ -442,12 +508,23 @@ fn test_av_sync_master_clock_playback() {
             let test_media = Path::new("target/test_av_sync_media.mp4");
             let mut cmd = std::process::Command::new(&binaries.ffmpeg);
             cmd.args([
-                "-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=24",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=duration=3:size=640x360:rate=24",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=3",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
                 "-y",
-            ]).arg(test_media);
+            ])
+            .arg(test_media);
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
@@ -459,8 +536,16 @@ fn test_av_sync_master_clock_playback() {
                     let start_sec = 1.0;
 
                     // 1. Spawn audio playback with master clock
-                    let mut audio_session = spawn_audio_playback(ffplay, &media_str, start_sec, Some(1.0), 100, None, None)
-                        .expect("Audio playback should spawn");
+                    let mut audio_session = spawn_audio_playback(
+                        ffplay,
+                        &media_str,
+                        start_sec,
+                        Some(1.0),
+                        100,
+                        None,
+                        None,
+                    )
+                    .expect("Audio playback should spawn");
 
                     // 2. Spawn video decode stream
                     let mut video_child = spawn_playback_stream_transformed(
@@ -470,27 +555,38 @@ fn test_av_sync_master_clock_playback() {
                         VideoRotation::None,
                         false,
                         false,
-                    ).expect("Video stream should spawn");
+                    )
+                    .expect("Video stream should spawn");
 
                     let mut stdout = video_child.stdout.take().expect("Should have stdout pipe");
                     let mut frame_buf = vec![0u8; 640 * 360 * 4];
 
                     // Read first video frame from pipe
                     let read_res = stdout.read_exact(&mut frame_buf);
-                    assert!(read_res.is_ok(), "First decoded video frame should be read successfully");
+                    assert!(
+                        read_res.is_ok(),
+                        "First decoded video frame should be read successfully"
+                    );
 
                     // Verify audio clock advances around start_sec (1.0)
                     let start = std::time::Instant::now();
                     let mut got_audio_clock = false;
                     while start.elapsed().as_millis() < 2500 {
                         if let Some(pts) = audio_session.get_pts() {
-                            assert!((0.5..=2.5).contains(&pts), "Audio PTS should be near start_sec (1.0), got: {}", pts);
+                            assert!(
+                                (0.5..=2.5).contains(&pts),
+                                "Audio PTS should be near start_sec (1.0), got: {}",
+                                pts
+                            );
                             got_audio_clock = true;
                             break;
                         }
                         std::thread::sleep(std::time::Duration::from_millis(20));
                     }
-                    assert!(got_audio_clock, "Audio master clock should report PTS near seek target");
+                    assert!(
+                        got_audio_clock,
+                        "Audio master clock should report PTS near seek target"
+                    );
 
                     let _ = audio_session.kill();
                     let _ = video_child.kill();
@@ -504,17 +600,26 @@ fn test_av_sync_master_clock_playback() {
 
 #[test]
 fn test_trimmed_playback_stream_with_duration() {
-    use kabosu_converter::ffmpeg::{spawn_playback_stream_transformed_with_duration, VideoRotation, FFmpegBinaries};
+    use kabosu_converter::ffmpeg::{
+        spawn_playback_stream_transformed_with_duration, FFmpegBinaries, VideoRotation,
+    };
     use std::io::Read;
 
     if let Ok(binaries) = FFmpegBinaries::locate() {
         let test_media = Path::new("target/test_trimmed_playback_media.mp4");
         let mut cmd = std::process::Command::new(&binaries.ffmpeg);
         cmd.args([
-            "-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=24",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=3:size=640x360:rate=24",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
             "-y",
-        ]).arg(test_media);
+        ])
+        .arg(test_media);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -535,7 +640,8 @@ fn test_trimmed_playback_stream_with_duration() {
                     VideoRotation::None,
                     false,
                     false,
-                ).expect("Video stream should spawn with duration");
+                )
+                .expect("Video stream should spawn with duration");
 
                 let mut stdout = video_child.stdout.take().expect("Should have stdout pipe");
                 let mut frame_buf = vec![0u8; 640 * 360 * 4];
@@ -553,7 +659,10 @@ fn test_trimmed_playback_stream_with_duration() {
                 );
 
                 let wait_res = video_child.wait();
-                assert!(wait_res.is_ok(), "Video process should exit cleanly after trimmed duration");
+                assert!(
+                    wait_res.is_ok(),
+                    "Video process should exit cleanly after trimmed duration"
+                );
 
                 let _ = std::fs::remove_file(test_media);
             }
@@ -569,13 +678,19 @@ fn test_extract_frame_rgba_accurate_seeking() {
         let test_vid = Path::new("target/test_seek_input.mp4");
         let mut cmd = std::process::Command::new(&binaries.ffmpeg);
         cmd.args([
-            "-f", "lavfi",
-            "-i", "testsrc=duration=4:size=640x360:rate=24",
-            "-g", "48", // Keyframes every 2.0s
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=4:size=640x360:rate=24",
+            "-g",
+            "48", // Keyframes every 2.0s
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
             "-y",
-        ]).arg(test_vid);
+        ])
+        .arg(test_vid);
 
         #[cfg(windows)]
         {
@@ -586,19 +701,32 @@ fn test_extract_frame_rgba_accurate_seeking() {
         if let Ok(status) = cmd.status() {
             if status.success() {
                 // Test 1: Extract at 0.5s (short seek, target <= 2.0)
-                let frame_05 = extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 0.5);
-                assert!(frame_05.is_ok(), "extract_frame_rgba at 0.5s failed: {:?}", frame_05.err());
+                let frame_05 =
+                    extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 0.5);
+                assert!(
+                    frame_05.is_ok(),
+                    "extract_frame_rgba at 0.5s failed: {:?}",
+                    frame_05.err()
+                );
                 let buf_05 = frame_05.unwrap();
                 assert_eq!(buf_05.len(), 640 * 360 * 4);
 
                 // Test 2: Extract at 3.0s (two-stage seek, target > 2.0)
-                let frame_30 = extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 3.0);
-                assert!(frame_30.is_ok(), "extract_frame_rgba at 3.0s failed: {:?}", frame_30.err());
+                let frame_30 =
+                    extract_frame_rgba(&binaries.ffmpeg, &test_vid.to_string_lossy(), 3.0);
+                assert!(
+                    frame_30.is_ok(),
+                    "extract_frame_rgba at 3.0s failed: {:?}",
+                    frame_30.err()
+                );
                 let buf_30 = frame_30.unwrap();
                 assert_eq!(buf_30.len(), 640 * 360 * 4);
 
                 // Test 3: The two frames must not be identical (verifies accurate temporal decoding rather than snapping to 0.0s)
-                assert_ne!(buf_05, buf_30, "Frame at 0.5s and 3.0s must have different visual contents");
+                assert_ne!(
+                    buf_05, buf_30,
+                    "Frame at 0.5s and 3.0s must have different visual contents"
+                );
 
                 let _ = std::fs::remove_file(test_vid);
             }
@@ -616,30 +744,71 @@ fn test_video_rotation_filters() {
     assert_eq!(VideoRotation::from_degrees(270), VideoRotation::RotateNeg90);
     assert_eq!(VideoRotation::from_degrees(180), VideoRotation::Rotate180);
 
-    assert_eq!(VideoRotation::None.effective_dimensions(1920, 1080), (1920, 1080));
-    assert_eq!(VideoRotation::Rotate90.effective_dimensions(1920, 1080), (1080, 1920));
-    assert_eq!(VideoRotation::RotateNeg90.effective_dimensions(1920, 1080), (1080, 1920));
-    assert_eq!(VideoRotation::Rotate180.effective_dimensions(1920, 1080), (1920, 1080));
+    assert_eq!(
+        VideoRotation::None.effective_dimensions(1920, 1080),
+        (1920, 1080)
+    );
+    assert_eq!(
+        VideoRotation::Rotate90.effective_dimensions(1920, 1080),
+        (1080, 1920)
+    );
+    assert_eq!(
+        VideoRotation::RotateNeg90.effective_dimensions(1920, 1080),
+        (1080, 1920)
+    );
+    assert_eq!(
+        VideoRotation::Rotate180.effective_dimensions(1920, 1080),
+        (1920, 1080)
+    );
 
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, false, false, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::None,
+            false,
+            false,
+            None
+        ),
         Vec::<String>::new()
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate90, false, false, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::Rotate90,
+            false,
+            false,
+            None
+        ),
         vec!["transpose=1".to_string()]
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::RotateNeg90, false, false, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::RotateNeg90,
+            false,
+            false,
+            None
+        ),
         vec!["transpose=2".to_string()]
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate180, false, false, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::Rotate180,
+            false,
+            false,
+            None
+        ),
         vec!["hflip".to_string(), "vflip".to_string()]
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate180, true, false, None),
-        vec!["hflip".to_string(), "vflip".to_string(), "hflip".to_string()]
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::Rotate180,
+            true,
+            false,
+            None
+        ),
+        vec![
+            "hflip".to_string(),
+            "vflip".to_string(),
+            "hflip".to_string()
+        ]
     );
 }
 
@@ -648,16 +817,35 @@ fn test_video_flip_filters() {
     use kabosu_converter::ffmpeg::VideoRotation;
 
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, true, false, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::None,
+            true,
+            false,
+            None
+        ),
         vec!["hflip".to_string()]
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::None, false, true, None),
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::None,
+            false,
+            true,
+            None
+        ),
         vec!["vflip".to_string()]
     );
     assert_eq!(
-        FFmpegCommandBuilder::build_transform_and_crop_filters(VideoRotation::Rotate90, true, true, None),
-        vec!["transpose=1".to_string(), "hflip".to_string(), "vflip".to_string()]
+        FFmpegCommandBuilder::build_transform_and_crop_filters(
+            VideoRotation::Rotate90,
+            true,
+            true,
+            None
+        ),
+        vec![
+            "transpose=1".to_string(),
+            "hflip".to_string(),
+            "vflip".to_string()
+        ]
     );
 }
 
@@ -770,7 +958,8 @@ fn test_crop_handle_drag_session_free_mode_anchors() {
     let start_norm_y = 0.5;
 
     // Test Handle 0 (Top-Left): Right edge and Bottom edge MUST STAY EXACTLY FIXED.
-    let session_0 = CropHandleDragSession::new(0, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_0 =
+        CropHandleDragSession::new(0, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     assert_eq!(session_0.fixed_right, 800);
     assert_eq!(session_0.fixed_bottom, 550);
 
@@ -779,8 +968,20 @@ fn test_crop_handle_drag_session_free_mode_anchors() {
             let norm_x = start_norm_x + (delta_px as f32 / eff_w as f32);
             let norm_y = start_norm_y + (delta_py as f32 / eff_h as f32);
             let rect = session_0.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
-            assert_eq!(rect.x + rect.width, 800, "Handle 0 right edge must be exactly 800 at delta ({}, {})", delta_px, delta_py);
-            assert_eq!(rect.y + rect.height, 550, "Handle 0 bottom edge must be exactly 550 at delta ({}, {})", delta_px, delta_py);
+            assert_eq!(
+                rect.x + rect.width,
+                800,
+                "Handle 0 right edge must be exactly 800 at delta ({}, {})",
+                delta_px,
+                delta_py
+            );
+            assert_eq!(
+                rect.y + rect.height,
+                550,
+                "Handle 0 bottom edge must be exactly 550 at delta ({}, {})",
+                delta_px,
+                delta_py
+            );
             assert_eq!(rect.x % 2, 0, "x must be even");
             assert_eq!(rect.y % 2, 0, "y must be even");
             assert_eq!(rect.width % 2, 0, "width must be even");
@@ -789,27 +990,38 @@ fn test_crop_handle_drag_session_free_mode_anchors() {
     }
 
     // Test Handle 1 (Top-Right): Left edge and Bottom edge MUST STAY EXACTLY FIXED.
-    let session_1 = CropHandleDragSession::new(1, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_1 =
+        CropHandleDragSession::new(1, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
         let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
         let rect = session_1.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
         assert_eq!(rect.x, 200, "Handle 1 left edge must remain at 200");
-        assert_eq!(rect.y + rect.height, 550, "Handle 1 bottom edge must remain at 550");
+        assert_eq!(
+            rect.y + rect.height,
+            550,
+            "Handle 1 bottom edge must remain at 550"
+        );
     }
 
     // Test Handle 2 (Bottom-Left): Right edge and Top edge MUST STAY EXACTLY FIXED.
-    let session_2 = CropHandleDragSession::new(2, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_2 =
+        CropHandleDragSession::new(2, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
         let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
         let rect = session_2.compute_rect(norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
-        assert_eq!(rect.x + rect.width, 800, "Handle 2 right edge must remain at 800");
+        assert_eq!(
+            rect.x + rect.width,
+            800,
+            "Handle 2 right edge must remain at 800"
+        );
         assert_eq!(rect.y, 150, "Handle 2 top edge must remain at 150");
     }
 
     // Test Handle 3 (Bottom-Right): Left edge and Top edge MUST STAY EXACTLY FIXED.
-    let session_3 = CropHandleDragSession::new(3, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_3 =
+        CropHandleDragSession::new(3, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
         let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
@@ -819,40 +1031,48 @@ fn test_crop_handle_drag_session_free_mode_anchors() {
     }
 
     // Test Handle 4 (Top Edge): Left, Right, Bottom MUST STAY EXACTLY FIXED.
-    let session_4 = CropHandleDragSession::new(4, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_4 =
+        CropHandleDragSession::new(4, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
-        let rect = session_4.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        let rect =
+            session_4.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
         assert_eq!(rect.x, 200);
         assert_eq!(rect.width, 600);
         assert_eq!(rect.y + rect.height, 550);
     }
 
     // Test Handle 5 (Bottom Edge): Left, Right, Top MUST STAY EXACTLY FIXED.
-    let session_5 = CropHandleDragSession::new(5, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_5 =
+        CropHandleDragSession::new(5, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_y = start_norm_y + (delta as f32 / eff_h as f32);
-        let rect = session_5.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        let rect =
+            session_5.compute_rect(start_norm_x, norm_y, eff_w, eff_h, CropAspectRatio::Free);
         assert_eq!(rect.x, 200);
         assert_eq!(rect.width, 600);
         assert_eq!(rect.y, 150);
     }
 
     // Test Handle 6 (Left Edge): Right, Top, Bottom MUST STAY EXACTLY FIXED.
-    let session_6 = CropHandleDragSession::new(6, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_6 =
+        CropHandleDragSession::new(6, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
-        let rect = session_6.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        let rect =
+            session_6.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
         assert_eq!(rect.x + rect.width, 800);
         assert_eq!(rect.y, 150);
         assert_eq!(rect.height, 400);
     }
 
     // Test Handle 7 (Right Edge): Left, Top, Bottom MUST STAY EXACTLY FIXED.
-    let session_7 = CropHandleDragSession::new(7, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
+    let session_7 =
+        CropHandleDragSession::new(7, start_rect, start_norm_x, start_norm_y, eff_w, eff_h);
     for delta in [-50, -17, -1, 0, 1, 15, 33, 99] {
         let norm_x = start_norm_x + (delta as f32 / eff_w as f32);
-        let rect = session_7.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
+        let rect =
+            session_7.compute_rect(norm_x, start_norm_y, eff_w, eff_h, CropAspectRatio::Free);
         assert_eq!(rect.x, 200);
         assert_eq!(rect.y, 150);
         assert_eq!(rect.height, 400);
@@ -890,9 +1110,7 @@ fn test_crop_box_drag_session_preserves_dimensions() {
 
 #[test]
 fn test_combined_transform_crop_scale_filter_order() {
-    use kabosu_converter::ffmpeg::{
-        CropRect, DeinterlaceMode, ResolutionPreset, VideoRotation,
-    };
+    use kabosu_converter::ffmpeg::{CropRect, DeinterlaceMode, ResolutionPreset, VideoRotation};
 
     let config = EncodeJobConfig {
         function: EncoderFunction::Transcode,
@@ -915,7 +1133,10 @@ fn test_combined_transform_crop_scale_filter_order() {
     };
 
     let cmd = FFmpegCommandBuilder::build(&config, Path::new("ffmpeg.exe"));
-    let vf_idx = cmd.iter().position(|arg| arg == "-vf").expect("Must contain -vf");
+    let vf_idx = cmd
+        .iter()
+        .position(|arg| arg == "-vf")
+        .expect("Must contain -vf");
     let vf_chain = &cmd[vf_idx + 1];
     assert_eq!(
         vf_chain,
@@ -1002,7 +1223,11 @@ fn test_live_transcode_with_rotation_flip_and_crop() {
     let cmd_args = FFmpegCommandBuilder::build(&config, &binaries.ffmpeg);
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let res = FFmpegRunner::run_with_progress(&cmd_args, 1.0, cancel, |_| {}, |_| {});
-    assert!(res.is_ok(), "Transformed & cropped transcode should succeed: {:?}", res);
+    assert!(
+        res.is_ok(),
+        "Transformed & cropped transcode should succeed: {:?}",
+        res
+    );
 
     let probed = probe_file(test_out, &binaries.ffprobe).expect("Must probe output file");
     let v_stream = probed.primary_video().expect("Must have video stream");
@@ -1049,7 +1274,10 @@ fn test_audio_gain_and_normalize_combined() {
 
     assert!(cmd.contains(&"-af".to_string()));
     let af_idx = cmd.iter().position(|r| r == "-af").unwrap();
-    assert_eq!(cmd[af_idx + 1], "volume=-3.5dB,loudnorm=I=-16.0:TP=-1.0:LRA=7.0");
+    assert_eq!(
+        cmd[af_idx + 1],
+        "volume=-3.5dB,loudnorm=I=-16.0:TP=-1.0:LRA=7.0"
+    );
 }
 
 #[test]
@@ -1069,7 +1297,11 @@ fn test_audio_filter_forces_reencode_when_copy_selected() {
     assert!(cmd.contains(&"-af".to_string()));
     assert!(cmd.contains(&"-c:a".to_string()));
     let ca_idx = cmd.iter().position(|r| r == "-c:a").unwrap();
-    assert_eq!(cmd[ca_idx + 1], "aac", "Copy should be automatically replaced with AAC when audio filters are active");
+    assert_eq!(
+        cmd[ca_idx + 1],
+        "aac",
+        "Copy should be automatically replaced with AAC when audio filters are active"
+    );
 }
 
 #[test]
@@ -1109,8 +1341,16 @@ fn test_scale_filter_aspect_ratio_bounding_box() {
     assert!(cmd.contains(&"-vf".to_string()));
     let vf_idx = cmd.iter().position(|r| r == "-vf").unwrap();
     let filter = &cmd[vf_idx + 1];
-    assert!(filter.contains("w=1920:h=1080"), "Scale filter must specify both width and height bounding dimensions: {}", filter);
-    assert!(filter.contains("force_original_aspect_ratio=decrease"), "Scale filter must decrease aspect ratio to avoid distortion: {}", filter);
+    assert!(
+        filter.contains("w=1920:h=1080"),
+        "Scale filter must specify both width and height bounding dimensions: {}",
+        filter
+    );
+    assert!(
+        filter.contains("force_original_aspect_ratio=decrease"),
+        "Scale filter must decrease aspect ratio to avoid distortion: {}",
+        filter
+    );
 }
 
 #[test]
@@ -1127,7 +1367,10 @@ fn test_audioless_video_skips_audio_filter_flag() {
     let ffmpeg_bin = Path::new("ffmpeg.exe");
     let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
 
-    assert!(!cmd.contains(&"-af".to_string()), "Commands without audio adjustments must not include -af");
+    assert!(
+        !cmd.contains(&"-af".to_string()),
+        "Commands without audio adjustments must not include -af"
+    );
 }
 
 #[test]
@@ -1166,7 +1409,9 @@ fn test_audio_playback_session_intentional_kill_prevents_premature_finish() {
         // is_finished() must NOT report true as natural stream completion.
         let _ = session.kill();
         assert!(!session.is_finished());
-        assert!(session.intentional_exit.load(std::sync::atomic::Ordering::Acquire));
+        assert!(session
+            .intentional_exit
+            .load(std::sync::atomic::Ordering::Acquire));
     }
 }
 
@@ -1274,7 +1519,11 @@ fn test_live_ffmpeg_version_detection() {
         Err(_) => return,
     };
     let (full_ver, badge) = binaries.detect_version();
-    assert!(full_ver.starts_with("8.1"), "Expected version starting with 8.1, got: {}", full_ver);
+    assert!(
+        full_ver.starts_with("8.1"),
+        "Expected version starting with 8.1, got: {}",
+        full_ver
+    );
     assert_eq!(badge, "FFmpeg 8.x Engine");
 }
 
@@ -1412,7 +1661,9 @@ fn test_svtav1_rate_control_modes() {
 fn test_faststart_case_insensitivity() {
     let ffmpeg_bin = Path::new("ffmpeg.exe");
 
-    for ext in &["out.MP4", "out.MOV", "out.M4V", "out.mp4", "out.mov", "out.m4v"] {
+    for ext in &[
+        "out.MP4", "out.MOV", "out.M4V", "out.mp4", "out.mov", "out.m4v",
+    ] {
         let config = EncodeJobConfig {
             function: EncoderFunction::Transcode,
             input_path: "in.mkv".to_string(),
@@ -1477,31 +1728,43 @@ fn test_parse_astats_level() {
     );
     // Non-matching lines
     assert_eq!(parse_astats_level("frame:0 pts:0 pts_time:0"), None);
-    assert_eq!(parse_astats_level("lavfi.astats.Overall.Peak_level=-18.0"), None);
+    assert_eq!(
+        parse_astats_level("lavfi.astats.Overall.Peak_level=-18.0"),
+        None
+    );
     assert_eq!(parse_astats_level("random stdout message"), None);
 }
 
 #[test]
 fn test_read_ffplay_meter_stream() {
+    use kabosu_converter::ffmpeg::read_ffplay_meter;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
-    use kabosu_converter::ffmpeg::read_ffplay_meter;
 
     let meter = Arc::new(Mutex::new((-60.0f32, -60.0f32)));
-    let mock_stream = b"frame:0 pts:0\r\nlavfi.astats.1.Peak_level=-14.5\r\nlavfi.astats.2.Peak_level=-20.2\r\n";
+    let mock_stream =
+        b"frame:0 pts:0\r\nlavfi.astats.1.Peak_level=-14.5\r\nlavfi.astats.2.Peak_level=-20.2\r\n";
     let cursor = Cursor::new(mock_stream);
 
     read_ffplay_meter(cursor, meter.clone());
 
     let (l, r) = *meter.lock().unwrap();
-    assert!((l - (-14.5)).abs() < 0.01, "L channel should be -14.5 dB: got {}", l);
-    assert!((r - (-20.2)).abs() < 0.01, "R channel should be -20.2 dB: got {}", r);
+    assert!(
+        (l - (-14.5)).abs() < 0.01,
+        "L channel should be -14.5 dB: got {}",
+        l
+    );
+    assert!(
+        (r - (-20.2)).abs() < 0.01,
+        "R channel should be -20.2 dB: got {}",
+        r
+    );
 }
 
 #[test]
 fn test_live_audio_meter_playback_and_volume_isolation() {
-    use std::path::Path;
     use kabosu_converter::ffmpeg::{spawn_audio_playback, FFmpegBinaries};
+    use std::path::Path;
 
     let binaries = match FFmpegBinaries::locate() {
         Ok(b) => b,
@@ -1538,7 +1801,10 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
             None,
             None,
         );
-        assert!(session.is_ok(), "spawn_audio_playback with meter filters should succeed");
+        assert!(
+            session.is_ok(),
+            "spawn_audio_playback with meter filters should succeed"
+        );
         let mut session = session.unwrap();
 
         // Wait up to 500ms for ffplay to process frames and emit meter levels
@@ -1553,7 +1819,10 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         let _ = session.kill();
-        assert!(got_levels, "Volume meter should read active stereo audio levels during playback");
+        assert!(
+            got_levels,
+            "Volume meter should read active stereo audio levels during playback"
+        );
 
         // 2. Test isolation from toolbar volume: with volume=0, meter MUST still reflect render output!
         let session_muted = spawn_audio_playback(
@@ -1565,7 +1834,10 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
             None,
             None,
         );
-        assert!(session_muted.is_ok(), "spawn_audio_playback with volume=0 should succeed");
+        assert!(
+            session_muted.is_ok(),
+            "spawn_audio_playback with volume=0 should succeed"
+        );
         let mut session_muted = session_muted.unwrap();
 
         let start = std::time::Instant::now();
@@ -1586,14 +1858,6 @@ fn test_live_audio_meter_playback_and_volume_isolation() {
         );
     }
 }
-
-
-
-
-
-
-
-
 
 #[test]
 #[cfg(target_os = "macos")]
@@ -1628,11 +1892,25 @@ fn test_mp4_audio_guard_promotes_mp3_and_opus_to_aac() {
         ..Default::default()
     };
     let cmd_mp3 = FFmpegCommandBuilder::build(&config_mp3, ffmpeg_bin);
-    let ca_idx = cmd_mp3.iter().position(|r| r == "-c:a").expect("-c:a must be present");
-    assert_eq!(cmd_mp3[ca_idx + 1], "aac", "MP3 in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility");
+    let ca_idx = cmd_mp3
+        .iter()
+        .position(|r| r == "-c:a")
+        .expect("-c:a must be present");
+    assert_eq!(
+        cmd_mp3[ca_idx + 1],
+        "aac",
+        "MP3 in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility"
+    );
     assert!(cmd_mp3.contains(&"-ac".to_string()));
-    let ac_idx = cmd_mp3.iter().position(|r| r == "-ac").expect("-ac must be present");
-    assert_eq!(cmd_mp3[ac_idx + 1], "2", "-ac must default to 2 for stereo compatibility in .mp4");
+    let ac_idx = cmd_mp3
+        .iter()
+        .position(|r| r == "-ac")
+        .expect("-ac must be present");
+    assert_eq!(
+        cmd_mp3[ac_idx + 1],
+        "2",
+        "-ac must default to 2 for stereo compatibility in .mp4"
+    );
 
     // 2. Opus in MP4 container -> guarded to AAC + stereo
     let config_opus = EncodeJobConfig {
@@ -1645,10 +1923,20 @@ fn test_mp4_audio_guard_promotes_mp3_and_opus_to_aac() {
         ..Default::default()
     };
     let cmd_opus = FFmpegCommandBuilder::build(&config_opus, ffmpeg_bin);
-    let ca_idx = cmd_opus.iter().position(|r| r == "-c:a").expect("-c:a must be present");
-    assert_eq!(cmd_opus[ca_idx + 1], "aac", "Opus in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility");
+    let ca_idx = cmd_opus
+        .iter()
+        .position(|r| r == "-c:a")
+        .expect("-c:a must be present");
+    assert_eq!(
+        cmd_opus[ca_idx + 1],
+        "aac",
+        "Opus in .mp4 must be automatically promoted to AAC for mobile/messenger compatibility"
+    );
     assert!(cmd_opus.contains(&"-ac".to_string()));
-    let ac_idx = cmd_opus.iter().position(|r| r == "-ac").expect("-ac must be present");
+    let ac_idx = cmd_opus
+        .iter()
+        .position(|r| r == "-ac")
+        .expect("-ac must be present");
     assert_eq!(cmd_opus[ac_idx + 1], "2");
 }
 
@@ -1664,8 +1952,15 @@ fn test_audio_only_mp3_keeps_libmp3lame() {
         ..Default::default()
     };
     let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
-    let ca_idx = cmd.iter().position(|r| r == "-c:a").expect("-c:a must be present");
-    assert_eq!(cmd[ca_idx + 1], "libmp3lame", "Audio-only .mp3 export must keep libmp3lame");
+    let ca_idx = cmd
+        .iter()
+        .position(|r| r == "-c:a")
+        .expect("-c:a must be present");
+    assert_eq!(
+        cmd[ca_idx + 1],
+        "libmp3lame",
+        "Audio-only .mp3 export must keep libmp3lame"
+    );
 }
 
 #[test]
@@ -1710,7 +2005,10 @@ fn test_audio_fade_in_and_out_command_generation() {
     };
 
     let cmd = FFmpegCommandBuilder::build(&config, ffmpeg_bin);
-    let af_idx = cmd.iter().position(|r| r == "-af").expect("-af must be present");
+    let af_idx = cmd
+        .iter()
+        .position(|r| r == "-af")
+        .expect("-af must be present");
     let af = &cmd[af_idx + 1];
 
     let vol_pos = af.find("volume=3.0dB").expect("volume filter missing");
@@ -1728,8 +2026,15 @@ fn test_audio_fade_in_and_out_command_generation() {
         af
     );
 
-    let ca_idx = cmd.iter().position(|r| r == "-c:a").expect("-c:a must be present");
-    assert_eq!(cmd[ca_idx + 1], "aac", "Copy audio must promote to AAC when afade is active");
+    let ca_idx = cmd
+        .iter()
+        .position(|r| r == "-c:a")
+        .expect("-c:a must be present");
+    assert_eq!(
+        cmd[ca_idx + 1],
+        "aac",
+        "Copy audio must promote to AAC when afade is active"
+    );
 
     // Verify preview afade filters use absolute media timestamps for ffplay
     let preview_filters = build_preview_afade_filters(&AudioFadePreview {
@@ -1771,7 +2076,10 @@ fn test_live_audio_fade_in_and_out_with_trim() {
         .arg(&src_wav)
         .status()
         .expect("spawn local ffmpeg");
-    assert!(gen_status.success(), "failed to generate synthetic sine wav");
+    assert!(
+        gen_status.success(),
+        "failed to generate synthetic sine wav"
+    );
 
     // Extract trimmed 1s..4s (3s clip) with 1.0s fade-in and 1.0s fade-out
     let config = EncodeJobConfig {

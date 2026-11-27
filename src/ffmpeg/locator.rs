@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::env;
+use std::path::PathBuf;
 
 /// Parses the output of `ffmpeg -version` into:
 /// - (clean_version_string, short_display_badge)
@@ -11,7 +11,10 @@ pub fn parse_ffmpeg_version(output: &str) -> (String, String) {
         let clean_ver = raw_ver.trim_start_matches(['n', 'v']);
         let major = clean_ver.split('.').next().unwrap_or("");
         if let Ok(maj_num) = major.parse::<u32>() {
-            return (clean_ver.to_string(), format!("FFmpeg {}.x Engine", maj_num));
+            return (
+                clean_ver.to_string(),
+                format!("FFmpeg {}.x Engine", maj_num),
+            );
         }
     }
     ("8.1".to_string(), "FFmpeg 8.x Engine".to_string())
@@ -78,11 +81,19 @@ impl FFmpegBinaries {
             None
         };
 
-        let ffmpeg = find_binary(&ffmpeg_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local storage or project root path", ffmpeg_name))?;
+        let ffmpeg = find_binary(&ffmpeg_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Could not find {} in app-local storage or project root path",
+                ffmpeg_name
+            )
+        })?;
 
-        let ffprobe = find_binary(&ffprobe_name)
-            .ok_or_else(|| anyhow::anyhow!("Could not find {} in app-local storage or project root path", ffprobe_name))?;
+        let ffprobe = find_binary(&ffprobe_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Could not find {} in app-local storage or project root path",
+                ffprobe_name
+            )
+        })?;
 
         let ffplay = find_binary(&ffplay_name);
 
@@ -119,7 +130,11 @@ impl FFmpegBinaries {
 
         #[cfg(target_os = "macos")]
         {
-            return (crate::ffmpeg::HwAccel::VideoToolbox, true, "Apple VideoToolbox".to_string());
+            return (
+                crate::ffmpeg::HwAccel::VideoToolbox,
+                true,
+                "Apple VideoToolbox".to_string(),
+            );
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -133,10 +148,14 @@ impl FFmpegBinaries {
             for &(encoder, accel, label) in PROBES {
                 let mut cmd = Command::new(&self.ffmpeg);
                 cmd.args([
-                    "-f", "lavfi",
-                    "-i", "nullsrc=s=256x256:d=0.04",
-                    "-c:v", encoder,
-                    "-f", "null",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "nullsrc=s=256x256:d=0.04",
+                    "-c:v",
+                    encoder,
+                    "-f",
+                    "null",
                     "-",
                 ])
                 .stdin(Stdio::null())
@@ -149,7 +168,11 @@ impl FFmpegBinaries {
                 }
             }
 
-            (crate::ffmpeg::HwAccel::Cpu, false, "CPU Software".to_string())
+            (
+                crate::ffmpeg::HwAccel::Cpu,
+                false,
+                "CPU Software".to_string(),
+            )
         }
     }
 }

@@ -1,6 +1,6 @@
 mod common;
-use slint::ComponentHandle;
 use slint::platform::{PointerEventButton, WindowEvent};
+use slint::ComponentHandle;
 use slint::LogicalPosition;
 
 slint::include_modules!();
@@ -180,8 +180,14 @@ fn test_timeline_scrollbar_full_lifecycle() {
         button: PointerEventButton::Left,
     });
 
-    assert!(win.get_timeline_cx() < -400.0, "Timeline viewport content-x should have scrolled left");
-    assert!(win.get_sb_thumb_x() > 200.0, "Scrollbar thumb should have moved towards the right");
+    assert!(
+        win.get_timeline_cx() < -400.0,
+        "Timeline viewport content-x should have scrolled left"
+    );
+    assert!(
+        win.get_sb_thumb_x() > 200.0,
+        "Scrollbar thumb should have moved towards the right"
+    );
 
     // Drag right towards the end
     let drag_x = sx + sw - 10.0;
@@ -189,7 +195,10 @@ fn test_timeline_scrollbar_full_lifecycle() {
         position: LogicalPosition::new(drag_x, click_y),
     });
 
-    assert!(win.get_timeline_cx() <= -850.0, "Timeline should be panned close to the maximum scrollable range");
+    assert!(
+        win.get_timeline_cx() <= -850.0,
+        "Timeline should be panned close to the maximum scrollable range"
+    );
 
     // Release mouse pointer
     w.dispatch_event(WindowEvent::PointerReleased {
@@ -207,7 +216,10 @@ fn test_timeline_scrollbar_full_lifecycle() {
         position: LogicalPosition::new(drag_back_x, click_y),
     });
 
-    assert!(win.get_timeline_cx() > -200.0, "Timeline should have scrolled back near the beginning");
+    assert!(
+        win.get_timeline_cx() > -200.0,
+        "Timeline should have scrolled back near the beginning"
+    );
 
     w.dispatch_event(WindowEvent::PointerReleased {
         position: LogicalPosition::new(drag_back_x, click_y),

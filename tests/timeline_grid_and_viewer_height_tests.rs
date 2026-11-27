@@ -83,7 +83,11 @@ fn test_timeline_grid_and_viewer_height_lifecycle() {
     // Video gets full 500px (100% of space, unchanged).
     layout.set_selected_is_video(true);
     let vid_h = layout.get_viewer_height();
-    assert!((vid_h - 500.0).abs() < 1.0, "Video viewer should occupy all 500px: got {}", vid_h);
+    assert!(
+        (vid_h - 500.0).abs() < 1.0,
+        "Video viewer should occupy all 500px: got {}",
+        vid_h
+    );
 
     // Audio is selected:
     // Available stretch space = 500px.
@@ -93,7 +97,18 @@ fn test_timeline_grid_and_viewer_height_lifecycle() {
     let audio_h = layout.get_viewer_height();
     let spacer_h = layout.get_spacer_height();
 
-    assert!((audio_h - (500.0 * 2.0 / 3.0)).abs() < 2.0, "Audio viewer should be 2/3 of 500px (~333px): got {}", audio_h);
-    assert!((spacer_h - (500.0 / 3.0)).abs() < 2.0, "Spacer should be 1/3 of 500px (~167px): got {}", spacer_h);
-    assert!(((vid_h - audio_h) - (vid_h / 3.0)).abs() < 2.0, "Audio viewer height must be reduced by 1/3 compared to video viewer height");
+    assert!(
+        (audio_h - (500.0 * 2.0 / 3.0)).abs() < 2.0,
+        "Audio viewer should be 2/3 of 500px (~333px): got {}",
+        audio_h
+    );
+    assert!(
+        (spacer_h - (500.0 / 3.0)).abs() < 2.0,
+        "Spacer should be 1/3 of 500px (~167px): got {}",
+        spacer_h
+    );
+    assert!(
+        ((vid_h - audio_h) - (vid_h / 3.0)).abs() < 2.0,
+        "Audio viewer height must be reduced by 1/3 compared to video viewer height"
+    );
 }

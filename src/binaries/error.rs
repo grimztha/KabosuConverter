@@ -15,7 +15,9 @@ pub enum BinaryError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("SHA-256 verification failed for '{binary}'. Expected: {expected}, calculated: {actual}")]
+    #[error(
+        "SHA-256 verification failed for '{binary}'. Expected: {expected}, calculated: {actual}"
+    )]
     ChecksumMismatch {
         binary: String,
         expected: String,
@@ -23,19 +25,13 @@ pub enum BinaryError {
     },
 
     #[error("Checksum entry not found for asset '{asset_name}' in manifest from {url}")]
-    ChecksumNotFound {
-        asset_name: String,
-        url: String,
-    },
+    ChecksumNotFound { asset_name: String, url: String },
 
     #[error("Archive extraction failed: {0}")]
     ArchiveExtraction(String),
 
     #[error("Unsupported platform: OS={os}, Arch={arch}")]
-    PlatformNotSupported {
-        os: String,
-        arch: String,
-    },
+    PlatformNotSupported { os: String, arch: String },
 
     #[error("Binary smoke test failed for '{name}' at {path:?}: {details}")]
     ExecutionFailed {

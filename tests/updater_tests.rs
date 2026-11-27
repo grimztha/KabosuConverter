@@ -66,10 +66,16 @@ fn test_find_platform_asset_resolution() {
     ];
 
     let found = updater::find_platform_asset(&assets);
-    assert!(found.is_some(), "Should find a matching asset for host platform");
+    assert!(
+        found.is_some(),
+        "Should find a matching asset for host platform"
+    );
 
     #[cfg(target_os = "windows")]
-    assert_eq!(found.unwrap().name, "kabosu-converter-v0.15.0-x86_64-windows.zip");
+    assert_eq!(
+        found.unwrap().name,
+        "kabosu-converter-v0.15.0-x86_64-windows.zip"
+    );
 
     #[cfg(target_os = "macos")]
     assert!(found.unwrap().name.contains("apple") || found.unwrap().name.contains("darwin"));
@@ -99,7 +105,10 @@ fn test_github_release_deserialization() {
     let r = release.unwrap();
     assert_eq!(r.tag_name, "v0.14.6");
     assert_eq!(r.assets.len(), 1);
-    assert_eq!(r.assets[0].name, "kabosu-converter-v0.14.6-x86_64-windows.zip");
+    assert_eq!(
+        r.assets[0].name,
+        "kabosu-converter-v0.14.6-x86_64-windows.zip"
+    );
     assert_eq!(r.assets[0].size, 12555929);
 }
 
@@ -119,7 +128,10 @@ fn test_ui_update_state_lifecycle() {
     data.set_update_status(1);
     data.set_update_status_text("Checking for updates...".into());
     assert_eq!(data.get_update_status(), 1);
-    assert_eq!(data.get_update_status_text().as_str(), "Checking for updates...");
+    assert_eq!(
+        data.get_update_status_text().as_str(),
+        "Checking for updates..."
+    );
 
     // State 2: Up to date
     data.set_update_status(2);
@@ -131,7 +143,9 @@ fn test_ui_update_state_lifecycle() {
     data.set_has_update_available(true);
     data.set_update_status(3);
     data.set_update_latest_version("v0.15.0".into());
-    data.set_update_release_url("https://github.com/grimztha/KabosuConverter/releases/tag/v0.15.0".into());
+    data.set_update_release_url(
+        "https://github.com/grimztha/KabosuConverter/releases/tag/v0.15.0".into(),
+    );
     data.set_update_status_text("Update to v0.15.0".into());
     assert_eq!(data.get_update_status(), 3);
     assert!(data.get_has_update_available());
@@ -148,14 +162,22 @@ fn test_ui_update_state_lifecycle() {
     // State 5: Downloaded
     data.set_update_status(5);
     data.set_update_download_progress(1.0);
-    data.set_update_downloaded_path("C:\\Users\\User\\Downloads\\kabosu-converter-v0.15.0-x86_64-windows.zip".into());
+    data.set_update_downloaded_path(
+        "C:\\Users\\User\\Downloads\\kabosu-converter-v0.15.0-x86_64-windows.zip".into(),
+    );
     data.set_update_status_text("Update downloaded (Click to open)".into());
     assert_eq!(data.get_update_status(), 5);
-    assert_eq!(data.get_update_status_text().as_str(), "Update downloaded (Click to open)");
+    assert_eq!(
+        data.get_update_status_text().as_str(),
+        "Update downloaded (Click to open)"
+    );
 
     // State 6: Error / retry
     data.set_update_status(6);
     data.set_update_status_text("Check failed (Click to retry)".into());
     assert_eq!(data.get_update_status(), 6);
-    assert_eq!(data.get_update_status_text().as_str(), "Check failed (Click to retry)");
+    assert_eq!(
+        data.get_update_status_text().as_str(),
+        "Check failed (Click to retry)"
+    );
 }

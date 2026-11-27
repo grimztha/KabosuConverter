@@ -1,4 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
+import { Palette, ScrollView } from "std-widgets.slint";
 
 import { QueueFile, DownloadHistoryItem } from "types.slint";
 export { QueueFile, DownloadHistoryItem }
@@ -27,6 +27,10 @@ export component MainWindow inherits Window {
     resize-border-width: AppData.is_window_maximized ? 0px : 6px;
     maximized <=> AppData.is_window_maximized;
 
+    init => {
+        Palette.color-scheme = ColorScheme.dark;
+    }
+
     forward-focus: fs;
 
     property <length> queue_panel_width: AppData.queue_panel_expanded ? 300px : 38px;
@@ -41,142 +45,137 @@ export component MainWindow inherits Window {
         clip: true;
 
         fs := FocusScope {
-        key-pressed(event) => {
-            if event.text == Key.Delete || event.text == "\u{7f}" {
-                if AppData.selected_file_index >= 0 && AppData.selected_file_index < AppData.queue.length {
-                    AppLogic.remove_file(AppData.selected_file_index);
-                    return accept;
+            key-pressed(event) => {
+                if event.text == Key.Delete || event.text == "\u{7f}" {
+                    if AppData.selected_file_index >= 0 && AppData.selected_file_index < AppData.queue.length {
+                        AppLogic.remove_file(AppData.selected_file_index);
+                        return accept;
+                    }
                 }
+                if event.text == " " {
+                    if AppData.active_tab == 1 && AppData.player_has_media {
+                        AppLogic.player_play_pause();
+                        return accept;
+                    }
+                }
+                if AppData.active_tab == 1 && AppData.player_has_media && AppData.selected_is_video && AppData.crop_enabled && AppData.crop_arrow_keys_enabled {
+                    if event.text == Key.LeftArrow {
+                        AppLogic.crop_nudge(event.modifiers.shift ? -AppData.crop_nudge_step * 4 : -AppData.crop_nudge_step, 0);
+                        return accept;
+                    }
+                    if event.text == Key.RightArrow {
+                        AppLogic.crop_nudge(event.modifiers.shift ? AppData.crop_nudge_step * 4 : AppData.crop_nudge_step, 0);
+                        return accept;
+                    }
+                    if event.text == Key.UpArrow {
+                        AppLogic.crop_nudge(0, event.modifiers.shift ? -AppData.crop_nudge_step * 4 : -AppData.crop_nudge_step);
+                        return accept;
+                    }
+                    if event.text == Key.DownArrow {
+                        AppLogic.crop_nudge(0, event.modifiers.shift ? AppData.crop_nudge_step * 4 : AppData.crop_nudge_step);
+                        return accept;
+                    }
+                }
+                reject
             }
-            if event.text == " " {
-                if AppData.active_tab == 1 && AppData.player_has_media {
-                    AppLogic.player_play_pause();
-                    return accept;
-                }
-            }
-            if AppData.active_tab == 1 && AppData.player_has_media && AppData.selected_is_video && AppData.crop_enabled && AppData.crop_arrow_keys_enabled {
-                if event.text == Key.LeftArrow {
-                    AppLogic.crop_nudge(event.modifiers.shift ? -AppData.crop_nudge_step * 4 : -AppData.crop_nudge_step, 0);
-                    return accept;
-                }
-                if event.text == Key.RightArrow {
-                    AppLogic.crop_nudge(event.modifiers.shift ? AppData.crop_nudge_step * 4 : AppData.crop_nudge_step, 0);
-                    return accept;
-                }
-                if event.text == Key.UpArrow {
-                    AppLogic.crop_nudge(0, event.modifiers.shift ? -AppData.crop_nudge_step * 4 : -AppData.crop_nudge_step);
-                    return accept;
-                }
-                if event.text == Key.DownArrow {
-                    AppLogic.crop_nudge(0, event.modifiers.shift ? AppData.crop_nudge_step * 4 : AppData.crop_nudge_step);
-                    return accept;
-                }
-            }
-            reject
-        }
 
-        VerticalLayout {
-            spacing: 0px;
+            VerticalLayout {
+                // UNIFIED TOP HEADER BAR (Integrated Title Bar + Workspace Tabs + Window Controls)
+                Rectangle {
+                    height: 44px;
+                    background: Theme.header_bg;
 
-            // UNIFIED TOP HEADER BAR (Integrated Title Bar + Workspace Tabs + Window Controls)
-            Rectangle {
-                height: 42px;
-                background: Theme.header_bg;
+                    HorizontalLayout {
+                        // Left Section (Above QueuePanel): Brand Identity & Title Bar Text
+                        Rectangle {
+                            min-width: root.queue_panel_width + 1px;
+                            max-width: root.queue_panel_width + 1px;
+                            clip: true;
 
-                HorizontalLayout {
-                    padding-left: 0px;
-                    padding-right: 0px;
-                    spacing: 0px;
+                            animate min-width { duration: 160ms; easing: ease-out; }
+                            animate max-width { duration: 160ms; easing: ease-out; }
 
-                    // Left Section (Above QueuePanel): Brand Identity & Title Bar Text
-                    Rectangle {
-                        min-width: root.queue_panel_width + 1px;
-                        max-width: root.queue_panel_width + 1px;
-                        horizontal-stretch: 0;
-                        clip: true;
+                            WindowMoveArea {
+                                enabled: !AppData.is_window_maximized;
 
-                        animate min-width { duration: 160ms; easing: ease-out; }
-                        animate max-width { duration: 160ms; easing: ease-out; }
+                                HorizontalLayout {
+                                    padding-left: AppData.queue_panel_expanded ? 14px : 9px;
+                                    spacing: 8px;
+                                    alignment: start;
 
-                        WindowMoveArea {
-                            width: 100%;
-                            height: 100%;
-                            enabled: !AppData.is_window_maximized;
-
-                            HorizontalLayout {
-                                padding-left: AppData.queue_panel_expanded ? 14px : 9px;
-                                spacing: 8px;
-                                alignment: start;
-
-                                VerticalLayout {
-                                    alignment: center;
-                                    Image {
-                                        width: 20px;
-                                        height: 20px;
-                                        source: @image-url("icons/brand-logo.png");
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            width: 20px;
+                                            height: 20px;
+                                            source: @image-url("icons/brand-logo.png");
+                                        }
                                     }
-                                }
 
-                                if AppData.queue_panel_expanded : VerticalLayout {
-                                    alignment: center;
-                                    Text {
-                                        text: "KABOSU CONVERTER";
-                                        font-size: 12px;
-                                        font-weight: 700;
-                                        letter-spacing: 0.5px;
-                                        color: Theme.text_primary;
-                                        overflow: elide;
+                                    if AppData.queue_panel_expanded : VerticalLayout {
+                                        alignment: center;
+                                        HorizontalLayout {
+                                            spacing: 5px;
+                                            alignment: start;
+                                            Text {
+                                                text: "KABOSU";
+                                                font-size: 12px;
+                                                font-weight: 800;
+                                                letter-spacing: 0.8px;
+                                                color: Theme.text_primary;
+                                            }
+                                            Text {
+                                                text: "CONVERTER";
+                                                font-size: 12px;
+                                                font-weight: 500;
+                                                letter-spacing: 0.8px;
+                                                color: Theme.text_muted;
+                                                overflow: elide;
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Spacer aligning Tabs with middle panel content (20px padding)
-                    Rectangle {
-                        min-width: 20px;
-                        max-width: 20px;
-                        horizontal-stretch: 0;
+                        // Spacer aligning Tabs with middle panel content (20px padding)
+                        Rectangle {
+                            min-width: 20px;
+                            max-width: 20px;
 
-                        WindowMoveArea {
-                            width: 100%;
-                            height: 100%;
-                            enabled: !AppData.is_window_maximized;
+                            WindowMoveArea {
+                                enabled: !AppData.is_window_maximized;
+                            }
                         }
-                    }
 
-                        // Center-Left: Workspace Navigation Tabs (Segmented Control Pill, static left-aligned with middle panel)
+                        // Center-Left: Workspace Navigation Tabs (Segmented Control Pill)
                         tabs_nav_layout := VerticalLayout {
                             alignment: center;
-                            horizontal-stretch: 0;
 
                             Rectangle {
                                 height: 32px;
-                                border-radius: 8px;
+                                border-radius: 9px;
                                 background: Theme.tab_container_bg;
                                 border-width: 1px;
                                 border-color: Theme.tab_container_border;
 
                                 HorizontalLayout {
-                                    padding-left: 3px;
-                                    padding-right: 3px;
-                                    padding-top: 3px;
-                                    padding-bottom: 3px;
+                                    padding: 3px;
                                     spacing: 3px;
 
                                     // Tab 0: Downloader
                                     t0 := Rectangle {
-                                        border-radius: 6px;
-                                        background: AppData.active_tab == 0 ? Theme.tab_active_bg : (t0_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
+                                        border-radius: Theme.radius_sm;
+                                        background: AppData.active_tab == 0 ? Theme.tab_active_bg : (t0_ta.has-hover ? Theme.tab_inactive_hover : transparent);
                                         border-width: 1px;
-                                        border-color: AppData.active_tab == 0 ? Theme.tab_active_border : #00000000;
+                                        border-color: AppData.active_tab == 0 ? Theme.tab_active_border : transparent;
 
-                                        animate background { duration: 120ms; }
-                                        animate border-color { duration: 120ms; }
+                                        animate background { duration: 140ms; easing: ease-out; }
+                                        animate border-color { duration: 140ms; easing: ease-out; }
 
                                         HorizontalLayout {
-                                            padding-left: 10px;
-                                            padding-right: 10px;
+                                            padding-left: 11px;
+                                            padding-right: 11px;
                                             spacing: 6px;
                                             alignment: center;
 
@@ -194,8 +193,8 @@ export component MainWindow inherits Window {
                                                 alignment: center;
                                                 Text {
                                                     text: "Downloader";
-                                                    font-size: 12px;
-                                                    font-weight: AppData.active_tab == 0 ? 700 : 500;
+                                                    font-size: Theme.font_caption;
+                                                    font-weight: AppData.active_tab == 0 ? 600 : 500;
                                                     color: AppData.active_tab == 0 ? Theme.tab_active_text : (t0_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
@@ -206,7 +205,7 @@ export component MainWindow inherits Window {
                                                     width: 6px;
                                                     height: 6px;
                                                     border-radius: 3px;
-                                                    background: #34d399;
+                                                    background: Theme.accent_green;
                                                 }
                                             }
                                         }
@@ -219,17 +218,17 @@ export component MainWindow inherits Window {
 
                                     // Tab 1: View & Edit
                                     t1 := Rectangle {
-                                        border-radius: 6px;
-                                        background: AppData.active_tab == 1 ? Theme.tab_active_bg : (t1_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
+                                        border-radius: Theme.radius_sm;
+                                        background: AppData.active_tab == 1 ? Theme.tab_active_bg : (t1_ta.has-hover ? Theme.tab_inactive_hover : transparent);
                                         border-width: 1px;
-                                        border-color: AppData.active_tab == 1 ? Theme.tab_active_border : #00000000;
+                                        border-color: AppData.active_tab == 1 ? Theme.tab_active_border : transparent;
 
-                                        animate background { duration: 120ms; }
-                                        animate border-color { duration: 120ms; }
+                                        animate background { duration: 140ms; easing: ease-out; }
+                                        animate border-color { duration: 140ms; easing: ease-out; }
 
                                         HorizontalLayout {
-                                            padding-left: 10px;
-                                            padding-right: 10px;
+                                            padding-left: 11px;
+                                            padding-right: 11px;
                                             spacing: 6px;
                                             alignment: center;
 
@@ -247,8 +246,8 @@ export component MainWindow inherits Window {
                                                 alignment: center;
                                                 Text {
                                                     text: "View & Edit";
-                                                    font-size: 12px;
-                                                    font-weight: AppData.active_tab == 1 ? 700 : 500;
+                                                    font-size: Theme.font_caption;
+                                                    font-weight: AppData.active_tab == 1 ? 600 : 500;
                                                     color: AppData.active_tab == 1 ? Theme.tab_active_text : (t1_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
@@ -259,7 +258,7 @@ export component MainWindow inherits Window {
                                                     width: 6px;
                                                     height: 6px;
                                                     border-radius: 3px;
-                                                    background: #f59e0b;
+                                                    background: Theme.accent_amber;
                                                 }
                                             }
                                         }
@@ -270,19 +269,19 @@ export component MainWindow inherits Window {
                                         }
                                     }
 
-                                    // Tab 2: Transcoder Settings
+                                    // Tab 2: Settings
                                     t2 := Rectangle {
-                                        border-radius: 6px;
-                                        background: AppData.active_tab == 2 ? Theme.tab_active_bg : (t2_ta.has-hover ? Theme.tab_inactive_hover : #00000000);
+                                        border-radius: Theme.radius_sm;
+                                        background: AppData.active_tab == 2 ? Theme.tab_active_bg : (t2_ta.has-hover ? Theme.tab_inactive_hover : transparent);
                                         border-width: 1px;
-                                        border-color: AppData.active_tab == 2 ? Theme.tab_active_border : #00000000;
+                                        border-color: AppData.active_tab == 2 ? Theme.tab_active_border : transparent;
 
-                                        animate background { duration: 120ms; }
-                                        animate border-color { duration: 120ms; }
+                                        animate background { duration: 140ms; easing: ease-out; }
+                                        animate border-color { duration: 140ms; easing: ease-out; }
 
                                         HorizontalLayout {
-                                            padding-left: 10px;
-                                            padding-right: 10px;
+                                            padding-left: 11px;
+                                            padding-right: 11px;
                                             spacing: 6px;
                                             alignment: center;
 
@@ -300,8 +299,8 @@ export component MainWindow inherits Window {
                                                 alignment: center;
                                                 Text {
                                                     text: "Settings";
-                                                    font-size: 12px;
-                                                    font-weight: AppData.active_tab == 2 ? 700 : 500;
+                                                    font-size: Theme.font_caption;
+                                                    font-weight: AppData.active_tab == 2 ? 600 : 500;
                                                     color: AppData.active_tab == 2 ? Theme.tab_active_text : (t2_ta.has-hover ? Theme.text_primary : Theme.tab_inactive_text);
                                                 }
                                             }
@@ -327,263 +326,290 @@ export component MainWindow inherits Window {
                             }
                         }
 
-                    // Flexible Draggable Space (Right of Tabs)
-                    Rectangle {
-                        horizontal-stretch: 1;
+                        // Flexible Draggable Space (Right of Tabs)
+                        Rectangle {
+                            horizontal-stretch: 1;
 
-                        WindowMoveArea {
-                            width: 100%;
+                            WindowMoveArea {
+                                enabled: !AppData.is_window_maximized;
+                            }
+                        }
+
+                        // Right: Windows Native-Style Control Buttons (Minimize, Maximize/Restore, Close)
+                        WindowControls {
                             height: 100%;
-                            enabled: !AppData.is_window_maximized;
                         }
                     }
-
-                    // Right: Windows Native-Style Control Buttons (Minimize, Maximize/Restore, Close)
-                    WindowControls {
-                        height: 100%;
-                    }
                 }
-            }
 
-            // Header Subtle Divider
-            Rectangle { height: 1px; background: Theme.header_border; }
+                // Header Subtle Divider
+                Rectangle { height: 1px; background: Theme.header_border; }
 
-        // MAIN BODY (Split Left: Queue, Right: Inspector)
-        HorizontalLayout {
-            spacing: 0px;
-            vertical-stretch: 1;
-
-            // LEFT PANEL: FILE QUEUE
-            QueuePanel {
-                min-width: root.queue_panel_width;
-                max-width: root.queue_panel_width;
-                horizontal-stretch: 0;
-                request_focus => { fs.focus(); }
-                animate min-width { duration: 160ms; easing: ease-out; }
-                animate max-width { duration: 160ms; easing: ease-out; }
-            }
-
-            // Vertical Split Divider
-            Rectangle { width: 1px; background: Theme.panel_border; }
-
-            // RIGHT PANEL: FUNCTION & PARAMETERS (Stretch)
-            Rectangle {
-                min-width: 0px;
-                horizontal-stretch: 1;
-                background: Theme.app_bg;
-                clip: true;
-
-                if AppData.active_tab == 0 : DownloaderTab {}
-                if AppData.active_tab == 1 : PlayerTab {
-                    request_focus => { fs.focus(); }
-                }
-                if AppData.active_tab == 2 : TranscoderTab {}
-            }
-
-            // RIGHT-SIDE EXPANDABLE / COLLAPSIBLE EDITING COLUMN (Shown when in player tab and media is loaded)
-            if AppData.active_tab == 1 && AppData.player_has_media : EditPanel {
-                horizontal-stretch: 0;
-                request_focus => { fs.focus(); }
-            }
-        }
-
-        // LOG DRAWER (Collapsible)
-        if AppData.show_logs : Rectangle {
-            height: 120px;
-            background: Theme.header_bg;
-
-            VerticalLayout {
-                padding: 10px;
-                spacing: 6px;
-
+                // MAIN BODY (Split Left: Queue, Center: Workspace, Right: Inspector)
                 HorizontalLayout {
-                    Text { text: "Live FFmpeg Command & Stderr Stream"; font-size: 11px; font-weight: 600; color: Theme.text_muted; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton {
-                        icon_source: @image-url("icons/x.svg");
-                        has_icon: true;
-                        icon_size: 12px;
-                        btn_width: 24px;
-                        btn_height: 24px;
-                        clicked => { AppLogic.toggle_logs(); }
+                    vertical-stretch: 1;
+
+                    // LEFT PANEL: FILE QUEUE
+                    QueuePanel {
+                        min-width: root.queue_panel_width;
+                        max-width: root.queue_panel_width;
+                        request_focus => { fs.focus(); }
+                        animate min-width { duration: 160ms; easing: ease-out; }
+                        animate max-width { duration: 160ms; easing: ease-out; }
+                    }
+
+                    // Vertical Split Divider
+                    Rectangle { width: 1px; background: Theme.panel_border; }
+
+                    // CENTER WORKSPACE PANEL (Stretch)
+                    Rectangle {
+                        min-width: 0px;
+                        horizontal-stretch: 1;
+                        background: Theme.app_bg;
+                        clip: true;
+
+                        if AppData.active_tab == 0 : DownloaderTab {}
+                        if AppData.active_tab == 1 : PlayerTab {
+                            request_focus => { fs.focus(); }
+                        }
+                        if AppData.active_tab == 2 : TranscoderTab {}
+                    }
+
+                    // RIGHT-SIDE EXPANDABLE / COLLAPSIBLE EDITING COLUMN
+                    if AppData.active_tab == 1 && AppData.player_has_media : EditPanel {
+                        request_focus => { fs.focus(); }
                     }
                 }
 
-                ScrollView {
-                    Text {
-                        text: AppData.log_preview;
-                        font-size: 11px;
-                        font-family: "Consolas";
-                        color: #bef264;
-                        wrap: word-wrap;
-                    }
-                }
-            }
-        }
-
-        // Bottom Divider
-        Rectangle { height: 1px; background: Theme.status_bar_border; }
-
-        // BOTTOM STATUS BAR
-        Rectangle {
-            height: 42px;
-            background: Theme.status_bar_bg;
-
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 16px;
-                padding-top: 7px;
-                padding-bottom: 7px;
-                spacing: 12px;
-
-                // Left: Live Queue / Encoding Status Telemetry
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: start;
+                // LOG DRAWER (Collapsible Console)
+                if AppData.show_logs : Rectangle {
+                    height: 132px;
+                    background: Theme.card_subtle_bg;
 
                     VerticalLayout {
-                        alignment: center;
-                        Rectangle {
-                            width: 8px;
-                            height: 8px;
-                            border-radius: 4px;
-                            background: AppData.is_processing ? Theme.accent_amber : (AppData.queue.length > 0 ? Theme.accent_emerald : Theme.text_muted);
-                        }
-                    }
-
-                    Text {
-                        text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
-                        font-size: Theme.font_badge;
-                        font-weight: 600;
-                        font-family: AppData.is_processing ? Theme.font_mono : "";
-                        color: AppData.is_processing ? Theme.accent_amber : Theme.text_primary;
-                        vertical-alignment: center;
-                    }
-
-                    if AppData.is_processing : VerticalLayout {
-                        alignment: center;
-                        Rectangle {
-                            width: 90px;
-                            height: 6px;
-                            border-radius: 3px;
-                            background: Theme.control_bg;
-                            clip: true;
-
-                            Rectangle {
-                                x: 0px;
-                                y: 0px;
-                                width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
-                                height: 100%;
-                                border-radius: 3px;
-                                background: @linear-gradient(90deg, #65a30d 0%, #a3e635 50%, #10b981 100%);
-                            }
-                        }
-                    }
-                }
-
-                // Spacer pushing right-hand controls to the far right
-                Rectangle { horizontal-stretch: 1; }
-
-                // Bottom-Right Engine Subtitle
-                VerticalLayout {
-                    alignment: center;
-                    padding-right: 6px;
-                    Text {
-                        text: "High Performance Rust Transcoder & Video Downloader";
-                        font-size: Theme.font_badge;
-                        font-weight: 500;
-                        color: Theme.text_muted;
-                        overflow: elide;
-                    }
-                }
-
-                // Bottom-Right Corner: GPU Acceleration Status and Show Logs Toggle
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: center;
-
-                    // GPU Acceleration Status Pill
-                    Rectangle {
-                        height: 28px;
-                        border-radius: 4px;
-                        background: Theme.control_bg;
-                        border-width: 1px;
-                        border-color: AppData.is_gpu_accelerated ? Theme.accent_green.with-alpha(0.3) : Theme.border_color;
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        padding-top: 8px;
+                        padding-bottom: 10px;
+                        spacing: 6px;
 
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            spacing: 5px;
-                            alignment: center;
-
-                            VerticalLayout {
-                                alignment: center;
-                                Image {
-                                    source: @image-url("icons/zap.svg");
-                                    width: 12px;
-                                    height: 12px;
-                                    colorize: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: AppData.gpu_status_text;
-                                    font-size: 11px;
-                                    color: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
-                                    font-weight: 600;
-                                }
-                            }
-                        }
-                    }
-
-                    // Compact "Show Logs" Toggle in Bottom-Right Corner
-                    Rectangle {
-                        height: 28px;
-                        border-radius: 4px;
-                        background: AppData.show_logs ? #2a2a30 : Theme.control_bg;
-                        border-width: 1px;
-                        border-color: AppData.show_logs ? Theme.accent_cyan : Theme.border_color;
-
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            padding-top: 2px;
-                            padding-bottom: 2px;
-                            spacing: 5px;
-                            alignment: center;
-
+                            spacing: 8px;
                             VerticalLayout {
                                 alignment: center;
                                 Image {
                                     source: @image-url("icons/logs.svg");
                                     width: 12px;
                                     height: 12px;
-                                    colorize: AppData.show_logs ? Theme.accent_cyan : Theme.text_secondary;
+                                    colorize: Theme.accent_lime;
                                 }
                             }
+                            Text {
+                                text: "FFmpeg Command & Telemetry Stream";
+                                font-size: Theme.font_badge;
+                                font-weight: 600;
+                                color: Theme.text_secondary;
+                                vertical-alignment: center;
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            IconButton {
+                                icon_source: @image-url("icons/x.svg");
+                                has_icon: true;
+                                icon_size: 11px;
+                                btn_width: 24px;
+                                btn_height: 24px;
+                                clicked => { AppLogic.toggle_logs(); }
+                            }
+                        }
+
+                        Rectangle {
+                            vertical-stretch: 1;
+                            border-radius: Theme.radius_sm;
+                            background: Theme.input_bg;
+                            border-width: 1px;
+                            border-color: Theme.card_border;
+
+                            ScrollView {
+                                width: 100%;
+                                height: 100%;
+
+                                VerticalLayout {
+                                    padding: 8px;
+                                    Text {
+                                        text: AppData.log_preview == "" ? "Waiting for FFmpeg task output..." : AppData.log_preview;
+                                        font-size: Theme.font_badge;
+                                        font-family: Theme.font_mono;
+                                        color: AppData.log_preview == "" ? Theme.text_muted : Theme.accent_lime;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Divider
+                Rectangle { height: 1px; background: Theme.status_bar_border; }
+
+                // BOTTOM STATUS BAR
+                Rectangle {
+                    height: 40px;
+                    background: Theme.status_bar_bg;
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 14px;
+                        padding-top: 6px;
+                        padding-bottom: 6px;
+                        spacing: 12px;
+
+                        // Left: Live Queue / Encoding Status Telemetry
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+
                             VerticalLayout {
                                 alignment: center;
-                                Text {
-                                    text: AppData.show_logs ? "Hide Logs" : "Show Logs";
-                                    font-size: 11px;
-                                    font-weight: 600;
-                                    color: AppData.show_logs ? Theme.text_primary : Theme.text_secondary;
+                                Rectangle {
+                                    width: 7px;
+                                    height: 7px;
+                                    border-radius: 3.5px;
+                                    background: AppData.is_processing ? Theme.accent_amber : (AppData.queue.length > 0 ? Theme.accent_green : Theme.text_faint);
+                                }
+                            }
+
+                            Text {
+                                text: AppData.is_processing ? (AppData.progress_text + "  •  " + AppData.speed_text + "  •  " + AppData.fps_text + "  •  " + AppData.time_text) : AppData.status_summary;
+                                font-size: Theme.font_badge;
+                                font-weight: 600;
+                                font-family: AppData.is_processing ? Theme.font_mono : "";
+                                color: AppData.is_processing ? Theme.accent_amber : Theme.text_secondary;
+                                vertical-alignment: center;
+                            }
+
+                            if AppData.is_processing : VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 100px;
+                                    height: 6px;
+                                    border-radius: 3px;
+                                    background: Theme.control_bg;
+                                    clip: true;
+
+                                    Rectangle {
+                                        x: 0px;
+                                        y: 0px;
+                                        width: parent.width * AppData.progress_percent.clamp(0.0, 1.0);
+                                        height: 100%;
+                                        border-radius: 3px;
+                                        background: @linear-gradient(90deg, Theme.accent_primary 0%, Theme.accent_lime 100%);
+                                    }
                                 }
                             }
                         }
 
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { AppLogic.toggle_logs(); }
+                        // Flexible spacer
+                        Rectangle { horizontal-stretch: 1; }
+
+                        // Bottom-Right Engine Subtitle
+                        VerticalLayout {
+                            alignment: center;
+                            padding-right: 4px;
+                            Text {
+                                text: "Rust + FFmpeg Native Media Engine";
+                                font-size: Theme.font_badge;
+                                font-weight: 500;
+                                color: Theme.text_faint;
+                                overflow: elide;
+                            }
+                        }
+
+                        // Bottom-Right Corner: GPU Acceleration Status and Logs Toggle
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: center;
+
+                            // GPU Acceleration Status Pill
+                            Rectangle {
+                                height: 26px;
+                                border-radius: Theme.radius_sm;
+                                background: AppData.is_gpu_accelerated ? Theme.emerald_surface : Theme.card_secondary_bg;
+                                border-width: 1px;
+                                border-color: AppData.is_gpu_accelerated ? Theme.emerald_border : Theme.card_border;
+
+                                HorizontalLayout {
+                                    padding-left: 9px;
+                                    padding-right: 9px;
+                                    spacing: 5px;
+                                    alignment: center;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("icons/zap.svg");
+                                            width: 12px;
+                                            height: 12px;
+                                            colorize: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: AppData.gpu_status_text;
+                                            font-size: Theme.font_badge;
+                                            color: AppData.is_gpu_accelerated ? Theme.accent_green : Theme.text_muted;
+                                            font-weight: 600;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Compact "Logs" Toggle Button
+                            Rectangle {
+                                height: 26px;
+                                border-radius: Theme.radius_sm;
+                                background: AppData.show_logs ? Theme.accent_surface : (logs_ta.has-hover ? Theme.control_hover : Theme.control_bg);
+                                border-width: 1px;
+                                border-color: AppData.show_logs ? Theme.accent_border : Theme.control_border;
+
+                                animate background { duration: 120ms; easing: ease-out; }
+                                animate border-color { duration: 120ms; easing: ease-out; }
+
+                                HorizontalLayout {
+                                    padding-left: 9px;
+                                    padding-right: 9px;
+                                    spacing: 5px;
+                                    alignment: center;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("icons/logs.svg");
+                                            width: 12px;
+                                            height: 12px;
+                                            colorize: AppData.show_logs ? Theme.accent_lime : (logs_ta.has-hover ? Theme.text_primary : Theme.text_secondary);
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: AppData.show_logs ? "Hide Logs" : "Show Logs";
+                                            font-size: Theme.font_badge;
+                                            font-weight: 600;
+                                            color: AppData.show_logs ? Theme.accent_lime : (logs_ta.has-hover ? Theme.text_primary : Theme.text_secondary);
+                                        }
+                                    }
+                                }
+
+                                logs_ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { AppLogic.toggle_logs(); }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
-}
 }

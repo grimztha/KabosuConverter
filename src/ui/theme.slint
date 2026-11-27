@@ -1,87 +1,130 @@
 export global Theme {
+    // =========================================================================
+    // STUDIO KABOSU — Commercial Dark Design System
+    // Grounded in Japanese Oita Kabosu citrus rind green + warm Yuzu-gold pulp
+    // over botanical obsidian-charcoal matte surfaces.
+    // =========================================================================
+
     // Window & Shell Backgrounds
-    out property <color> app_bg: #09090b;
-    out property <color> window_border: #23232a;
-    out property <color> header_bg: #101013;
-    out property <color> header_border: #1f1f26;
-    out property <color> status_bar_bg: #121215;
-    out property <color> status_bar_border: #2a2a30;
+    out property <color> app_bg: #0b0d0c;
+    out property <color> window_border: #262f2a;
+    out property <color> header_bg: #0e110f;
+    out property <color> header_border: #1d2420;
+    out property <color> status_bar_bg: #0e110f;
+    out property <color> status_bar_border: #1e2521;
 
-    // Panels & Surfaces
-    out property <color> bg_surface: #09090b;
-    out property <color> panel_bg: #0f0f12;
-    out property <color> panel_border: #18181c;
-    out property <color> card_bg: #131317;
-    out property <color> card_border: #1f1f24;
-    out property <color> card_secondary_bg: #16161c;
-    out property <color> card_secondary_border: #24242e;
-    out property <color> card_subtle_bg: #101014;
-    out property <color> card_subtle_border: #1a1a20;
+    // Panels & Surfaces (5-tier matte botanical obsidian elevation)
+    out property <color> bg_surface: #0b0d0c;
+    out property <color> panel_bg: #101412;
+    out property <color> panel_border: #1c221e;
+    out property <color> card_subtle_bg: #121614;
+    out property <color> card_subtle_border: #1b221e;
+    out property <color> card_bg: #151a17;
+    out property <color> card_border: #222a25;
+    out property <color> card_secondary_bg: #1b211d;
+    out property <color> card_secondary_border: #2d3731;
 
-    // Controls & Inputs
-    out property <color> border_color: #2a2a32;
-    out property <color> control_bg: #1c1c22;
-    out property <color> control_hover: #2a2a32;
-    out property <color> control_border: #2a2a32;
-    out property <color> control_pressed: #32323d;
-    out property <color> focus_ring: #a3e635;
-    out property <color> focus_ring_border: #65a30d;
+    // Recessed Form Inputs & Dropdowns
+    out property <color> input_bg: #0f1311;
+    out property <color> input_hover_bg: #131815;
+    out property <color> input_border: #2c3630;
+    out property <color> input_hover_border: #3f4e45;
+    out property <color> popup_bg: #161c18;
+    out property <color> popup_border: #2d3832;
+
+    // Controls & Interactive Surfaces
+    out property <color> border_color: #2e3832;
+    out property <color> control_bg: #1d2420;
+    out property <color> control_hover: #252e29;
+    out property <color> control_border: #2e3832;
+    out property <color> control_pressed: #2d3832;
+    out property <color> focus_ring: #a4dc5a;
+    out property <color> focus_ring_border: #5e9429;
 
     // Tab Bar (Segmented Control Pill in Header)
-    out property <color> tab_container_bg: #141418;
-    out property <color> tab_container_border: #24242c;
-    out property <color> tab_active_bg: #1f1f27;
-    out property <color> tab_active_border: #a3e635;
-    out property <color> tab_active_text: #a3e635;
-    out property <color> tab_inactive_hover: #181820;
-    out property <color> tab_inactive_text: #9ca3af;
+    out property <color> tab_container_bg: #131815;
+    out property <color> tab_container_border: #222b25;
+    out property <color> tab_active_bg: #1d2919;
+    out property <color> tab_active_border: #7ec13a66;
+    out property <color> tab_active_text: #a4dc5a;
+    out property <color> tab_inactive_hover: #1a211c;
+    out property <color> tab_inactive_text: #97a6a1;
 
-    // Text & Labels (Contrast compliant against #131317 and #09090b)
-    out property <color> text_primary: #f4f4f5;
-    out property <color> text_secondary: #d4d4d8;
-    out property <color> text_muted: #9ca3af; // WCAG AA compliant >= 5.2:1
-    out property <color> text_faint: #71717a;
+    // Text & Labels (WCAG AA/AAA verified against #151a17 and #0b0d0c)
+    out property <color> text_primary: #f1f5f2;    // 16.3:1 on card_bg
+    out property <color> text_secondary: #c5cfc8;  // 11.2:1 on card_bg
+    out property <color> text_muted: #97a6a1;      //  7.0:1 on card_bg (AAA)
+    out property <color> text_faint: #67756d;      // Disabled icons & hairlines
+    out property <color> text_on_accent: #0b1208;  //  8.5:1 on accent_primary (AAA)
 
-    // Accents & Status Ramps
-    out property <color> accent_primary: #65a30d;
-    out property <color> accent_primary_hover: #4d7c0f;
-    out property <color> accent_primary_pressed: #3f6212;
-    out property <color> accent_lime: #a3e635;
-    out property <color> accent_cyan: #a3e635;
-    out property <color> accent_green: #34d399;
-    out property <color> accent_emerald: #10b981;
-    out property <color> accent_emerald_hover: #059669;
-    out property <color> accent_orange: #f97316;
-    out property <color> accent_amber: #f59e0b;
-    out property <color> accent_amber_hover: #d97706;
-    out property <color> accent_red: #ef4444;
-    out property <color> accent_red_hover: #dc2626;
-    out property <color> accent_purple: #a78bfa;
-    out property <color> brand_vimeo: #1ab7ea;
-    out property <color> brand_bilibili: #00aeec;
-    out property <color> brand_instagram: #e1306c;
-    out property <color> brand_facebook: #2d88ff;
+    // Core Kabosu Citrus Green Accent Ramp
+    out property <color> accent_primary: #7ec13a;
+    out property <color> accent_primary_hover: #8fd14b;
+    out property <color> accent_primary_pressed: #68a32d;
+    out property <color> accent_lime: #a4dc5a;
+    out property <color> accent_cyan: #a4dc5a;     // Alias mapped to Kabosu Zest
+    out property <color> accent_surface: #1a2616;
+    out property <color> accent_surface_hover: #22321c;
+    out property <color> accent_border: #7ec13a55;
+
+    // Complementary Semantic Ramps
+    // Jade / Fresh Mint — Success, Ready, GPU Active, Lossless Export
+    out property <color> accent_green: #4ad09b;
+    out property <color> accent_emerald: #2fa677;
+    out property <color> accent_emerald_hover: #3aba88;
+    out property <color> emerald_surface: #12261f;
+    out property <color> emerald_surface_hover: #183329;
+    out property <color> emerald_border: #2fa67755;
+
+    // Warm Yuzu Gold / Citrus Pulp — Trim Range, Processing Telemetry, Warnings
+    out property <color> accent_orange: #df8638;
+    out property <color> accent_amber: #e5a93b;
+    out property <color> accent_amber_hover: #f0ba52;
+    out property <color> amber_surface: #261e11;
+    out property <color> amber_surface_hover: #332816;
+    out property <color> amber_border: #e5a93b55;
+
+    // Studio Crimson — Destructive Actions, Errors, Stop/Cancel
+    out property <color> accent_red: #d94b4b;
+    out property <color> accent_red_solid: #c83e3e;
+    out property <color> accent_red_hover: #dc4e4e;
+    out property <color> accent_red_text: #f28b8b;
+    out property <color> red_surface: #271516;
+    out property <color> red_surface_hover: #361c1e;
+    out property <color> red_border: #d94b4b55;
+
+    // Soft Plum / Lavender — Audio Track & Codec Category Distinction
+    out property <color> accent_purple: #a799eb;
+    out property <color> purple_surface: #1e1b2b;
+    out property <color> purple_border: #a799eb4d;
+
+    // Muted Platform Brand Accents (Harmonized for Dark UI)
+    out property <color> brand_vimeo: #5bc0de;
+    out property <color> brand_bilibili: #52b8db;
+    out property <color> brand_instagram: #df6d95;
+    out property <color> brand_facebook: #679ce8;
 
     // Action Button Neutrals
-    out property <color> btn_neutral_bg: #1c1c22;
-    out property <color> btn_neutral_hover: #2a2a32;
-    out property <color> btn_neutral_pressed: #282834;
-    out property <color> btn_neutral_text: #d4d4d8;
+    out property <color> btn_neutral_bg: #1c231f;
+    out property <color> btn_neutral_hover: #252e29;
+    out property <color> btn_neutral_pressed: #2d3832;
+    out property <color> btn_neutral_border: #2e3832;
+    out property <color> btn_neutral_text: #d4ddd7;
 
     // Audio Meter & Visualizer
-    out property <color> meter_bg: #12141e;
-    out property <color> meter_border: #2b2f44;
-    out property <color> meter_green: #22c55e;
-    out property <color> meter_green_dim: #062311;
-    out property <color> meter_yellow: #eab308;
-    out property <color> meter_yellow_dim: #332405;
-    out property <color> meter_red: #ef4444;
-    out property <color> meter_red_dim: #3b070c;
+    out property <color> meter_bg: #0e1210;
+    out property <color> meter_border: #232c26;
+    out property <color> meter_green: #4ad09b;
+    out property <color> meter_green_dim: #0e241b;
+    out property <color> meter_yellow: #e5a93b;
+    out property <color> meter_yellow_dim: #2b210e;
+    out property <color> meter_red: #e05252;
+    out property <color> meter_red_dim: #2d1113;
 
     // Track & Sliders
-    out property <color> slider_track: #2a2a30;
-    out property <color> slider_thumb: #ffffff;
-    out property <color> slider_thumb_active: #a3e635;
+    out property <color> slider_track: #26302a;
+    out property <color> slider_thumb: #f1f5f2;
+    out property <color> slider_thumb_active: #a4dc5a;
 
     // Typographic Scale (Floored at 11px to ensure legibility)
     out property <length> font_title: 18px;
@@ -91,28 +134,28 @@ export global Theme {
     out property <length> font_badge: 11px;
     out property <string> font_mono: "Consolas";
 
-    // Standard Spacing Scale
+    // Standard Spacing Scale (4px base rhythm)
     out property <length> space_xs: 4px;
     out property <length> space_sm: 8px;
     out property <length> space_md: 12px;
     out property <length> space_lg: 16px;
     out property <length> space_xl: 24px;
 
-    // Standard Interactive Button Heights (Finding #15)
+    // Standard Interactive Button Heights
     out property <length> btn_height_sm: 28px;
     out property <length> btn_height_md: 34px;
     out property <length> btn_height_lg: 40px;
 
-    // Concentric Radii Standards (Finding #13: outer = inner + padding)
+    // Concentric Radii Standards (outer = inner + padding)
     out property <length> radius_sm: 6px;
     out property <length> radius_md: 10px;
     out property <length> radius_lg: 14px;
 
-    // Overlay, Mask & Timeline Specific Tokens (Finding #6)
-    out property <color> overlay_mask: #000000aa;
-    out property <color> timeline_track_bg: #09090d;
-    out property <color> timeline_border: #1c1c24;
-    out property <color> trim_in_marker: #10b981;
-    out property <color> trim_out_marker: #f59e0b;
-    out property <color> playhead_marker: #a3e635;
+    // Overlay, Mask & Timeline Specific Tokens
+    out property <color> overlay_mask: #060807b8;
+    out property <color> timeline_track_bg: #0b0e0c;
+    out property <color> timeline_border: #202823;
+    out property <color> trim_in_marker: #4ad09b;
+    out property <color> trim_out_marker: #e5a93b;
+    out property <color> playhead_marker: #a4dc5a;
 }

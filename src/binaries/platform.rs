@@ -128,8 +128,8 @@ impl PlatformInfo {
             (TargetOS::Linux, TargetArch::X86_64) => BinaryDownloadTarget {
                 name: "yt-dlp",
                 binary_filename: "yt-dlp",
-                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
-                asset_filename: "yt-dlp",
+                download_url: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
+                asset_filename: "yt-dlp_linux",
                 checksum_url: Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"),
                 format: ArchiveFormat::RawExecutable,
             },

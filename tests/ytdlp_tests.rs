@@ -161,9 +161,33 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
     assert_eq!(parse_downloaded_filepath("[ExtractAudio] Destination: out.mp3", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("[FixupM3u8] Fixing...", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("[ffmpeg] Fixing container in \"out.mp4\"", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("[youtube] [jsc:node] Solving JS challenges using node", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("[jsc:deno] Solving JS challenge v2.3.0", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("[twitter] Extracting URL: https://x.com/user/status/123", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("Deleting original file C:\\Media\\Downloads\\video.f395.mp4 (pass -k to keep)", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("WARNING: [youtube] Some warning about file.js", dest_dir), None);
+    assert_eq!(parse_downloaded_filepath("ERROR: Unable to extract video.mp4", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("download:50.0%|10.0MiB/s|00:05|50.0MiB", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("", dest_dir), None);
     assert_eq!(parse_downloaded_filepath("   ", dest_dir), None);
+
+    // 1b. Explicit sentinel emitted by --print after_move:KABOSU_FILEPATH:%(filepath)s
+    let sentinel_abs = if cfg!(windows) {
+        "KABOSU_FILEPATH:D:\\media\\[youtube] Video Title.mp4"
+    } else {
+        "KABOSU_FILEPATH:/media/[youtube] Video Title.mp4"
+    };
+    let expected_sentinel = if cfg!(windows) {
+        PathBuf::from("D:\\media\\[youtube] Video Title.mp4")
+    } else {
+        PathBuf::from("/media/[youtube] Video Title.mp4")
+    };
+    assert_eq!(parse_downloaded_filepath(sentinel_abs, dest_dir), Some(expected_sentinel));
+    assert_eq!(
+        parse_downloaded_filepath("KABOSU_FILEPATH:[youtube] Relative Title.mp4", dest_dir),
+        Some(dest_dir.join("[youtube] Relative Title.mp4"))
+    );
+    assert_eq!(parse_downloaded_filepath("KABOSU_FILEPATH:   ", dest_dir), None);
 
     // 2. Relative filename starting with brackets (e.g. [1080p] Video Title.mp4)
     let bracket_relative = "[1080p] Video Title [dQw4w9WgXcQ].mp4";
@@ -185,11 +209,46 @@ fn test_parse_downloaded_filepath_bracket_filenames_and_tags() {
 }
 
 #[test]
+fn test_parse_progress_line_ytdlp_2026_format() {
+    use kabosu_converter::ytdlp::parse_progress_line;
+
+    // Standard yt-dlp 2026.11.23 progress line with exact total bytes
+    let p = parse_progress_line("download: 28.8%| 899.38KiB/s|00:00| 218.53KiB").expect("valid progress");
+    assert!((p.percent - 28.8).abs() < 0.01);
+    assert_eq!(p.speed, "899.38KiB/s");
+    assert_eq!(p.eta, "00:00");
+    assert_eq!(p.size, "218.53KiB");
+
+    // Initial chunk with Unknown speed/ETA should clear sentinel values so UI doesn't flash garbage
+    let p_unknown = parse_progress_line("download:  0.4%| Unknown B/s|Unknown| 246.27KiB").expect("valid progress");
+    assert!((p_unknown.percent - 0.4).abs() < 0.01);
+    assert!(p_unknown.speed.is_empty());
+    assert!(p_unknown.eta.is_empty());
+    assert_eq!(p_unknown.size, "246.27KiB");
+
+    // Final 100% line with NA ETA
+    let p_done = parse_progress_line("download:100.0%|482.16KiB/s|NA| 246.27KiB").expect("valid progress");
+    assert!((p_done.percent - 100.0).abs() < 0.01);
+    assert_eq!(p_done.speed, "482.16KiB/s");
+    assert!(p_done.eta.is_empty());
+    assert_eq!(p_done.size, "246.27KiB");
+
+    // Non-progress lines return None
+    assert!(parse_progress_line("[download] Destination: out.mp4").is_none());
+    assert!(parse_progress_line("KABOSU_FILEPATH:out.mp4").is_none());
+}
+
+#[test]
 fn test_ytdlp_version_detection() {
     if let Some(path) = find_ytdlp_binary() {
         let (ver, badge) = detect_version(&path);
         assert!(!ver.is_empty(), "Version string must not be empty");
         assert!(badge.contains("yt-dlp"), "Badge should contain 'yt-dlp'");
         assert!(badge.contains(&ver), "Badge should contain version");
+        assert!(
+            !kabosu_converter::updater::is_newer_version(&ver, "2026.11.23"),
+            "Installed yt-dlp ({}) should be at least 2026.11.23",
+            ver
+        );
     }
 }

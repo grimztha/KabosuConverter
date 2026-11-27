@@ -208,6 +208,46 @@ impl DependencyManager {
         })
     }
 
+    /// Checks the latest official `yt-dlp` GitHub release and updates the app-managed binary
+    /// inside `self.bin_dir` (with full SHA-256 verification) when a newer version is available.
+    /// Returns `Ok(Some((path, new_version)))` if updated, or `Ok(None)` if already current.
+    pub async fn update_ytdlp_if_outdated(
+        &self,
+        current_version: &str,
+    ) -> Result<Option<(PathBuf, String)>, BinaryError> {
+        let release = crate::updater::check_latest_release("yt-dlp/yt-dlp")
+            .await
+            .map_err(|e| BinaryError::Other(format!("Failed to check latest yt-dlp release: {}", e)))?;
+
+        if !crate::updater::is_newer_version(current_version, &release.tag_name) {
+            return Ok(None);
+        }
+
+        let fetcher = fetcher::BinaryFetcher::new()?;
+        let target = self.platform.ytdlp_target();
+        let verified_hash = self
+            .download_verify_and_extract(&fetcher, &target, &|_, _| {})
+            .await?;
+
+        let ytdlp = self.bin_dir.join(self.platform.ytdlp_filename());
+        let ver_output = Self::verify_binary_executable(&ytdlp, "--version").await?;
+        let installed_ver = ver_output.trim().to_string();
+
+        let mut manifest = manifest::LocalBinaryManifest::load(&self.bin_dir);
+        manifest.update(
+            "yt-dlp",
+            manifest::BinaryMetadata {
+                installed_at: Self::unix_timestamp_secs(),
+                sha256: Some(verified_hash),
+                version: Some(installed_ver.clone()),
+                path: Some(ytdlp.to_string_lossy().to_string()),
+            },
+        );
+        let _ = manifest.save(&self.bin_dir);
+
+        Ok(Some((ytdlp, installed_ver)))
+    }
+
     /// Searches for `filename` in the app-local `bin` folder first, then in the project/exe root.
     pub async fn resolve_binary(&self, filename: &str, test_arg: &str) -> Option<PathBuf> {
         let local_path = self.bin_dir.join(filename);

@@ -128,3 +128,44 @@ async fn test_standalone_settings_and_clean_uninstallation() {
     fs::remove_dir_all(&custom_app_dir).unwrap();
     assert!(!custom_app_dir.exists());
 }
+
+#[test]
+fn test_ytdlp_platform_targets_use_standalone_binaries() {
+    use kabosu_converter::binaries::platform::{TargetArch, TargetOS};
+
+    let cases = [
+        (TargetOS::Windows, TargetArch::X86_64, "yt-dlp.exe", "yt-dlp.exe"),
+        (TargetOS::Windows, TargetArch::Aarch64, "yt-dlp.exe", "yt-dlp_arm64.exe"),
+        (TargetOS::MacOS, TargetArch::X86_64, "yt-dlp", "yt-dlp_macos"),
+        (TargetOS::MacOS, TargetArch::Aarch64, "yt-dlp", "yt-dlp_macos"),
+        (TargetOS::Linux, TargetArch::X86_64, "yt-dlp", "yt-dlp_linux"),
+        (TargetOS::Linux, TargetArch::Aarch64, "yt-dlp", "yt-dlp_linux_aarch64"),
+    ];
+
+    for (os, arch, expected_bin, expected_asset) in cases {
+        let info = PlatformInfo { os, arch };
+        let target = info.ytdlp_target();
+        assert_eq!(target.binary_filename, expected_bin);
+        assert_eq!(target.asset_filename, expected_asset);
+        assert!(
+            target.download_url.ends_with(expected_asset),
+            "Unexpected URL {} for {:?}",
+            target.download_url,
+            (os, arch)
+        );
+        assert_eq!(
+            target.checksum_url,
+            Some("https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS")
+        );
+    }
+}
+
+#[test]
+fn test_ytdlp_date_version_comparison() {
+    use kabosu_converter::updater::is_newer_version;
+
+    assert!(is_newer_version("2026.10.26", "2026.11.23"));
+    assert!(!is_newer_version("2026.11.23", "2026.11.23"));
+    assert!(!is_newer_version("2026.11.23", "2026.10.26"));
+    assert!(is_newer_version("2026.11.23", "2026.12.01"));
+}

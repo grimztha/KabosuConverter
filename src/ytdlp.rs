@@ -55,7 +55,7 @@ pub fn find_ytdlp_binary() -> Option<PathBuf> {
 }
 
 /// Queries `yt-dlp --version` to extract the release tag and formatted UI badge.
-/// e.g. ("2026.10.26", "yt-dlp 2026.10.26 (Local Engine)")
+/// e.g. ("2026.11.23", "yt-dlp 2026.11.23 (Local Engine)")
 pub fn detect_version(bin: &Path) -> (String, String) {
     let mut cmd = Command::new(bin);
     cmd.arg("--version")
@@ -73,7 +73,21 @@ pub fn detect_version(bin: &Path) -> (String, String) {
         }
     }
 
-    ("2026.10.26".to_string(), "yt-dlp 2026.10.26 (Local Engine)".to_string())
+    ("2026.11.23".to_string(), "yt-dlp 2026.11.23 (Local Engine)".to_string())
+}
+
+/// JavaScript runtimes enabled for yt-dlp's External JS Challenge Solver (EJS).
+/// Starting in 2026 releases, yt-dlp only enables `deno` by default; enabling all supported
+/// runtimes lets yt-dlp automatically fall back to Node (v22+), QuickJS, or Bun if installed.
+const SUPPORTED_JS_RUNTIMES: &[&str] = &["deno", "node", "quickjs", "bun"];
+
+/// Prefix printed via `--print after_move:KABOSU_FILEPATH:%(filepath)s` for unambiguous path capture.
+pub const PRINTED_FILEPATH_PREFIX: &str = "KABOSU_FILEPATH:";
+
+fn apply_js_runtime_args(cmd: &mut Command) {
+    for runtime in SUPPORTED_JS_RUNTIMES {
+        cmd.arg("--js-runtimes").arg(runtime);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,9 +137,9 @@ pub fn discover_media(ytdlp_bin: &Path, url: &str) -> Result<(YtDlpMediaInfo, Ve
     let mut cmd = Command::new(ytdlp_bin);
     cmd.arg("--dump-single-json")
         .arg("--no-playlist")
-        .arg("--no-warnings")
-        .arg("--")
-        .arg(trimmed);
+        .arg("--no-warnings");
+    apply_js_runtime_args(&mut cmd);
+    cmd.arg("--").arg(trimmed);
 
     let output = crate::ffmpeg::spawn_with_output(cmd, "yt-dlp")?;
     if !output.status.success() {
@@ -309,19 +323,81 @@ pub fn build_output_template(custom_filename: Option<&str>) -> String {
     format!("{}.%(ext)s", stem)
 }
 
-/// Parses a line of yt-dlp stdout (from `--print after_move:filepath`) into a resolved file path.
-/// Distinguishes between internal yt-dlp progress tags and actual target paths, even when video titles start with `[`.
+/// Parses a `download:<percent>|<speed>|<eta>|<size>` progress line emitted by yt-dlp.
+pub fn parse_progress_line(line: &str) -> Option<YtDlpProgress> {
+    let payload = line.strip_prefix("download:")?;
+    let parts: Vec<&str> = payload.split('|').collect();
+    if parts.len() < 4 {
+        return None;
+    }
+
+    let pct_str = parts[0].trim().trim_end_matches('%');
+    let pct = pct_str.parse::<f32>().unwrap_or(0.0).clamp(0.0, 100.0);
+
+    let clean_metric = |raw: &str| -> String {
+        let t = raw.trim();
+        if t.is_empty()
+            || t.eq_ignore_ascii_case("NA")
+            || t.eq_ignore_ascii_case("N/A")
+            || t.eq_ignore_ascii_case("Unknown")
+            || t.eq_ignore_ascii_case("Unknown B/s")
+        {
+            String::new()
+        } else {
+            t.to_string()
+        }
+    };
+
+    let speed = clean_metric(parts[1]);
+    let eta = clean_metric(parts[2]);
+    let size = clean_metric(parts[3]);
+
+    Some(YtDlpProgress {
+        percent: pct,
+        speed,
+        eta,
+        size,
+        status: format!("Downloading: {:.1}%", pct),
+    })
+}
+
+/// Parses a line of yt-dlp stdout (from `--print after_move:KABOSU_FILEPATH:%(filepath)s` or plain `after_move:filepath`)
+/// into a resolved file path, distinguishing internal yt-dlp log lines from actual target paths even when titles start with `[`.
 pub fn parse_downloaded_filepath(line: &str, dest_dir: &Path) -> Option<PathBuf> {
     let trimmed = line.trim();
-    let is_ytdlp_tag = trimmed.starts_with("[download]")
+    if trimmed.is_empty() || trimmed.starts_with("download:") {
+        return None;
+    }
+
+    if let Some(explicit) = trimmed.strip_prefix(PRINTED_FILEPATH_PREFIX) {
+        let candidate = explicit.trim();
+        if candidate.is_empty() {
+            return None;
+        }
+        let p = PathBuf::from(candidate);
+        return Some(if p.is_absolute() { p } else { dest_dir.join(p) });
+    }
+
+    let is_ytdlp_log = trimmed.starts_with("[download]")
         || trimmed.starts_with("[info]")
-        || trimmed.starts_with("[youtube]")
+        || trimmed.starts_with("[youtube")
+        || trimmed.starts_with("[jsc")
         || trimmed.starts_with("[Merger]")
         || trimmed.starts_with("[ExtractAudio]")
         || trimmed.starts_with("[Fixup")
-        || trimmed.starts_with("[ffmpeg]");
+        || trimmed.starts_with("[ffmpeg]")
+        || trimmed.starts_with("[Metadata]")
+        || trimmed.starts_with("[MoveFiles]")
+        || trimmed.starts_with("[VideoConvertor]")
+        || trimmed.starts_with("[VideoRemuxer]")
+        || trimmed.starts_with("[generic]")
+        || trimmed.starts_with("[twitter]")
+        || trimmed.starts_with("[facebook]")
+        || trimmed.starts_with("Deleting original file ")
+        || trimmed.starts_with("WARNING:")
+        || trimmed.starts_with("ERROR:");
 
-    if !trimmed.is_empty() && !trimmed.starts_with("download:") && !is_ytdlp_tag {
+    if !is_ytdlp_log {
         let p = PathBuf::from(trimmed);
         let resolved = if p.is_absolute() {
             p.clone()
@@ -371,10 +447,14 @@ pub fn start_download(
 
     let mut cmd = Command::new(ytdlp_bin);
     cmd.arg("--newline")
-        .arg("--no-playlist")
-        .arg("--progress-template")
-        .arg("download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress._total_bytes_estimate_str)s")
-        .arg("--print").arg("after_move:filepath");
+        .arg("--no-quiet")
+        .arg("--progress")
+        .arg("--no-playlist");
+    apply_js_runtime_args(&mut cmd);
+    cmd.arg("--progress-template")
+        .arg("download:download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress._total_bytes_str,progress._total_bytes_estimate_str)s")
+        .arg("--print")
+        .arg(format!("after_move:{}%(filepath)s", PRINTED_FILEPATH_PREFIX));
 
     if let Some(f_dir) = ffmpeg_dir {
         cmd.arg("--ffmpeg-location").arg(f_dir);
@@ -436,38 +516,30 @@ pub fn start_download(
         });
 
         let mut printed_path: Option<PathBuf> = None;
+        let mut explicit_printed_path: Option<PathBuf> = None;
         let stdout_reader = BufReader::new(stdout);
         for line in stdout_reader.lines().map_while(Result::ok) {
             if cancel_clone.load(Ordering::SeqCst) {
                 break;
             }
-            if !line.starts_with("download:") {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("download:") && !trimmed.starts_with(PRINTED_FILEPATH_PREFIX) {
                 on_log_out(line.clone());
             }
 
-            let trimmed = line.trim();
-            // Capture after_move:filepath output
-            if let Some(resolved) = parse_downloaded_filepath(trimmed, &dest_dir_clone) {
-                printed_path = Some(resolved);
+            // Capture after_move:filepath output (prefer explicit sentinel over heuristic lines)
+            if trimmed.starts_with(PRINTED_FILEPATH_PREFIX) {
+                if let Some(resolved) = parse_downloaded_filepath(trimmed, &dest_dir_clone) {
+                    explicit_printed_path = Some(resolved);
+                }
+            } else if explicit_printed_path.is_none() {
+                if let Some(resolved) = parse_downloaded_filepath(trimmed, &dest_dir_clone) {
+                    printed_path = Some(resolved);
+                }
             }
 
-            if line.starts_with("download:") {
-                let parts: Vec<&str> = line.trim_start_matches("download:").split('|').collect();
-                if parts.len() >= 4 {
-                    let pct_str = parts[0].trim().trim_end_matches('%');
-                    let pct = pct_str.parse::<f32>().unwrap_or(0.0);
-                    let speed = parts[1].trim().to_string();
-                    let eta = parts[2].trim().to_string();
-                    let size = parts[3].trim().to_string();
-
-                    on_progress(YtDlpProgress {
-                        percent: pct,
-                        speed,
-                        eta,
-                        size,
-                        status: format!("Downloading: {:.1}%", pct),
-                    });
-                }
+            if let Some(progress) = parse_progress_line(trimmed) {
+                on_progress(progress);
             } else if line.contains("[Merger]") {
                 on_progress(YtDlpProgress {
                     percent: 98.0,
@@ -523,7 +595,7 @@ pub fn start_download(
         }
 
         // Check if after_move printed path exists
-        if let Some(path) = printed_path {
+        if let Some(path) = explicit_printed_path.or(printed_path) {
             if path.exists() {
                 on_complete(Ok(path));
                 return;

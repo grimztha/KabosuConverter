@@ -96,10 +96,53 @@ fn main() -> Result<()> {
     })));
 
     // Populate initial yt-dlp engine version badge if already installed
-    if let Some(ref p) = *ytdlp_binary {
+    let initial_ytdlp_version = if let Some(ref p) = *ytdlp_binary {
         if p.is_file() {
-            let (_ytdlp_ver, ytdlp_badge) = ytdlp::detect_version(p);
+            let (ytdlp_ver, ytdlp_badge) = ytdlp::detect_version(p);
             ui.global::<AppData>().set_ytdlp_version_badge(ytdlp_badge.into());
+            Some((p.clone(), ytdlp_ver))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Silently keep the app-managed yt-dlp binary up to date with official GitHub releases
+    if let Some((ytdlp_path, current_ver)) = initial_ytdlp_version {
+        let managed_bin_dir = default_bin_dir.clone();
+        let is_managed = ytdlp_path
+            .canonicalize()
+            .ok()
+            .zip(managed_bin_dir.canonicalize().ok())
+            .is_some_and(|(p, dir)| p.starts_with(dir));
+        if is_managed {
+            let ui_weak = ui.as_weak();
+            std::thread::spawn(move || {
+                let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    return;
+                };
+                rt.block_on(async move {
+                    if let Ok(dm) = kabosu_converter::binaries::DependencyManager::new(
+                        kabosu_converter::settings::APP_NAME,
+                    ) {
+                        if let Ok(Some((_path, new_ver))) =
+                            dm.update_ytdlp_if_outdated(&current_ver).await
+                        {
+                            let new_badge = format!("yt-dlp {} (Local Engine)", new_ver);
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_weak.upgrade() {
+                                    ui.global::<AppData>()
+                                        .set_ytdlp_version_badge(new_badge.into());
+                                }
+                            });
+                        }
+                    }
+                });
+            });
         }
     }
 
